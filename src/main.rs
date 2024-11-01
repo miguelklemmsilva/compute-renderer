@@ -13,8 +13,13 @@ mod window;
 
 fn main() {
     let mut scene = scene::Scene::new();
+    // scene.add_model(model::Model::new(
+    //     "assets/ANH_SABER.obj",
+    //     model::FileType::Obj,
+    // ));
+    // add simple triangle to scene
     scene.add_model(model::Model::new(
-        "assets/ANH_SABER.obj",
+        "assets/triangle.obj",
         model::FileType::Obj,
     ));
     let mut window = Window::new(800, 600, scene);

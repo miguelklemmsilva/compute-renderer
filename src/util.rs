@@ -51,7 +51,7 @@ impl Uniform {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable)]
+#[derive(Copy, Clone, Pod, Zeroable, Debug)]
 pub struct Vertex {
     v: [f32; 3],
 }
