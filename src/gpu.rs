@@ -58,6 +58,7 @@ impl GPU {
         });
 
         let vertices = scene.models.iter().flat_map(|model| model.vertices.clone()).collect::<Vec<Vertex>>();
+        println!("Vertices: {:?}", vertices);
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
