@@ -19,13 +19,18 @@ pub fn process_gltf_model(file: &str) -> Vec<Vertex> {
 }
 
 pub fn process_obj_model(file: &str) -> Vec<Vertex> {
-    obj::ObjData::load_buf(&mut std::fs::File::open(file).unwrap())
-        .unwrap()
-        .position
-        .iter()
-        .cloned()
-        .map(Vertex::from)
-        .collect()
+    let obj_data = obj::ObjData::load_buf(&mut std::fs::File::open(file).unwrap()).unwrap();
+    let mut vertices = Vec::new();
+
+    // Loop over each face and add vertices for each vertex position in the face
+    for face in obj_data.objects[0].groups[0].polys.iter() {
+        for index in &face.0 {
+            let position = obj_data.position[index.0];
+            vertices.push(Vertex::from(position));
+        }
+    }
+
+    vertices
 }
 
 pub(crate) const WORKGROUP_SIZE: u32 = 256;
