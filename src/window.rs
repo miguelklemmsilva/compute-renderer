@@ -7,7 +7,7 @@ pub struct Window {
     pub gpu: gpu::GPU,
     height: usize,
     width: usize,
-    scene: scene::Scene,
+    pub scene: scene::Scene,
 }
 
 impl Window {
@@ -23,11 +23,22 @@ impl Window {
             panic!("{}", e);
         });
 
-        Window { gpu, window, height, width, scene }
+        Window {
+            gpu,
+            window,
+            height,
+            width,
+            scene,
+        }
     }
 
     pub async fn update(&mut self) {
-        let buffer = self.gpu.execute_pipeline(self.width, self.height, &self.scene).await;
+        self.scene.update(&mut self.gpu);
+
+        let buffer = self
+            .gpu
+            .execute_pipeline(self.width, self.height, &self.scene)
+            .await;
 
         // Update the window with the buffer
         self.window

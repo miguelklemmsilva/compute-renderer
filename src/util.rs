@@ -57,9 +57,6 @@ pub struct Vertex {
 }
 
 impl Vertex {
-    pub const SIZE: u64 = std::mem::size_of::<Self>() as _;
-    pub const ATTR: [wgpu::VertexAttribute; 1] = wgpu::vertex_attr_array![0 => Float32x3];
-
     pub const fn new(x: f32, y: f32, z: f32) -> Self {
         Self { v: [x, y, z] }
     }

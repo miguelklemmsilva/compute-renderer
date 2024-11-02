@@ -90,7 +90,7 @@ impl Camera {
         self.set_yaw(self.yaw + delta);
     }
 
-    fn update(&mut self) {
+    pub fn update(&mut self) {
         let pitch_cos = self.pitch.cos();
         // This positions the eye based on spherical coordinates conversion
         self.eye = self.zoom
@@ -100,5 +100,11 @@ impl Camera {
                 -self.yaw.cos() * pitch_cos, // Use negative for a right-handed coordinate system
             )
             + self.target; // Ensure to add the target to offset the camera position correctly
+    }
+
+    pub fn update_over_time(&mut self, delta_time: f32) {
+        // Rotate the camera around the Y-axis
+        self.add_yaw(delta_time * 0.5); // Adjust the multiplier to control rotation speed
+        self.update();
     }
 }
