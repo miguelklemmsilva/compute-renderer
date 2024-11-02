@@ -13,11 +13,6 @@ mod window;
 
 fn main() {
     let mut scene = scene::Scene::new();
-    // scene.add_model(model::Model::new(
-    //     "assets/ANH_SABER.obj",
-    //     model::FileType::Obj,
-    // ));
-    // add simple triangle to scene
     scene.add_model(model::Model::new(
         "assets/triangle.obj",
         model::FileType::Obj,
@@ -34,13 +29,23 @@ fn main() {
     let mut window = Window::new(800, 600, scene);
 
     let mut last_time = Instant::now();
+    let mut frame_start_time = Instant::now();
     let mut frame_count = 0;
 
     while window.is_open() && !window.is_key_down(minifb::Key::Escape) {
+        let current_time = Instant::now();
+        let delta_time = current_time.duration_since(frame_start_time).as_secs_f32();
+        frame_start_time = current_time;
+
+        if let Some(camera) = window.scene.get_active_camera_mut() {
+            camera.update_over_time(delta_time);
+        }
+
+        // Render and display the frame
         pollster::block_on(window.update());
 
+        // FPS counting
         frame_count += 1;
-        let current_time = Instant::now();
         if current_time.duration_since(last_time).as_secs_f32() >= 1.0 {
             println!("FPS: {}", frame_count);
             frame_count = 0;
