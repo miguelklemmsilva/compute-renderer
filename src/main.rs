@@ -14,11 +14,11 @@ mod window;
 fn main() {
     let mut scene = scene::Scene::new();
     scene.add_model(model::Model::new(
-        "assets/triangle.obj",
+        "assets/suzanne.obj",
         model::FileType::Obj,
     ));
     scene.add_camera(camera::Camera::new(
-        1.0,
+        2.0,
         0.0,
         0.0,
         glam::Vec3::ZERO,
