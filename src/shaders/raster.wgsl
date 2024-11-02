@@ -17,17 +17,29 @@ struct Uniform {
   height: f32,
 }
 
+struct Camera {
+  view_pos: vec4<f32>,
+  view_proj: mat4x4<f32>,
+}
+
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
 @group(1) @binding(0) var<storage, read_write> depth_buffer: DepthBuffer;
 @group(2) @binding(0) var<uniform> screen_dims : Uniform;
 @group(3) @binding(0) var<storage, read> vertex_buffer : VertexBuffer;
+@group(4) @binding(0) var<uniform> camera : Camera;
 
 fn project(v: Vertex) -> vec3<f32> {
-    // convert the vertex to screen space
+    // Transform the vertex position to clip space
+    let clip_pos = camera.view_proj * vec4<f32>(v.x, v.y, v.z, 1.0);
+
+    // Perform the perspective divide to get NDC
+    let ndc_pos = clip_pos.xyz / clip_pos.w;
+
+    // Convert NDC to screen coordinates
     return vec3<f32>(
-        ((v.x + 1.0) * 0.5) * screen_dims.width,
-        (1.0 - (v.y + 1.0) * 0.5) * screen_dims.height,
-        v.z
+        ((ndc_pos.x + 1.0) * 0.5) * screen_dims.width,
+        (1.0 - (ndc_pos.y + 1.0) * 0.5) * screen_dims.height,
+        ndc_pos.z
     );
 }
 
