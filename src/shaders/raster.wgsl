@@ -22,18 +22,35 @@ struct Uniform {
 @group(2) @binding(0) var<uniform> screen_dims : Uniform;
 @group(3) @binding(0) var<storage, read> vertex_buffer : VertexBuffer;
 
+fn project(v: Vertex) -> vec3<f32> {
+    // convert the vertex to screen space
+    return vec3<f32>(
+        ((v.x + 1.0) * 0.5) * screen_dims.width,
+        (1.0 - (v.y + 1.0) * 0.5) * screen_dims.height,
+        v.z
+    );
+}
+
 fn rgb(r: u32, g: u32, b: u32) -> u32 {
     return (r << 16) | (g << 8) | b;
 }
 
-fn color_vertex(vertex: Vertex, color: u32) {
-    let x_screen = ((vertex.x + 1.0) * 0.5) * screen_dims.width;
-    let y_screen = ((1.0 - (vertex.y + 1.0) * 0.5) * screen_dims.height);
+fn color_pixel(x: f32, y: f32, color: u32) {
+    let pixelID = u32(x) + u32(y) * u32(screen_dims.width);
 
-    // Calculate the pixel ID based on the screen space coordinates
-    let pixelID = u32(x_screen) + u32(y_screen) * u32(screen_dims.width);
+    output_buffer.data[pixelID] = color;
+}
 
-        output_buffer.data[pixelID] = color;
+fn draw_line(v1: vec3<f32>, v2: vec3<f32>) {
+  let v1Vec = vec2<f32>(v1.x, v1.y);
+  let v2Vec = vec2<f32>(v2.x, v2.y);
+
+  let dist = i32(distance(v1Vec, v2Vec));
+  for (var i = 0; i < dist; i = i + 1) {
+    let x = v1.x + f32(v2.x - v1.x) * (f32(i) / f32(dist));
+    let y = v1.y + f32(v2.y - v1.y) * (f32(i) / f32(dist));
+    color_pixel(x, y, rgb(255u, 255u, 255u));
+  }
 }
 
 @compute @workgroup_size(256, 1)
@@ -58,11 +75,11 @@ fn clear(@builtin(global_invocation_id) global_id: vec3<u32>) {
 fn raster(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let triangle_idx = global_id.x * 3u;
 
-    let vertex0 = vertex_buffer.values[triangle_idx];
-    let vertex1 = vertex_buffer.values[triangle_idx + 1u];
-    let vertex2 = vertex_buffer.values[triangle_idx + 2u];
+    let v1 = project(vertex_buffer.values[triangle_idx]);
+    let v2 = project(vertex_buffer.values[triangle_idx + 1u]);
+    let v3 = project(vertex_buffer.values[triangle_idx + 2u]);
 
-    color_vertex(vertex0, rgb(255u, 0u, 0u));
-    color_vertex(vertex1, rgb(0u, 255u, 0u));
-    color_vertex(vertex2, rgb(0u, 0u, 255u));
+    draw_line(v1, v2);
+    draw_line(v2, v3);
+    draw_line(v3, v1);
 }
