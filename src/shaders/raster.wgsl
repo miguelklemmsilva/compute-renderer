@@ -1,5 +1,5 @@
 struct OutputBuffer {
-    data: array<u32>,
+    data: array<atomic<u32>>,
 };
 
 struct DepthBuffer {
@@ -50,7 +50,7 @@ fn rgb(r: u32, g: u32, b: u32) -> u32 {
 fn color_pixel(x: u32, y: u32, color: u32) {
     let pixelID = u32(x) + u32(y) * u32(screen_dims.width);
 
-    output_buffer.data[pixelID] = color;
+    atomicMin(&output_buffer.data[pixelID], color);
 }
 
 fn draw_line(v1: vec3<f32>, v2: vec3<f32>) {
