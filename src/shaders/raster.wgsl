@@ -47,22 +47,15 @@ fn rgb(r: u32, g: u32, b: u32) -> u32 {
     return (r << 16) | (g << 8) | b;
 }
 
-fn color_pixel(x: u32, y: u32, color: u32) {
-    let pixelID = u32(x) + u32(y) * u32(screen_dims.width);
+fn color_pixel(x: u32, y: u32, depth: f32, color: u32) {
+    let pixelID = x + y * u32(screen_dims.width);
 
-    atomicMin(&output_buffer.data[pixelID], color);
-}
-
-fn draw_line(v1: vec3<f32>, v2: vec3<f32>) {
-  let v1Vec = vec2<f32>(v1.x, v1.y);
-  let v2Vec = vec2<f32>(v2.x, v2.y);
-
-  let dist = i32(distance(v1Vec, v2Vec));
-  for (var i = 0; i < dist; i = i + 1) {
-    let x = v1.x + f32(v2.x - v1.x) * (f32(i) / f32(dist));
-    let y = v1.y + f32(v2.y - v1.y) * (f32(i) / f32(dist));
-    color_pixel(u32(x), u32(y), rgb(255u, 255u, 255u));
-  }
+    // Check the depth buffer
+    if (depth < depth_buffer.depth[pixelID]) {
+        // Update depth and color if the new depth is closer
+        depth_buffer.depth[pixelID] = depth;
+        output_buffer.data[pixelID] = color;
+    }
 }
 
 fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec3<f32> {
@@ -103,18 +96,18 @@ fn draw_triangle(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) {
         continue;
       }
 
-      // Normalize z-value from [-1.0, 1.0] to [0.0, 1.0]
+      // Calculate the interpolated z-value for the pixel
       let z_value = bc.x * v1.z + bc.y * v2.z + bc.z * v3.z;
       let normalized_z = (z_value + 1.0) * 0.5;
 
-      // Scale to [0, 255] and convert to u32
-      let color = u32(normalized_z * 255.0);
+      // Calculate color based on depth and barycentric weights
+      let R = u32(normalized_z * 255.0);
+      let G = u32((1.0 - normalized_z) * 255.0);
+      let B = u32(bc.z * 255.0);
+      let color = rgb(R, G, B);
 
-      let R = u32(normalized_z * 255.0); // Red varies with depth
-      let G = u32((1.0 - normalized_z) * 255.0); // Green inversely varies with depth
-      let B = u32(bc.z * 255.0); // Blue based on third barycentric weight
-
-      color_pixel(x, y, rgb(R, G, B));
+      // Pass the depth along with the color to color_pixel
+      color_pixel(x, y, normalized_z, color);
     }
   }
 }
