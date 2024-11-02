@@ -1,7 +1,7 @@
 use glam::{Mat4, Vec3};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct CameraUniform {
     pub view_position: [f32; 4],
     pub view_proj: [[f32; 4]; 4],

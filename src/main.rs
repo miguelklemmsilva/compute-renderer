@@ -22,6 +22,15 @@ fn main() {
         "assets/triangle.obj",
         model::FileType::Obj,
     ));
+    scene.add_camera(camera::Camera::new(
+        1.0,
+        0.0,
+        0.0,
+        glam::Vec3::ZERO,
+        800.0 / 600.0,
+    ));
+    scene.set_active_camera(0);
+
     let mut window = Window::new(800, 600, scene);
 
     let mut last_time = Instant::now();
