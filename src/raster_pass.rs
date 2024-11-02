@@ -68,6 +68,22 @@ impl RasterPass {
                 }],
             });
 
+        // Bind Group Layout for Camera Buffer
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Raster: Camera Buffer Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         // Create Pipeline Layout with all Bind Group Layouts
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Raster Pipeline Layout"),
@@ -76,6 +92,7 @@ impl RasterPass {
                 &depth_bind_group_layout,
                 &uniform_bind_group_layout,
                 &vertex_bind_group_layout,
+                &camera_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -102,6 +119,7 @@ pub struct RasterBindings {
     pub depth_buffer: wgpu::BindGroup,
     pub uniform: wgpu::BindGroup,
     pub vertex_buffer: wgpu::BindGroup,
+    pub camera_buffer: wgpu::BindGroup,
 }
 
 impl RasterBindings {
@@ -112,6 +130,7 @@ impl RasterBindings {
         depth_buffer: &wgpu::Buffer,
         vertex_buffer: &wgpu::Buffer,
         uniform: &wgpu::Buffer,
+        camera_buffer: &wgpu::Buffer,
     ) -> Self {
         // Bind Group for Color Buffer
         let output_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -153,11 +172,22 @@ impl RasterBindings {
             }],
         });
 
+        // Bind Group for Camera Buffer
+        let camera_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Raster: Camera Buffer Bind Group"),
+            layout: &pipeline.get_bind_group_layout(4),
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
+            }],
+        });
+
         Self {
             output_buffer,
             depth_buffer,
             uniform,
             vertex_buffer,
+            camera_buffer,
         }
     }
 
@@ -173,6 +203,22 @@ impl RasterBindings {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: vertex_buffer.as_entire_binding(),
+            }],
+        });
+    }
+
+    pub fn update_camera_buffer(
+        &mut self,
+        device: &wgpu::Device,
+        RasterPass { pipeline }: &RasterPass,
+        camera_buffer: &wgpu::Buffer,
+    ) {
+        self.camera_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Raster: Camera Buffer Bind Group"),
+            layout: &pipeline.get_bind_group_layout(0),
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: camera_buffer.as_entire_binding(),
             }],
         });
     }
@@ -192,6 +238,7 @@ impl<'a> RasterPass {
         cpass.set_bind_group(1, &bindings.depth_buffer, &[]);
         cpass.set_bind_group(2, &bindings.uniform, &[]);
         cpass.set_bind_group(3, &bindings.vertex_buffer, &[]);
+        cpass.set_bind_group(4, &bindings.camera_buffer, &[]);
         cpass.dispatch_workgroups(dispatch_size, 1, 1);
     }
 }

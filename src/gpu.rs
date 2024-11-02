@@ -1,7 +1,7 @@
 use wgpu::util::DeviceExt;
 
 use crate::{
-    clear_pass::ClearPass, raster_pass::{RasterBindings, RasterPass}, scene, util::{dispatch_size, process_obj_model, Uniform, Vertex}
+    camera, clear_pass::ClearPass, raster_pass::{RasterBindings, RasterPass}, scene, util::{dispatch_size, process_obj_model, Uniform, Vertex}
 };
 
 pub struct GPU {
@@ -57,14 +57,30 @@ impl GPU {
                 | wgpu::BufferUsages::STORAGE,
         });
 
-        let vertices = scene.models.iter().flat_map(|model| model.vertices.clone()).collect::<Vec<Vertex>>();
-        println!("Vertices: {:?}", vertices);
+        let vertices = scene
+            .models
+            .iter()
+            .flat_map(|model| model.vertices.clone())
+            .collect::<Vec<Vertex>>();
+
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
+        });
+
+        let active_camera = scene.get_active_camera().expect("No active camera");
+        let mut camera_uniform = camera::CameraUniform::default();
+        camera_uniform.update_view_proj(&active_camera);
+
+        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Camera Buffer"),
+            contents: bytemuck::bytes_of(&camera_uniform),
+            usage: wgpu::BufferUsages::UNIFORM
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::STORAGE,
         });
 
         let depth_buffer = device.create_buffer(&wgpu::BufferDescriptor {
@@ -91,6 +107,7 @@ impl GPU {
             &depth_buffer,
             &vertex_buffer,
             &screen_uniform,
+            &camera_buffer
         );
 
         GPU {
@@ -107,7 +124,12 @@ impl GPU {
         }
     }
 
-    pub async fn execute_pipeline(&mut self, width: usize, height: usize, scene: &scene::Scene) -> Vec<u32> {
+    pub async fn execute_pipeline(
+        &mut self,
+        width: usize,
+        height: usize,
+        scene: &scene::Scene,
+    ) -> Vec<u32> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -119,6 +141,7 @@ impl GPU {
                 label: Some("Clear Pass"),
                 timestamp_writes: None,
             });
+            
             self.clear_pass.record(
                 &mut cpass,
                 &self.raster_bindings,
@@ -131,7 +154,14 @@ impl GPU {
                 label: Some("Raster Pass"),
                 timestamp_writes: None,
             });
-            let num_triangles = scene.models.iter().map(|model| model.vertices.len()).sum::<usize>() / 3;
+
+            let num_triangles = scene
+                .models
+                .iter()
+                .map(|model| model.vertices.len())
+                .sum::<usize>()
+                / 3;
+
             self.raster_pass.record(
                 &mut cpass,
                 &self.raster_bindings,
