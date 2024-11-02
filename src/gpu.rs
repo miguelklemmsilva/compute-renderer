@@ -1,7 +1,11 @@
 use wgpu::util::DeviceExt;
 
 use crate::{
-    camera, clear_pass::ClearPass, raster_pass::{RasterBindings, RasterPass}, scene, util::{dispatch_size, process_obj_model, Uniform, Vertex}
+    camera,
+    clear_pass::ClearPass,
+    raster_pass::{RasterBindings, RasterPass},
+    scene,
+    util::{self, dispatch_size, Uniform, Vertex},
 };
 
 pub struct GPU {
@@ -71,6 +75,47 @@ impl GPU {
                 | wgpu::BufferUsages::COPY_SRC,
         });
 
+        let img = image::open("assets/african_head_diffuse.tga")
+            .unwrap()
+            .to_rgba8();
+        let (tex_width, tex_height) = img.dimensions();
+        let texture_data = img.into_raw();
+
+        // Pack the RGBA data into u32 values
+        let mut packed_texture_data = Vec::with_capacity((tex_width * tex_height) as usize);
+        for i in 0..(texture_data.len() / 4) {
+            let r = texture_data[i * 4 + 0] as u32;
+            let g = texture_data[i * 4 + 1] as u32;
+            let b = texture_data[i * 4 + 2] as u32;
+            let a = texture_data[i * 4 + 3] as u32;
+            let packed = (r << 24) | (g << 16) | (b << 8) | a;
+            packed_texture_data.push(packed);
+        }
+
+        println!("Texture data sample: {:?}", &packed_texture_data[..10]);
+
+        // Create a buffer for the texture data
+        let texture_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Texture Buffer"),
+            contents: bytemuck::cast_slice(&packed_texture_data),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let texture_dims = util::TextureDims {
+            width: tex_width,
+            height: tex_height,
+        };
+
+        let texture_dims_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Texture Dims Buffer"),
+            contents: bytemuck::bytes_of(&texture_dims),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
+        // for vertex in &vertices {
+        //     println!("UV: {:?}", vertex.tex_coords);
+        // }
+
         let active_camera = scene.get_active_camera().expect("No active camera");
         let mut camera_uniform = camera::CameraUniform::default();
         camera_uniform.update_view_proj(&active_camera);
@@ -106,8 +151,10 @@ impl GPU {
             &output_buffer,
             &depth_buffer,
             &vertex_buffer,
+            &texture_buffer,
+            &texture_dims_buffer,
             &screen_uniform,
-            &camera_buffer
+            &camera_buffer,
         );
 
         GPU {
@@ -158,9 +205,8 @@ impl GPU {
             let num_triangles = scene
                 .models
                 .iter()
-                .map(|model| model.vertices.len())
-                .sum::<usize>()
-                / 3;
+                .map(|model| model.vertices.len() / 3)
+                .sum::<usize>();
 
             self.raster_pass.record(
                 &mut cpass,

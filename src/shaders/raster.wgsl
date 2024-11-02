@@ -1,16 +1,22 @@
 struct OutputBuffer {
-    data: array<atomic<u32>>,
+    data: array<u32>,
 };
 
 struct DepthBuffer {
     depth: array<f32>,
 };
 
-struct Vertex { x: f32, y: f32, z: f32 }
+struct Vertex {
+    x: f32,
+    y: f32,
+    z: f32,
+    u: f32,
+    v: f32
+};
 
 struct VertexBuffer {
-  values: array<Vertex>,
-}
+    values: array<Vertex>
+};
 
 struct Uniform {
   width: f32,
@@ -22,13 +28,48 @@ struct Camera {
   view_proj: mat4x4<f32>,
 }
 
+struct TextureBuffer {
+    data: array<u32>
+};
+
+struct TextureDims {
+    width: u32,
+    height: u32
+};
+
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
 @group(1) @binding(0) var<storage, read_write> depth_buffer: DepthBuffer;
 @group(2) @binding(0) var<uniform> screen_dims : Uniform;
 @group(3) @binding(0) var<storage, read> vertex_buffer : VertexBuffer;
 @group(4) @binding(0) var<uniform> camera : Camera;
+@group(5) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
+@group(6) @binding(0) var<uniform> texture_dims: TextureDims;
 
-fn project(v: Vertex) -> vec3<f32> {
+fn sample_texture(uv: vec2<f32>) -> vec4<f32> {
+    let tex_width = f32(texture_dims.width);
+    let tex_height = f32(texture_dims.height);
+
+    // Clamp UV coordinates to [0,1]
+    let u = clamp(uv.x, 0.0, 1.0);
+    let v = clamp(1.0 - uv.y, 0.0, 1.0);
+
+    // Convert UV coordinates to texture indices
+    let x = u32(u * (tex_width - 1.0));
+    let y = u32(v * (tex_height - 1.0));
+
+    let tex_index = y * texture_dims.width + x;
+    let texel = texture_buffer.data[tex_index];
+
+    // Extract RGBA components from the packed u32
+    let r = f32((texel >> 24) & 0xFFu) / 255.0;
+    let g = f32((texel >> 16) & 0xFFu) / 255.0;
+    let b = f32((texel >> 8) & 0xFFu) / 255.0;
+    let a = f32(texel & 0xFFu) / 255.0;
+
+    return vec4<f32>(r, g, b, a);
+}
+
+fn project(v: Vertex) -> Vertex {
     // Transform the vertex position to clip space
     let clip_pos = camera.view_proj * vec4<f32>(v.x, v.y, v.z, 1.0);
 
@@ -36,10 +77,18 @@ fn project(v: Vertex) -> vec3<f32> {
     let ndc_pos = clip_pos.xyz / clip_pos.w;
 
     // Convert NDC to screen coordinates
-    return vec3<f32>(
+    let screen_pos = vec3<f32>(
         ((ndc_pos.x + 1.0) * 0.5) * screen_dims.width,
-        (1.0 - (ndc_pos.y + 1.0) * 0.5) * screen_dims.height,
+        ((1.0 - ndc_pos.y) * 0.5) * screen_dims.height,
         ndc_pos.z
+    );
+
+    return Vertex(
+        screen_pos.x,
+        screen_pos.y,
+        screen_pos.z,
+        v.u,
+        v.v
     );
 }
 
@@ -81,33 +130,43 @@ fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
   return min_max;
 }
 
-fn draw_triangle(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) {
-  let min_max = get_min_max(v1, v2, v3);
-  let startX = u32(min_max.x);
-  let startY = u32(min_max.y);
-  let endX = u32(min_max.z);
-  let endY = u32(min_max.w);
+fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
+  let min_max = get_min_max(vec3<f32>(v1.x, v1.y, v1.z), vec3<f32>(v2.x, v2.y, v2.z), vec3<f32>(v3.x, v3.y, v3.z));
+  let startX = u32(clamp(min_max.x, 0.0, f32(screen_dims.width - 1)));
+  let startY = u32(clamp(min_max.y, 0.0, f32(screen_dims.height - 1)));
+  let endX = u32(clamp(min_max.z, 0.0, f32(screen_dims.width - 1)));
+  let endY = u32(clamp(min_max.w, 0.0, f32(screen_dims.height - 1)));
 
   for (var x: u32 = startX; x <= endX; x = x + 1u) {
     for (var y: u32 = startY; y <= endY; y = y + 1u) {
-      let bc = barycentric(v1, v2, v3, vec2<f32>(f32(x), f32(y))); 
+      let bc = barycentric(
+          vec3<f32>(v1.x, v1.y, v1.z),
+          vec3<f32>(v2.x, v2.y, v2.z),
+          vec3<f32>(v3.x, v3.y, v3.z),
+          vec2<f32>(f32(x), f32(y))
+      );
 
       if (bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0) {
-        continue;
+          continue;
       }
 
-      // Calculate the interpolated z-value for the pixel
       let z_value = bc.x * v1.z + bc.y * v2.z + bc.z * v3.z;
       let normalized_z = (z_value + 1.0) * 0.5;
 
-      // Calculate color based on depth and barycentric weights
-      let R = u32(normalized_z * 255.0);
-      let G = u32((1.0 - normalized_z) * 255.0);
-      let B = u32(bc.z * 255.0);
-      let color = rgb(R, G, B);
+      // Interpolate UV coordinates
+      let uv = bc.x * vec2<f32>(v1.u, v1.v) +
+                bc.y * vec2<f32>(v2.u, v2.v) +
+                bc.z * vec2<f32>(v3.u, v3.v);
 
-      // Pass the depth along with the color to color_pixel
-      color_pixel(x, y, normalized_z, color);
+      // Sample the texture
+      let tex_color = sample_texture(uv);
+
+      // Convert color to u32
+      let R = u32(tex_color.r * 255.0);
+      let G = u32(tex_color.g * 255.0);
+      let B = u32(tex_color.b * 255.0);
+
+      color_pixel(x, y, normalized_z, rgb(R, G, B));
     }
   }
 }
