@@ -5,14 +5,14 @@ use crate::{
 };
 
 pub struct GPU {
-    device: wgpu::Device,
-    queue: wgpu::Queue,
+    pub device: wgpu::Device,
+    pub queue: wgpu::Queue,
 
-    screen_uniform: wgpu::Buffer,
+    pub camera_buffer: wgpu::Buffer,
     output_buffer: wgpu::Buffer,
 
-    raster_pass: RasterPass,
-    raster_bindings: RasterBindings,
+    pub raster_pass: RasterPass,
+    pub raster_bindings: RasterBindings,
 
     clear_pass: ClearPass,
 }
@@ -114,7 +114,7 @@ impl GPU {
             device,
             queue,
 
-            screen_uniform,
+            camera_buffer,
             output_buffer,
 
             raster_pass,
@@ -141,7 +141,7 @@ impl GPU {
                 label: Some("Clear Pass"),
                 timestamp_writes: None,
             });
-            
+
             self.clear_pass.record(
                 &mut cpass,
                 &self.raster_bindings,

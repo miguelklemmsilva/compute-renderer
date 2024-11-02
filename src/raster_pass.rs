@@ -190,38 +190,6 @@ impl RasterBindings {
             camera_buffer,
         }
     }
-
-    pub fn update_vertex_buffer(
-        &mut self,
-        device: &wgpu::Device,
-        RasterPass { pipeline }: &RasterPass,
-        vertex_buffer: &wgpu::Buffer,
-    ) {
-        self.vertex_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Raster: Vertex Buffer Bind Group"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: vertex_buffer.as_entire_binding(),
-            }],
-        });
-    }
-
-    pub fn update_camera_buffer(
-        &mut self,
-        device: &wgpu::Device,
-        RasterPass { pipeline }: &RasterPass,
-        camera_buffer: &wgpu::Buffer,
-    ) {
-        self.camera_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Raster: Camera Buffer Bind Group"),
-            layout: &pipeline.get_bind_group_layout(0),
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: camera_buffer.as_entire_binding(),
-            }],
-        });
-    }
 }
 
 impl<'a> RasterPass {
