@@ -14,8 +14,7 @@ mod window;
 fn main() {
     let mut scene = scene::Scene::new();
     scene.add_model(model::Model::new(
-        "assets/suzanne.obj",
-        model::FileType::Obj,
+        "assets/african_head.obj",
     ));
     scene.add_camera(camera::Camera::new(
         2.0,
