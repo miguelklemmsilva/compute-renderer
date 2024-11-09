@@ -12,20 +12,34 @@ mod util;
 mod window;
 
 fn main() {
+    let height = 900;
+    let width = 1000;
+
     let mut scene = scene::Scene::new();
-    scene.add_model(model::Model::new(
-        "assets/african_head.obj",
-    ));
+    let model_index = {
+        scene.add_model("assets/african_head.obj");
+        scene.models.len() - 1
+    };
+
+    // Load the texture and get its index
+    let texture_index = scene.add_texture("assets/african_head_diffuse.tga");
+
+    // Apply the texture to the model
+    if let Some(model) = scene.models.get_mut(model_index) {
+        model.apply_texture(texture_index);
+    }
+
+    // Add camera and set active
     scene.add_camera(camera::Camera::new(
         2.0,
         0.0,
-        0.0,
+        3.0,
         glam::Vec3::ZERO,
-        800.0 / 600.0,
+        (width as f32) / (height as f32),
     ));
     scene.set_active_camera(0);
 
-    let mut window = Window::new(800, 600, scene);
+    let mut window = Window::new(width, height, scene);
 
     let mut last_time = Instant::now();
     let mut frame_start_time = Instant::now();

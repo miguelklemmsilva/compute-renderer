@@ -11,7 +11,8 @@ struct Vertex {
     y: f32,
     z: f32,
     u: f32,
-    v: f32
+    v: f32,
+    texture_index: u32,
 };
 
 struct VertexBuffer {
@@ -32,9 +33,15 @@ struct TextureBuffer {
     data: array<u32>
 };
 
-struct TextureDims {
+struct TextureInfos {
+    infos: array<TextureInfo>
+};
+
+struct TextureInfo {
+    offset: u32,
     width: u32,
-    height: u32
+    height: u32,
+    _padding: u32, // Match the Rust struct definition
 };
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
@@ -43,24 +50,29 @@ struct TextureDims {
 @group(3) @binding(0) var<storage, read> vertex_buffer : VertexBuffer;
 @group(4) @binding(0) var<uniform> camera : Camera;
 @group(5) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
-@group(6) @binding(0) var<uniform> texture_dims: TextureDims;
+@group(6) @binding(0) var<storage, read> texture_infos: TextureInfos;
 
-fn sample_texture(uv: vec2<f32>) -> vec4<f32> {
-    let tex_width = f32(texture_dims.width);
-    let tex_height = f32(texture_dims.height);
+fn sample_texture(uv: vec2<f32>, texture_index: u32) -> vec4<f32> {
+  let NO_TEXTURE_INDEX: u32 = 0xffffffffu;
 
-    // Clamp UV coordinates to [0,1]
+    if (texture_index == NO_TEXTURE_INDEX) {
+        return vec4<f32>(1.0, 1.0, 1.0, 1.0); // Return white color for vertices without texture
+    }
+
+
+    let tex_info = texture_infos.infos[texture_index];
+    let tex_width = f32(tex_info.width);
+    let tex_height = f32(tex_info.height);
+
     let u = clamp(uv.x, 0.0, 1.0);
     let v = clamp(1.0 - uv.y, 0.0, 1.0);
 
-    // Convert UV coordinates to texture indices
     let x = u32(u * (tex_width - 1.0));
     let y = u32(v * (tex_height - 1.0));
 
-    let tex_index = y * texture_dims.width + x;
+    let tex_index = tex_info.offset + y * tex_info.width + x;
     let texel = texture_buffer.data[tex_index];
 
-    // Extract RGBA components from the packed u32
     let r = f32((texel >> 24) & 0xFFu) / 255.0;
     let g = f32((texel >> 16) & 0xFFu) / 255.0;
     let b = f32((texel >> 8) & 0xFFu) / 255.0;
@@ -88,7 +100,8 @@ fn project(v: Vertex) -> Vertex {
         screen_pos.y,
         screen_pos.z,
         v.u,
-        v.v
+        v.v,
+        v.texture_index
     );
 }
 
@@ -131,6 +144,7 @@ fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
 }
 
 fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
+  let texture_index = v1.texture_index;
   let min_max = get_min_max(vec3<f32>(v1.x, v1.y, v1.z), vec3<f32>(v2.x, v2.y, v2.z), vec3<f32>(v3.x, v3.y, v3.z));
   let startX = u32(clamp(min_max.x, 0.0, f32(screen_dims.width - 1)));
   let startY = u32(clamp(min_max.y, 0.0, f32(screen_dims.height - 1)));
@@ -159,7 +173,7 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
                 bc.z * vec2<f32>(v3.u, v3.v);
 
       // Sample the texture
-      let tex_color = sample_texture(uv);
+      let tex_color = sample_texture(uv, texture_index);
 
       // Convert color to u32
       let R = u32(tex_color.r * 255.0);
