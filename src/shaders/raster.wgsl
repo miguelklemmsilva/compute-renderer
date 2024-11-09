@@ -10,6 +10,9 @@ struct Vertex {
     x: f32,
     y: f32,
     z: f32,
+    nx: f32,
+    ny: f32,
+    nz: f32,
     u: f32,
     v: f32,
     texture_index: u32,
@@ -99,10 +102,14 @@ fn project(v: Vertex) -> Vertex {
         ndc_pos.z
     );
 
+    // Pass through normals
     return Vertex(
         screen_pos.x,
         screen_pos.y,
         screen_pos.z,
+        v.nx,
+        v.ny,
+        v.nz,
         v.u,
         v.v,
         v.texture_index
@@ -148,6 +155,15 @@ fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
 }
 
 fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
+    let e1 = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
+    let e2 = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
+    let cross_z = e1.x * e2.y - e1.y * e2.x;
+
+    if (cross_z <= 0.0) {
+        // Triangle is back-facing, cull it
+        return;
+    }
+
   let texture_index = v1.texture_index;
   let min_max = get_min_max(vec3<f32>(v1.x, v1.y, v1.z), vec3<f32>(v2.x, v2.y, v2.z), vec3<f32>(v3.x, v3.y, v3.z));
   let startX = u32(clamp(min_max.x, 0.0, f32(screen_dims.width - 1)));
@@ -155,38 +171,52 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
   let endX = u32(clamp(min_max.z, 0.0, f32(screen_dims.width - 1)));
   let endY = u32(clamp(min_max.w, 0.0, f32(screen_dims.height - 1)));
 
-  for (var x: u32 = startX; x <= endX; x = x + 1u) {
-    for (var y: u32 = startY; y <= endY; y = y + 1u) {
-      let bc = barycentric(
-          vec3<f32>(v1.x, v1.y, v1.z),
-          vec3<f32>(v2.x, v2.y, v2.z),
-          vec3<f32>(v3.x, v3.y, v3.z),
-          vec2<f32>(f32(x), f32(y))
-      );
+    for (var x: u32 = startX; x <= endX; x = x + 1u) {
+        for (var y: u32 = startY; y <= endY; y = y + 1u) {
+            let bc = barycentric(
+                vec3<f32>(v1.x, v1.y, v1.z),
+                vec3<f32>(v2.x, v2.y, v2.z),
+                vec3<f32>(v3.x, v3.y, v3.z),
+                vec2<f32>(f32(x), f32(y))
+            );
 
-      if (bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0) {
-          continue;
-      }
+            if (bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0) {
+                continue;
+            }
 
-      let z_value = bc.x * v1.z + bc.y * v2.z + bc.z * v3.z;
-      let normalized_z = (z_value + 1.0) * 0.5;
+            let z_value = bc.x * v1.z + bc.y * v2.z + bc.z * v3.z;
+            let normalized_z = (z_value + 1.0) * 0.5;
 
-      // Interpolate UV coordinates
-      let uv = bc.x * vec2<f32>(v1.u, v1.v) +
-                bc.y * vec2<f32>(v2.u, v2.v) +
-                bc.z * vec2<f32>(v3.u, v3.v);
+            // Interpolate UV coordinates
+            let uv = bc.x * vec2<f32>(v1.u, v1.v) +
+                    bc.y * vec2<f32>(v2.u, v2.v) +
+                    bc.z * vec2<f32>(v3.u, v3.v);
 
-      // Sample the texture
-      let tex_color = sample_texture(uv, texture_index);
+            // Interpolate normals
+            let normal = normalize(
+                bc.x * vec3<f32>(v1.nx, v1.ny, v1.nz) +
+                bc.y * vec3<f32>(v2.nx, v2.ny, v2.nz) +
+                bc.z * vec3<f32>(v3.nx, v3.ny, v3.nz)
+            );
 
-      // Convert color to u32
-      let R = u32(tex_color.r * 255.0);
-      let G = u32(tex_color.g * 255.0);
-      let B = u32(tex_color.b * 255.0);
+            // Compute diffuse lighting
+            let light_dir = normalize(vec3<f32>(0.0, 0.0, -1.0)); // Light coming from the camera direction
+            let diffuse = calculate_diffuse_lighting(normal, light_dir);
 
-      color_pixel(x, y, normalized_z, rgb(R, G, B));
+            // Sample the texture
+            let tex_color = sample_texture(uv, texture_index);
+
+            // Apply diffuse lighting
+            let final_color = tex_color.rgb * diffuse;
+
+            // Convert color to u32
+            let R = u32(final_color.r * 255.0);
+            let G = u32(final_color.g * 255.0);
+            let B = u32(final_color.b * 255.0);
+
+            color_pixel(x, y, normalized_z, rgb(R, G, B));
+        }
     }
-  }
 }
 
 @compute @workgroup_size(256, 1)
