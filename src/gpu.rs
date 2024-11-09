@@ -75,41 +75,41 @@ impl GPU {
                 | wgpu::BufferUsages::COPY_SRC,
         });
 
-        let img = image::open("assets/african_head_diffuse.tga")
-            .unwrap()
-            .to_rgba8();
-        let (tex_width, tex_height) = img.dimensions();
-        let texture_data = img.into_raw();
-
-        // Pack the RGBA data into u32 values
-        let mut packed_texture_data = Vec::with_capacity((tex_width * tex_height) as usize);
-        for i in 0..(texture_data.len() / 4) {
-            let r = texture_data[i * 4 + 0] as u32;
-            let g = texture_data[i * 4 + 1] as u32;
-            let b = texture_data[i * 4 + 2] as u32;
-            let a = texture_data[i * 4 + 3] as u32;
-            let packed = (r << 24) | (g << 16) | (b << 8) | a;
-            packed_texture_data.push(packed);
+        #[repr(C)]
+        #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
+        struct TextureInfo {
+            offset: u32,
+            width: u32,
+            height: u32,
+            _padding: u32, // Add padding to meet 16-byte alignment
         }
 
-        println!("Texture data sample: {:?}", &packed_texture_data[..10]);
+        let mut flattened_texture_data = Vec::new();
+        let mut texture_infos = Vec::new();
 
-        // Create a buffer for the texture data
+        for material in &scene.materials {
+            let offset = flattened_texture_data.len() as u32;
+
+            flattened_texture_data.extend_from_slice(&material.texture.data);
+
+            texture_infos.push(TextureInfo {
+                offset,
+                width: material.texture.width,
+                height: material.texture.height,
+                _padding: 0,
+            });
+        }
+
         let texture_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Texture Buffer"),
-            contents: bytemuck::cast_slice(&packed_texture_data),
+            contents: bytemuck::cast_slice(&flattened_texture_data),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        let texture_dims = util::TextureDims {
-            width: tex_width,
-            height: tex_height,
-        };
-
-        let texture_dims_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Texture Dims Buffer"),
-            contents: bytemuck::bytes_of(&texture_dims),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        let texture_infos_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Texture Info Buffer"),
+            contents: bytemuck::cast_slice(&texture_infos),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         // for vertex in &vertices {
@@ -152,7 +152,7 @@ impl GPU {
             &depth_buffer,
             &vertex_buffer,
             &texture_buffer,
-            &texture_dims_buffer,
+            &texture_infos_buffer,
             &screen_uniform,
             &camera_buffer,
         );

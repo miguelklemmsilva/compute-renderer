@@ -12,9 +12,13 @@ pub fn process_obj_model(file: &str) -> Vec<Vertex> {
                     let tex_coord = if let Some(tex_idx) = index.1 {
                         obj_data.texture[tex_idx]
                     } else {
-                        [0.0, 0.0] // Default UV if none provided
+                        [0.0, 0.0]
                     };
-                    vertices.push(Vertex::from((position, tex_coord)));
+                    vertices.push(Vertex {
+                        position: [position[0], position[1], position[2]],
+                        tex_coords: [tex_coord[0], tex_coord[1]],
+                        texture_index: 0,
+                    });
                 }
             }
         }
@@ -48,28 +52,7 @@ impl Uniform {
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
 pub struct Vertex {
-    position: [f32; 3],
+    pub position: [f32; 3],
     pub tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    pub const fn new(x: f32, y: f32, z: f32, u: f32, v: f32) -> Self {
-        Self {
-            position: [x, y, z],
-            tex_coords: [u, v],
-        }
-    }
-}
-
-impl From<([f32; 3], [f32; 2])> for Vertex {
-    fn from(data: ([f32; 3], [f32; 2])) -> Self {
-        Vertex::new(data.0[0], data.0[1], data.0[2], data.1[0], data.1[1])
-    }
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable)]
-pub struct TextureDims {
-    pub width: u32,
-    pub height: u32,
+    pub texture_index: u32,
 }
