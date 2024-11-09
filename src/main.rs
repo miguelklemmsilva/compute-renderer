@@ -16,18 +16,8 @@ fn main() {
     let width = 1000;
 
     let mut scene = scene::Scene::new();
-    let model_index = {
-        scene.add_model("assets/african_head.obj");
-        scene.models.len() - 1
-    };
-
-    // Load the texture and get its index
-    let texture_index = scene.add_texture("assets/african_head_diffuse.tga");
-
-    // Apply the texture to the model
-    if let Some(model) = scene.models.get_mut(model_index) {
-        model.apply_texture(texture_index);
-    }
+    let model_index = scene.add_model("assets/african_head.obj");
+    scene.add_texture_to_model(model_index, "assets/african_head_diffuse.tga");
 
     // Add camera and set active
     scene.add_camera(camera::Camera::new(
