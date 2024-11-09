@@ -81,7 +81,7 @@ impl GPU {
             offset: u32,
             width: u32,
             height: u32,
-            _padding: u32, // Add padding to meet 16-byte alignment
+            _padding: u32,
         }
 
         let mut flattened_texture_data = Vec::new();
@@ -100,21 +100,36 @@ impl GPU {
             });
         }
 
+        let fallback_data = vec![0xffffffffu32]; // White pixel
+
+        let texture_data = if flattened_texture_data.is_empty() {
+            &fallback_data
+        } else {
+            &flattened_texture_data
+        };
+
+        let texture_infos_data = if texture_infos.is_empty() {
+            vec![TextureInfo {
+                offset: 0,
+                width: 1,
+                height: 1,
+                _padding: 0,
+            }]
+        } else {
+            texture_infos
+        };
+
         let texture_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Texture Buffer"),
-            contents: bytemuck::cast_slice(&flattened_texture_data),
+            contents: bytemuck::cast_slice(texture_data),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         let texture_infos_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Texture Info Buffer"),
-            contents: bytemuck::cast_slice(&texture_infos),
+            contents: bytemuck::cast_slice(&texture_infos_data),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
-
-        // for vertex in &vertices {
-        //     println!("UV: {:?}", vertex.tex_coords);
-        // }
 
         let active_camera = scene.get_active_camera().expect("No active camera");
         let mut camera_uniform = camera::CameraUniform::default();
