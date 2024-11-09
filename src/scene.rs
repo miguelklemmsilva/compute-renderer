@@ -25,7 +25,8 @@ impl Scene {
     /// Adds a model and returns a handle (index or reference) for easier access later
     pub fn add_model(&mut self, model_file: &str) -> usize {
         let vertices = process_obj_model(model_file);
-        let model = Model { vertices };
+        let mut model = Model { vertices };
+        model.without_texture();
         self.models.push(model);
         self.models.len() - 1 // Returns the model index for easy access
     }
