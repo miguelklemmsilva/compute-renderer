@@ -16,7 +16,7 @@ fn main() {
     let width = 1000;
 
     let mut scene = scene::Scene::new();
-    let model_index = scene.add_model("assets/ANH_SABER.obj");
+    let model_index = scene.add_model("assets/test.obj");
     // scene.add_texture_to_model(model_index, "assets/african_head_diffuse.tga");
 
     // Add camera and set active
