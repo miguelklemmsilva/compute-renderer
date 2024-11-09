@@ -52,11 +52,15 @@ struct TextureInfo {
 @group(5) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
 @group(6) @binding(0) var<storage, read> texture_infos: TextureInfos;
 
+fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
+    return max(dot(normalize(normal), normalize(light_dir)), 0.0);
+}
+
 fn sample_texture(uv: vec2<f32>, texture_index: u32) -> vec4<f32> {
   let NO_TEXTURE_INDEX: u32 = 0xffffffffu;
 
     if (texture_index == NO_TEXTURE_INDEX) {
-        return vec4<f32>(1.0, 1.0, 1.0, 1.0); // Return white color for vertices without texture
+        return vec4<f32>(1.0, 1.0, 1.0, 1.0);
     }
 
 
@@ -197,7 +201,7 @@ fn clear(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     // Set color to a default value
-    output_buffer.data[idx] = rgb(255u, 255u, 255u);
+    output_buffer.data[idx] = rgb(0u, 0u, 0u);
 
     // Set depth to maximum (1.0)
     depth_buffer.depth[idx] = 1.0;

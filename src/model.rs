@@ -1,4 +1,4 @@
-use crate::util::{Vertex};
+use crate::util::Vertex;
 
 pub struct Model {
     pub vertices: Vec<Vertex>,
@@ -14,6 +14,12 @@ impl Model {
     pub fn apply_texture_to_range(&mut self, texture_index: u32, start: usize, end: usize) {
         for vertex in &mut self.vertices[start..end] {
             vertex.texture_index = texture_index;
+        }
+    }
+
+    pub fn without_texture(&mut self) {
+        for vertex in &mut self.vertices {
+            vertex.texture_index = u32::MAX;
         }
     }
 }

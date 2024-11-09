@@ -16,14 +16,14 @@ fn main() {
     let width = 1000;
 
     let mut scene = scene::Scene::new();
-    let model_index = scene.add_model("assets/african_head.obj");
-    scene.add_texture_to_model(model_index, "assets/african_head_diffuse.tga");
+    let model_index = scene.add_model("assets/ANH_SABER.obj");
+    // scene.add_texture_to_model(model_index, "assets/african_head_diffuse.tga");
 
     // Add camera and set active
     scene.add_camera(camera::Camera::new(
-        2.0,
+        10.0,
         0.0,
-        3.0,
+        0.0,
         glam::Vec3::ZERO,
         (width as f32) / (height as f32),
     ));
