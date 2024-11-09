@@ -1,28 +1,51 @@
+use std::u32;
+
 use bytemuck::{Pod, Zeroable};
 
 pub fn process_obj_model(file: &str) -> Vec<Vertex> {
-    let obj_data = obj::ObjData::load_buf(&mut std::fs::File::open(file).unwrap()).unwrap();
-    let mut vertices = Vec::new();
+    let (models, materials) = tobj::load_obj(
+        file,
+        &tobj::LoadOptions {
+            triangulate: true,
+            single_index: true,
+            ..Default::default()
+        },
+    )
+    .expect("Failed to load OBJ file");
 
-    for object in &obj_data.objects {
-        for group in &object.groups {
-            for poly in &group.polys {
-                for index in &poly.0 {
-                    let position = obj_data.position[index.0];
-                    let tex_coord = if let Some(tex_idx) = index.1 {
-                        obj_data.texture[tex_idx]
-                    } else {
-                        [0.0, 0.0]
-                    };
-                    vertices.push(Vertex {
-                        position: [position[0], position[1], position[2]],
-                        tex_coords: [tex_coord[0], tex_coord[1]],
-                        texture_index: 0,
-                    });
-                }
-            }
+    let mut vertices = vec![];
+    for model in models.iter() {
+        let mesh = &model.mesh;
+
+        for &index in &mesh.indices {
+            let index = index as usize;
+            let pos_index = 3 * index;
+            let tex_index = 2 * index;
+
+            let position = [
+                mesh.positions[pos_index],
+                mesh.positions[pos_index + 1],
+                mesh.positions[pos_index + 2],
+            ];
+
+            let tex_coords = if !mesh.texcoords.is_empty() {
+                [mesh.texcoords[tex_index], mesh.texcoords[tex_index + 1]]
+            } else {
+                [0.0, 0.0]
+            };
+
+            let material_index = u32::MAX;
+
+            vertices.push(Vertex {
+                position,
+                tex_coords,
+                texture_index: material_index,
+            });
         }
     }
+
+    // print amount of vertices
+    println!("Amount of vertices: {}", vertices.len());
 
     vertices
 }
