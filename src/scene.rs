@@ -1,7 +1,7 @@
 use crate::{
     camera::{self, Camera},
     gpu,
-    model::{self, Material, Model},
+    model::{self, Material, Model, Texture},
     util::process_obj_model,
 };
 
@@ -13,8 +13,8 @@ pub struct Scene {
 }
 
 impl Scene {
-    pub fn new() -> Scene {
-        Scene {
+    pub fn new() -> Self {
+        Self {
             models: vec![],
             cameras: vec![],
             active_camera: None,
@@ -22,17 +22,28 @@ impl Scene {
         }
     }
 
-    pub fn add_model(&mut self, model_file: &str) -> &mut Model {
-        let mut vertices = process_obj_model(model_file);
-
-        // Set the texture_index to u32::MAX to indicate no texture
-        for vertex in &mut vertices {
-            vertex.texture_index = u32::MAX;
-        }
-
+    /// Adds a model and returns a handle (index or reference) for easier access later
+    pub fn add_model(&mut self, model_file: &str) -> usize {
+        let vertices = process_obj_model(model_file);
         let model = Model { vertices };
         self.models.push(model);
-        self.models.last_mut().unwrap()
+        self.models.len() - 1 // Returns the model index for easy access
+    }
+
+    /// Adds a texture to the scene and applies it to the specified model
+    pub fn add_texture_to_model(&mut self, model_index: usize, texture_file: &str) {
+        let texture = Texture::load(texture_file);
+        let texture_index = self.materials.len() as u32;
+
+        self.materials.push(Material {
+            texture,
+            texture_index,
+        });
+
+        // Apply texture to the model (assuming one texture per model in this example)
+        if let Some(model) = self.models.get_mut(model_index) {
+            model.apply_texture(texture_index);
+        }
     }
 
     pub fn add_texture(&mut self, texture_file: &str) -> u32 {
