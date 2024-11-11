@@ -1,21 +1,19 @@
 struct OutputBuffer {
-    data: array<u32>,
+    data: array<atomic<u32>>,
 };
 
 struct DepthBuffer {
-    depth: array<f32>,
+    depth: array<atomic<u32>>,
 };
 
 struct Vertex {
     x: f32,
     y: f32,
     z: f32,
-    nx: f32,
-    ny: f32,
-    nz: f32,
     u: f32,
     v: f32,
     texture_index: u32,
+    w_clip: f32,
 };
 
 struct VertexBuffer {
@@ -44,7 +42,7 @@ struct TextureInfo {
     offset: u32,
     width: u32,
     height: u32,
-    _padding: u32, // Match the Rust struct definition
+    _padding: u32, 
 };
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
@@ -65,7 +63,6 @@ fn sample_texture(uv: vec2<f32>, texture_index: u32) -> vec4<f32> {
     if (texture_index == NO_TEXTURE_INDEX) {
         return vec4<f32>(1.0, 1.0, 1.0, 1.0);
     }
-
 
     let tex_info = texture_infos.infos[texture_index];
     let tex_width = f32(tex_info.width);
@@ -102,17 +99,15 @@ fn project(v: Vertex) -> Vertex {
         ndc_pos.z
     );
 
-    // Pass through normals
+    // Return the Vertex, including w_clip
     return Vertex(
         screen_pos.x,
         screen_pos.y,
         screen_pos.z,
-        v.nx,
-        v.ny,
-        v.nz,
         v.u,
         v.v,
-        v.texture_index
+        v.texture_index,
+        clip_pos.w 
     );
 }
 
@@ -120,14 +115,28 @@ fn rgb(r: u32, g: u32, b: u32) -> u32 {
     return (r << 16) | (g << 8) | b;
 }
 
+fn float_to_depth_int(depth: f32) -> u32 {
+    return u32(depth * 4294967295.0);
+}
+
 fn color_pixel(x: u32, y: u32, depth: f32, color: u32) {
     let pixelID = x + y * u32(screen_dims.width);
-
-    // Check the depth buffer
-    if (depth < depth_buffer.depth[pixelID]) {
-        // Update depth and color if the new depth is closer
-        depth_buffer.depth[pixelID] = depth;
-        output_buffer.data[pixelID] = color;
+    let depth_int = float_to_depth_int(depth);
+    
+    loop {
+        let old_depth = atomicLoad(&depth_buffer.depth[pixelID]);
+        if (depth_int >= old_depth) {
+            // The new depth is not closer; exit
+            break;
+        }
+        // Attempt to update the depth buffer
+        let exchanged = atomicCompareExchangeWeak(&depth_buffer.depth[pixelID], old_depth, depth_int);
+        if (exchanged.exchanged) {
+            // Successfully updated depth buffer; update color buffer
+            atomicExchange(&output_buffer.data[pixelID], color);
+            break;
+        }
+        // Another thread updated the depth before us; try again
     }
 }
 
@@ -155,21 +164,17 @@ fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
 }
 
 fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
-    let e1 = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
-    let e2 = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
-    let cross_z = e1.x * e2.y - e1.y * e2.x;
+    let texture_index = v1.texture_index;
+    let min_max = get_min_max(
+        vec3<f32>(v1.x, v1.y, v1.z),
+        vec3<f32>(v2.x, v2.y, v2.z),
+        vec3<f32>(v3.x, v3.y, v3.z),
+    );
 
-    if (cross_z <= 0.0) {
-        // Triangle is back-facing, cull it
-        return;
-    }
-
-  let texture_index = v1.texture_index;
-  let min_max = get_min_max(vec3<f32>(v1.x, v1.y, v1.z), vec3<f32>(v2.x, v2.y, v2.z), vec3<f32>(v3.x, v3.y, v3.z));
-  let startX = u32(clamp(min_max.x, 0.0, f32(screen_dims.width - 1)));
-  let startY = u32(clamp(min_max.y, 0.0, f32(screen_dims.height - 1)));
-  let endX = u32(clamp(min_max.z, 0.0, f32(screen_dims.width - 1)));
-  let endY = u32(clamp(min_max.w, 0.0, f32(screen_dims.height - 1)));
+    let startX = u32(clamp(min_max.x, 0.0, screen_dims.width - 1.0));
+    let startY = u32(clamp(min_max.y, 0.0, screen_dims.height - 1.0));
+    let endX = u32(clamp(min_max.z, 0.0, screen_dims.width - 1.0));
+    let endY = u32(clamp(min_max.w, 0.0, screen_dims.height - 1.0));
 
     for (var x: u32 = startX; x <= endX; x = x + 1u) {
         for (var y: u32 = startY; y <= endY; y = y + 1u) {
@@ -177,42 +182,41 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
                 vec3<f32>(v1.x, v1.y, v1.z),
                 vec3<f32>(v2.x, v2.y, v2.z),
                 vec3<f32>(v3.x, v3.y, v3.z),
-                vec2<f32>(f32(x), f32(y))
+                vec2<f32>(f32(x), f32(y)),
             );
 
             if (bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0) {
                 continue;
             }
 
-            let z_value = bc.x * v1.z + bc.y * v2.z + bc.z * v3.z;
-            let normalized_z = (z_value + 1.0) * 0.5;
+            // Compute reciprocal of w_clip for each vertex
+            let one_over_w1 = 1.0 / v1.w_clip;
+            let one_over_w2 = 1.0 / v2.w_clip;
+            let one_over_w3 = 1.0 / v3.w_clip;
+
+            // Interpolated 1/w
+            let interpolated_one_over_w = bc.x * one_over_w1 + bc.y * one_over_w2 + bc.z * one_over_w3;
 
             // Interpolate UV coordinates
-            let uv = bc.x * vec2<f32>(v1.u, v1.v) +
-                    bc.y * vec2<f32>(v2.u, v2.v) +
-                    bc.z * vec2<f32>(v3.u, v3.v);
+            let interpolated_uv_over_w = bc.x * vec2<f32>(v1.u, v1.v) * one_over_w1 +
+                                         bc.y * vec2<f32>(v2.u, v2.v) * one_over_w2 +
+                                         bc.z * vec2<f32>(v3.u, v3.v) * one_over_w3;
+            let uv = interpolated_uv_over_w / interpolated_one_over_w;
 
-            // Interpolate normals
-            let normal = normalize(
-                bc.x * vec3<f32>(v1.nx, v1.ny, v1.nz) +
-                bc.y * vec3<f32>(v2.nx, v2.ny, v2.nz) +
-                bc.z * vec3<f32>(v3.nx, v3.ny, v3.nz)
-            );
-
-            // Compute diffuse lighting
-            let light_dir = normalize(vec3<f32>(0.0, 0.0, -1.0)); // Light coming from the camera direction
-            let diffuse = calculate_diffuse_lighting(normal, light_dir);
+            // Interpolate depth
+            let interpolated_z_over_w = bc.x * v1.z * one_over_w1 +
+                                        bc.y * v2.z * one_over_w2 +
+                                        bc.z * v3.z * one_over_w3;
+            let interpolated_z = interpolated_z_over_w / interpolated_one_over_w;
+            let normalized_z = clamp(interpolated_z, 0.0, 1.0);
 
             // Sample the texture
             let tex_color = sample_texture(uv, texture_index);
 
-            // Apply diffuse lighting
-            let final_color = tex_color.rgb * diffuse;
-
             // Convert color to u32
-            let R = u32(final_color.r * 255.0);
-            let G = u32(final_color.g * 255.0);
-            let B = u32(final_color.b * 255.0);
+            let R = u32(tex_color.r * 255.0);
+            let G = u32(tex_color.g * 255.0);
+            let B = u32(tex_color.b * 255.0);
 
             color_pixel(x, y, normalized_z, rgb(R, G, B));
         }
@@ -233,8 +237,8 @@ fn clear(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Set color to a default value
     output_buffer.data[idx] = rgb(0u, 0u, 0u);
 
-    // Set depth to maximum (1.0)
-    depth_buffer.depth[idx] = 1.0;
+    // Set depth to maximum value (farthest depth)
+    atomicStore(&depth_buffer.depth[idx], 0xFFFFFFFFu);
 }
 
 @compute @workgroup_size(256, 1)
