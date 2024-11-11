@@ -16,7 +16,7 @@ fn main() {
     let width = 1000;
 
     let mut scene = scene::Scene::new();
-    let model_path = format!("{}/assets/african_head.obj", env!("CARGO_MANIFEST_DIR"));
+    let model_path = format!("{}/assets/McLaren F1 1993 NFS2 Edition by Alex.Ka.obj", env!("CARGO_MANIFEST_DIR"));
     let texture_path = format!("{}/assets/african_head_diffuse.tga", env!("CARGO_MANIFEST_DIR"));
     
     let model_index = scene.add_model(&model_path);
@@ -24,8 +24,8 @@ fn main() {
 
     // Add camera and set active
     scene.add_camera(camera::Camera::new(
-        1.0,
-        0.0,
+        20.0,
+        20.0,
         0.0,
         glam::Vec3::ZERO,
         (width as f32) / (height as f32),
