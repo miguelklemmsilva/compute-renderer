@@ -21,35 +21,35 @@ struct VertexBuffer {
 };
 
 struct Uniform {
-  width: f32,
-  height: f32,
-}
+    width: f32,
+    height: f32,
+};
 
 struct Camera {
-  view_pos: vec4<f32>,
-  view_proj: mat4x4<f32>,
-}
+    view_pos: vec4<f32>,
+    view_proj: mat4x4<f32>,
+};
 
 struct TextureBuffer {
-    data: array<u32>
+    data: array<u32>,
 };
 
 struct TextureInfos {
-    infos: array<TextureInfo>
+    infos: array<TextureInfo>,
 };
 
 struct TextureInfo {
     offset: u32,
     width: u32,
     height: u32,
-    _padding: u32, 
+    _padding: u32,
 };
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
 @group(1) @binding(0) var<storage, read_write> depth_buffer: DepthBuffer;
-@group(2) @binding(0) var<uniform> screen_dims : Uniform;
-@group(3) @binding(0) var<storage, read> vertex_buffer : VertexBuffer;
-@group(4) @binding(0) var<uniform> camera : Camera;
+@group(2) @binding(0) var<uniform> screen_dims: Uniform;
+@group(3) @binding(0) var<storage, read> vertex_buffer: VertexBuffer;
+@group(4) @binding(0) var<uniform> camera: Camera;
 @group(5) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
 @group(6) @binding(0) var<storage, read> texture_infos: TextureInfos;
 
@@ -58,9 +58,9 @@ fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
 }
 
 fn sample_texture(uv: vec2<f32>, texture_index: u32) -> vec4<f32> {
-  let NO_TEXTURE_INDEX: u32 = 0xffffffffu;
+    let NO_TEXTURE_INDEX: u32 = 0xffffffffu;
 
-    if (texture_index == NO_TEXTURE_INDEX) {
+    if texture_index == NO_TEXTURE_INDEX {
         return vec4<f32>(1.0, 1.0, 1.0, 1.0);
     }
 
@@ -107,7 +107,7 @@ fn project(v: Vertex) -> Vertex {
         v.u,
         v.v,
         v.texture_index,
-        clip_pos.w 
+        clip_pos.w
     );
 }
 
@@ -122,16 +122,16 @@ fn float_to_depth_int(depth: f32) -> u32 {
 fn color_pixel(x: u32, y: u32, depth: f32, color: u32) {
     let pixelID = x + y * u32(screen_dims.width);
     let depth_int = float_to_depth_int(depth);
-    
+
     loop {
         let old_depth = atomicLoad(&depth_buffer.depth[pixelID]);
-        if (depth_int >= old_depth) {
+        if depth_int >= old_depth {
             // The new depth is not closer; exit
             break;
         }
         // Attempt to update the depth buffer
         let exchanged = atomicCompareExchangeWeak(&depth_buffer.depth[pixelID], old_depth, depth_int);
-        if (exchanged.exchanged) {
+        if exchanged.exchanged {
             // Successfully updated depth buffer; update color buffer
             atomicExchange(&output_buffer.data[pixelID], color);
             break;
@@ -141,26 +141,26 @@ fn color_pixel(x: u32, y: u32, depth: f32, color: u32) {
 }
 
 fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec3<f32> {
-  let u = cross(
-    vec3<f32>(v3.x - v1.x, v2.x - v1.x, v1.x - p.x), 
-    vec3<f32>(v3.y - v1.y, v2.y - v1.y, v1.y - p.y)
-  );
+    let u = cross(
+        vec3<f32>(v3.x - v1.x, v2.x - v1.x, v1.x - p.x),
+        vec3<f32>(v3.y - v1.y, v2.y - v1.y, v1.y - p.y)
+    );
 
-  if (abs(u.z) < 1.0) {
-    return vec3<f32>(-1.0, 1.0, 1.0);
-  }
+    if abs(u.z) < 1.0 {
+        return vec3<f32>(-1.0, 1.0, 1.0);
+    }
 
-  return vec3<f32>(1.0 - (u.x+u.y)/u.z, u.y/u.z, u.x/u.z); 
+    return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
 }
 
 fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
-  var min_max = vec4<f32>();
-  min_max.x = min(min(v1.x, v2.x), v3.x);
-  min_max.y = min(min(v1.y, v2.y), v3.y);
-  min_max.z = max(max(v1.x, v2.x), v3.x);
-  min_max.w = max(max(v1.y, v2.y), v3.y);
+    var min_max = vec4<f32>();
+    min_max.x = min(min(v1.x, v2.x), v3.x);
+    min_max.y = min(min(v1.y, v2.y), v3.y);
+    min_max.z = max(max(v1.x, v2.x), v3.x);
+    min_max.w = max(max(v1.y, v2.y), v3.y);
 
-  return min_max;
+    return min_max;
 }
 
 fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
@@ -168,7 +168,7 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
     let min_max = get_min_max(
         vec3<f32>(v1.x, v1.y, v1.z),
         vec3<f32>(v2.x, v2.y, v2.z),
-        vec3<f32>(v3.x, v3.y, v3.z),
+        vec3<f32>(v3.x, v3.y, v3.z)
     );
 
     let startX = u32(clamp(min_max.x, 0.0, screen_dims.width - 1.0));
@@ -182,10 +182,10 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
                 vec3<f32>(v1.x, v1.y, v1.z),
                 vec3<f32>(v2.x, v2.y, v2.z),
                 vec3<f32>(v3.x, v3.y, v3.z),
-                vec2<f32>(f32(x), f32(y)),
+                vec2<f32>(f32(x), f32(y))
             );
 
-            if (bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0) {
+            if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
                 continue;
             }
 
@@ -230,7 +230,7 @@ fn clear(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let height = u32(screen_dims.height);
     let total_pixels = width * height;
 
-    if (idx >= total_pixels) {
+    if idx >= total_pixels {
         return;
     }
 
@@ -245,9 +245,24 @@ fn clear(@builtin(global_invocation_id) global_id: vec3<u32>) {
 fn raster(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let triangle_idx = global_id.x * 3u;
 
+    // Ensure we don't access out of bounds
+    if triangle_idx + 2u >= arrayLength(&vertex_buffer.values) {
+        return;
+    }
+
     let v1 = project(vertex_buffer.values[triangle_idx]);
     let v2 = project(vertex_buffer.values[triangle_idx + 1u]);
     let v3 = project(vertex_buffer.values[triangle_idx + 2u]);
+
+    // Back Face Culling
+    let edge1 = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
+    let edge2 = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
+    let face_normal_z = edge1.x * edge2.y - edge1.y * edge2.x;
+
+    if face_normal_z <= 0.0 {
+        // The triangle is back-facing; cull it
+        return;
+    }
 
     draw_triangle(v1, v2, v3);
 }
