@@ -16,12 +16,15 @@ fn main() {
     let width = 1000;
 
     let mut scene = scene::Scene::new();
-    let model_index = scene.add_model("assets/test.obj");
-    // scene.add_texture_to_model(model_index, "assets/african_head_diffuse.tga");
+    let model_path = format!("{}/assets/african_head.obj", env!("CARGO_MANIFEST_DIR"));
+    let texture_path = format!("{}/assets/african_head_diffuse.tga", env!("CARGO_MANIFEST_DIR"));
+    
+    let model_index = scene.add_model(&model_path);
+    scene.add_texture_to_model(model_index, &texture_path);
 
     // Add camera and set active
     scene.add_camera(camera::Camera::new(
-        10.0,
+        1.0,
         0.0,
         0.0,
         glam::Vec3::ZERO,
