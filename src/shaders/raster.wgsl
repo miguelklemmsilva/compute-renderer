@@ -255,14 +255,14 @@ fn raster(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let v3 = project(vertex_buffer.values[triangle_idx + 2u]);
 
     // Back Face Culling
-    let edge1 = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
-    let edge2 = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
-    let face_normal_z = edge1.x * edge2.y - edge1.y * edge2.x;
+    // let edge1 = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
+    // let edge2 = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
+    // let face_normal_z = edge1.x * edge2.y - edge1.y * edge2.x;
 
-    if face_normal_z <= 0.0 {
-        // The triangle is back-facing; cull it
-        return;
-    }
+    // if face_normal_z <= 0.0 {
+    //     // The triangle is back-facing; cull it
+    //     return;
+    // }
 
     draw_triangle(v1, v2, v3);
 }
