@@ -1,13 +1,9 @@
-use crate::{
-    camera::{self, Camera},
-    gpu,
-    model::{self, Material, Model, Texture},
-    util::process_obj_model,
-};
+use crate::model::{Material, Model, Texture};
+use crate::{camera, gpu, util::process_obj_model};
 
 pub struct Scene {
     pub models: Vec<Model>,
-    cameras: Vec<Camera>,
+    cameras: Vec<camera::Camera>,
     active_camera: Option<usize>,
     pub materials: Vec<Material>,
 }
@@ -48,7 +44,7 @@ impl Scene {
     }
 
     pub fn add_texture(&mut self, texture_file: &str) -> u32 {
-        let texture = model::Texture::load(texture_file);
+        let texture = Texture::load(texture_file);
         let texture_index = self.materials.len() as u32;
 
         let material = Material {
@@ -73,16 +69,22 @@ impl Scene {
             .and_then(move |index| self.cameras.get_mut(index))
     }
 
-    pub fn get_active_camera(&self) -> Option<camera::Camera> {
-        self.active_camera.map(|index| self.cameras[index])
+    pub fn get_active_camera(&self) -> Option<&camera::Camera> {
+        self.active_camera.and_then(|index| self.cameras.get(index))
     }
 
     pub fn update(&mut self, gpu: &mut gpu::GPU) {
-        if let Some(camera) = self.get_active_camera_mut() {
+        if let Some(camera) = self.get_active_camera() {
             let mut camera_uniform = camera::CameraUniform::default();
             camera_uniform.update_view_proj(camera);
             gpu.queue
                 .write_buffer(&gpu.camera_buffer, 0, bytemuck::bytes_of(&camera_uniform));
         }
     }
+}
+
+pub struct SceneConfig {
+    pub name: String,
+    pub model_path: String,
+    pub texture_path: Option<String>,
 }
