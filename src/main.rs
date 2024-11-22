@@ -52,9 +52,9 @@ fn main() {
 
         // Add camera and set active
         scene.add_camera(camera::Camera::new(
-            5.0, // Starting zoom
-            0.0,
-            0.0,
+            5., // Starting zoom
+            0.,
+            0.,
             glam::Vec3::ZERO,
             (width as f32) / (height as f32),
         ));
@@ -74,7 +74,7 @@ fn main() {
         let mut last_frame_time = Instant::now();
 
         while window.is_open() && benchmark_start_time.elapsed() < benchmark_duration {
-            let frame_start_time = Instant::now(); // Start timing before camera update and rendering
+            let frame_start_time = Instant::now();
 
             // Calculate delta_time since last frame
             let delta_time = frame_start_time
