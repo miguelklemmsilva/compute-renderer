@@ -29,11 +29,6 @@ impl GPU {
             .await
             .expect("Failed to find an appropriate adapter");
 
-        let device_info = adapter.get_info();
-        println!("Backend: {:?}", device_info.backend);
-        println!("Device Name: {}", device_info.name);
-        println!("Device Type: {:?}", device_info.device_type);
-
         let limits = adapter.limits();
         let features = adapter.features();
 
