@@ -79,7 +79,7 @@ impl Camera {
         // Update the time variable
         self.time += delta_time;
 
-        let speed = 1.0;
+        let speed = 1.;
 
         // Adjust the yaw to rotate around the model
         self.yaw = self.time * speed; // Rotate at a speed of 2.0 radians per second
