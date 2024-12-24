@@ -36,7 +36,7 @@ fn main() {
             model_path: format!("{}/assets/suzanne.obj", env!("CARGO_MANIFEST_DIR")),
             texture_path: None,
             lights: vec![
-                ([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0), // Key light
+                ([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0),
             ],
         },
     ];
