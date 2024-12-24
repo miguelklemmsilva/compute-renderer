@@ -24,22 +24,24 @@ jobs:
       - name: Cargo build
         run: cargo build --release
 
-      - name: Package binary + assets
+      - name: Package binary + assets (Linux/macOS)
+        if: runner.os != 'Windows'
         run: |
-          if ($env:RUNNER_OS -eq "Windows") {
-            # On Windows, use PowerShell's Compress-Archive
-            New-Item -ItemType Directory -Force -Path artifacts
-            Copy-Item -Recurse -Force assets artifacts\assets
-            Copy-Item target\release\compute-renderer.exe artifacts\
-            Compress-Archive -Path artifacts\* -DestinationPath artifacts\compute-renderer-windows-latest.zip
-          } else {
-            # On Linux/macOS, use Bash
-            mkdir -p artifacts
-            cp -r assets artifacts/assets
-            cp target/release/compute-renderer artifacts/
-            cd artifacts
-            zip -r compute-renderer-${{ matrix.os }}.zip compute-renderer assets
-          }
+          mkdir -p artifacts
+          cp -r assets artifacts/assets
+          cp target/release/compute-renderer artifacts/
+          cd artifacts
+          zip -r compute-renderer-${{ matrix.os }}.zip compute-renderer assets
+
+      - name: Package binary + assets (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          powershell -Command "
+            New-Item -ItemType Directory -Force -Path artifacts;
+            Copy-Item -Recurse -Force assets artifacts\assets;
+            Copy-Item target\release\compute-renderer.exe artifacts\;
+            Compress-Archive -Path artifacts\* -DestinationPath artifacts\compute-renderer-windows-latest.zip;
+          "
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
