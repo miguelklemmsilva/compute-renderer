@@ -21,6 +21,7 @@ pub fn process_obj_model(file: &str) -> Vec<Vertex> {
             let index = index as usize;
             let pos_index = 3 * index;
             let tex_index = 2 * index;
+            let normal_index = 3 * index;
 
             let position = [
                 mesh.positions[pos_index],
@@ -34,18 +35,28 @@ pub fn process_obj_model(file: &str) -> Vec<Vertex> {
                 [0.0, 0.0]
             };
 
+            let normal = if !mesh.normals.is_empty() {
+                [
+                    mesh.normals[normal_index],
+                    mesh.normals[normal_index + 1],
+                    mesh.normals[normal_index + 2],
+                ]
+            } else {
+                [0.0, 1.0, 0.0] // Default normal pointing up
+            };
+
             let material_index = u32::MAX;
 
             vertices.push(Vertex {
                 position,
                 tex_coords,
+                normal,
                 texture_index: material_index,
-                w_clip: 0.0
+                w_clip: 0.0,
             });
         }
     }
 
-    // print amount of vertices
     println!("Amount of vertices: {}", vertices.len());
 
     vertices
@@ -78,6 +89,7 @@ impl Uniform {
 pub struct Vertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
+    pub normal: [f32; 3],
     pub texture_index: u32,
-    pub w_clip: f32
+    pub w_clip: f32,
 }

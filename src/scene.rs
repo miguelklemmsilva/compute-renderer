@@ -1,11 +1,32 @@
 use crate::model::{Material, Model, Texture};
 use crate::{camera, gpu, util::process_obj_model};
 
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+pub struct Light {
+    pub position: [f32; 3],
+    _padding1: f32,
+    pub color: [f32; 3],
+    pub intensity: f32,
+}
+
+impl Default for Light {
+    fn default() -> Self {
+        Self {
+            position: [5.0, 5.0, 5.0],
+            _padding1: 0.0,
+            color: [1.0, 1.0, 1.0],
+            intensity: 1.0,
+        }
+    }
+}
+
 pub struct Scene {
     pub models: Vec<Model>,
     cameras: Vec<camera::Camera>,
     active_camera: Option<usize>,
     pub materials: Vec<Material>,
+    pub lights: Vec<Light>,
 }
 
 impl Scene {
@@ -15,6 +36,7 @@ impl Scene {
             cameras: vec![],
             active_camera: None,
             materials: vec![],
+            lights: vec![],
         }
     }
 
@@ -74,12 +96,52 @@ impl Scene {
     }
 
     pub fn update(&mut self, gpu: &mut gpu::GPU) {
+        // Update camera
         if let Some(camera) = self.get_active_camera() {
             let mut camera_uniform = camera::CameraUniform::default();
             camera_uniform.update_view_proj(camera);
             gpu.queue
                 .write_buffer(&gpu.camera_buffer, 0, bytemuck::bytes_of(&camera_uniform));
         }
+
+        // Update lights
+        gpu.queue
+            .write_buffer(&gpu.light_buffer, 0, bytemuck::cast_slice(&self.lights));
+    }
+
+    pub fn add_light(&mut self, position: [f32; 3], color: [f32; 3], intensity: f32) -> usize {
+        let light = Light {
+            position,
+            _padding1: 0.0,
+            color,
+            intensity,
+        };
+        self.lights.push(light);
+        self.lights.len() - 1
+    }
+
+    pub fn update_light(
+        &mut self,
+        index: usize,
+        position: Option<[f32; 3]>,
+        color: Option<[f32; 3]>,
+        intensity: Option<f32>,
+    ) {
+        if let Some(light) = self.lights.get_mut(index) {
+            if let Some(pos) = position {
+                light.position = pos;
+            }
+            if let Some(col) = color {
+                light.color = col;
+            }
+            if let Some(int) = intensity {
+                light.intensity = int;
+            }
+        }
+    }
+
+    pub fn get_lights(&self) -> &[Light] {
+        &self.lights
     }
 }
 
@@ -87,4 +149,9 @@ pub struct SceneConfig {
     pub name: String,
     pub model_path: String,
     pub texture_path: Option<String>,
+    pub lights: Vec<(
+        /* position */ [f32; 3],
+        /* color */ [f32; 3],
+        /* intensity */ f32,
+    )>,
 }

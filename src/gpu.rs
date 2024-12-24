@@ -5,7 +5,7 @@ use crate::{
     clear_pass::ClearPass,
     raster_pass::{RasterBindings, RasterPass},
     scene,
-    util::{self, dispatch_size, Uniform, Vertex},
+    util::{dispatch_size, Uniform, Vertex},
 };
 
 pub struct GPU {
@@ -13,6 +13,7 @@ pub struct GPU {
     pub queue: wgpu::Queue,
 
     pub camera_buffer: wgpu::Buffer,
+    pub light_buffer: wgpu::Buffer,
     output_buffer: wgpu::Buffer,
 
     pub raster_pass: RasterPass,
@@ -155,6 +156,13 @@ impl GPU {
             mapped_at_creation: false,
         });
 
+        let lights = scene.get_lights();
+        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Light Buffer"),
+            contents: bytemuck::cast_slice(lights),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
         let raster_bindings = RasterBindings::new(
             &device,
             &raster_pass,
@@ -165,6 +173,7 @@ impl GPU {
             &texture_infos_buffer,
             &screen_uniform,
             &camera_buffer,
+            &light_buffer,
         );
 
         GPU {
@@ -172,6 +181,7 @@ impl GPU {
             queue,
 
             camera_buffer,
+            light_buffer,
             output_buffer,
 
             raster_pass,

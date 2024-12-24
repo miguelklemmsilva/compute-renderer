@@ -27,11 +27,17 @@ fn main() {
                 "{}/assets/african_head_diffuse.tga",
                 env!("CARGO_MANIFEST_DIR")
             )),
+            lights: vec![
+                ([1.0, 1.0, 1.0], [1.0, 1.0, 1.0], 3.0),
+            ],
         },
         SceneConfig {
             name: "Suzanne".to_string(),
             model_path: format!("{}/assets/suzanne.obj", env!("CARGO_MANIFEST_DIR")),
             texture_path: None,
+            lights: vec![
+                ([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0), // Key light
+            ],
         },
     ];
 
@@ -48,6 +54,11 @@ fn main() {
 
         if let Some(texture_path) = &scene_config.texture_path {
             scene.add_texture_to_model(model_index, texture_path);
+        }
+
+        // Add lights from config
+        for (position, color, intensity) in &scene_config.lights {
+            scene.add_light(*position, *color, *intensity);
         }
 
         // Add camera and set active
