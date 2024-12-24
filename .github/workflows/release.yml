@@ -64,7 +64,7 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           tag: ${{ github.ref_name }}
-          releaseName: ${{ github.ref_name }}
+          name: ${{ github.ref_name }}
           body: "Automated release for ${{ github.ref_name }}."
           draft: false
           prerelease: false
