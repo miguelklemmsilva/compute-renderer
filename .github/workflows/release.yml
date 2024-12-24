@@ -1,14 +1,9 @@
 name: Build and Release
 
 on:
-  # Trigger a build when pushing to main
+  # Trigger a build when pushing to master
   push:
-    branches: ["main"]
-    tags:
-      - "v*" # e.g., v1.0.0
-  # Also trigger on pull requests to main
-  pull_request:
-    branches: ["main"]
+    branches: ["master"]
 
 jobs:
   # -----------------------------------------------------------
