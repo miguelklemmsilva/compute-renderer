@@ -145,18 +145,17 @@ fn color_pixel(x: u32, y: u32, depth: f32, color: u32) {
 
     loop {
         let old_depth = atomicLoad(&depth_buffer.depth[pixelID]);
-        if depth_int >= old_depth {
-            // The new depth is not closer; exit
-            break;
+        // Attempt to update the depth buffer only if the new depth is closer
+        if depth_int < old_depth {
+            let exchanged = atomicCompareExchangeWeak(&depth_buffer.depth[pixelID], old_depth, depth_int);
+            if exchanged.exchanged {
+                // Successfully updated depth buffer; update color buffer
+                atomicExchange(&output_buffer.data[pixelID], color);
+                break;
+            }
+        } else {
+            break; // Depth is not closer; exit
         }
-        // Attempt to update the depth buffer
-        let exchanged = atomicCompareExchangeWeak(&depth_buffer.depth[pixelID], old_depth, depth_int);
-        if exchanged.exchanged {
-            // Successfully updated depth buffer; update color buffer
-            atomicExchange(&output_buffer.data[pixelID], color);
-            break;
-        }
-        // Another thread updated the depth before us; try again
     }
 }
 
