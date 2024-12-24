@@ -39,6 +39,14 @@ fn main() {
                 ([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0),
             ],
         },
+        SceneConfig {
+            name: "Desk".to_string(),
+            model_path: format!("{}/assets/test.obj", env!("CARGO_MANIFEST_DIR")),
+            texture_path: None,
+            lights: vec![
+                ([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0),
+            ],
+        }
     ];
 
     // Initialize the system information once
@@ -63,7 +71,7 @@ fn main() {
 
         // Add camera and set active
         scene.add_camera(camera::Camera::new(
-            5., // Starting zoom
+            15., // Starting zoom
             0.,
             0.,
             glam::Vec3::ZERO,

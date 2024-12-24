@@ -1,19 +1,25 @@
 name: Build and Release
 
 on:
+  # Trigger a build when pushing to main
   push:
-    branches: [ "main" ]
+    branches: ["main"]
     tags:
-      - "v*"
+      - "v*" # e.g., v1.0.0
+  # Also trigger on pull requests to main
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 jobs:
+  # -----------------------------------------------------------
+  # 1) Build job for each OS (Windows, macOS, Linux)
+  # -----------------------------------------------------------
   build-matrix:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
-        os: [ ubuntu-latest, macos-latest, windows-latest ]
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
     steps:
       - name: Check out code
         uses: actions/checkout@v3
@@ -24,15 +30,65 @@ jobs:
       - name: Cargo build
         run: cargo build --release
 
-      - name: Package binary + assets (Linux/macOS)
-        if: runner.os != 'Windows'
+      # ------------------------------------------
+      # LINUX PACKAGING
+      # ------------------------------------------
+      - name: Package binary + assets (Linux)
+        if: runner.os == 'Linux'
         run: |
           mkdir -p artifacts
+          # Copy assets
           cp -r assets artifacts/assets
+          # Copy the compiled binary (adjust if your binary name differs)
           cp target/release/compute-renderer artifacts/
           cd artifacts
-          zip -r compute-renderer-${{ matrix.os }}.zip compute-renderer assets
+          zip -r compute-renderer-linux.zip compute-renderer assets
 
+      # ------------------------------------------
+      # MACOS PACKAGING
+      # ------------------------------------------
+      - name: Package binary + assets into a .app (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          # 1) Create .app folder structure
+          mkdir -p "ComputeRenderer.app/Contents/MacOS"
+          mkdir -p "ComputeRenderer.app/Contents/Resources"
+
+          # 2) Minimal Info.plist
+          cat > ComputeRenderer.app/Contents/Info.plist << 'EOF'
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>CFBundleExecutable</key>
+              <string>compute-renderer</string>
+              <key>CFBundleIdentifier</key>
+              <string>com.compute-renderer</string>
+              <key>CFBundleName</key>
+              <string>ComputeRenderer</string>
+              <key>CFBundlePackageType</key>
+              <string>APPL</string>
+              <key>CFBundleShortVersionString</key>
+              <string>1.0</string>
+              <key>LSMinimumSystemVersion</key>
+              <string>10.10</string>
+          </dict>
+          </plist>
+          EOF
+
+          # 3) Copy the compiled binary
+          cp target/release/compute-renderer ComputeRenderer.app/Contents/MacOS/
+
+          # 4) Optionally copy assets into the app’s Resources
+          cp -R assets ComputeRenderer.app/Contents/Resources/
+
+          # 5) Zip the .app for distribution
+          mkdir -p artifacts
+          zip -r artifacts/compute-renderer-macos.zip ComputeRenderer.app
+
+      # ------------------------------------------
+      # WINDOWS PACKAGING
+      # ------------------------------------------
       - name: Package binary + assets (Windows)
         if: runner.os == 'Windows'
         run: |
@@ -40,19 +96,26 @@ jobs:
             New-Item -ItemType Directory -Force -Path artifacts;
             Copy-Item -Recurse -Force assets artifacts\assets;
             Copy-Item target\release\compute-renderer.exe artifacts\;
-            Compress-Archive -Path artifacts\* -DestinationPath artifacts\compute-renderer-windows-latest.zip;
+            Compress-Archive -Path artifacts\* -DestinationPath artifacts\compute-renderer-windows.zip;
           "
 
+      # ------------------------------------------
+      # UPLOAD ARTIFACTS
+      # ------------------------------------------
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: compute-renderer-${{ matrix.os }}
           path: artifacts/*.zip
 
+  # -----------------------------------------------------------
+  # 2) Create Release job (only runs if a tag is pushed)
+  # -----------------------------------------------------------
   create-release:
     needs: build-matrix
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
+
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v3
