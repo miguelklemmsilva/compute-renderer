@@ -31,8 +31,8 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v3
         with:
-          name: myapp-${{ matrix.os }}.zip
-          path: artifacts/myapp-${{ matrix.os }}.zip
+          name: compute-renderer-${{ matrix.os }}.zip
+          path: artifacts/compute-renderer-${{ matrix.os }}.zip
 
   create-release:
     needs: build-and-release
