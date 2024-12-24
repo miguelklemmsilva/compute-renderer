@@ -1,0 +1,59 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build-and-release:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v3
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build
+        run: cargo build --release
+
+      - name: Archive binary
+        # Package the binary into a zip (or tar.gz on Linux/macOS).
+        run: |
+          mkdir -p artifacts
+          # Name your artifact with something like app-<os>-<version>.zip
+          zip -j artifacts/compute-renderer-${{ matrix.os }}.zip target/release/compute-renderer
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: myapp-${{ matrix.os }}.zip
+          path: artifacts/myapp-${{ matrix.os }}.zip
+
+  create-release:
+    needs: build-and-release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download build artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: ./release-binaries
+
+      - name: Create GitHub Release
+        uses: ncipollo/release-action@v1
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          # Tag that triggered this workflow
+          tag: ${{ github.ref_name }}
+          # Release name; often same as tag
+          releaseName: ${{ github.ref_name }}
+          # A short release description
+          body: "Automated release of version ${{ github.ref_name }}"
+          draft: false
+          prerelease: false
+          artifacts: |
+            release-binaries/*.zip
