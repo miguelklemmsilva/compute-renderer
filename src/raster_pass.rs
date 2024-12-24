@@ -68,6 +68,22 @@ impl RasterPass {
                 }],
             });
 
+        // Bind Group Layout for Camera Buffer
+        let camera_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Raster: Camera Buffer Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         let texture_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Texture Buffer Bind Group Layout"),
@@ -98,15 +114,15 @@ impl RasterPass {
                 }],
             });
 
-        // Bind Group Layout for Camera Buffer
-        let camera_bind_group_layout =
+        // Bind Group Layout for Light Buffer
+        let light_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-                label: Some("Raster: Camera Buffer Bind Group Layout"),
+                label: Some("Light Buffer Bind Group Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
@@ -125,6 +141,7 @@ impl RasterPass {
                 &camera_bind_group_layout,
                 &texture_bind_group_layout,
                 &texture_infos_bind_group_layout,
+                &light_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -154,6 +171,7 @@ pub struct RasterBindings {
     pub texture_buffer: wgpu::BindGroup,
     pub texture_infos_buffer: wgpu::BindGroup,
     pub camera_buffer: wgpu::BindGroup,
+    pub light_buffer: wgpu::BindGroup,
 }
 
 impl RasterBindings {
@@ -167,6 +185,7 @@ impl RasterBindings {
         texture_infos_buffer: &wgpu::Buffer,
         uniform: &wgpu::Buffer,
         camera_buffer: &wgpu::Buffer,
+        light_buffer: &wgpu::Buffer,
     ) -> Self {
         // Bind Group for Color Buffer
         let output_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -236,6 +255,16 @@ impl RasterBindings {
             }],
         });
 
+        // Bind Group for Light Buffer
+        let light_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Light Buffer Bind Group"),
+            layout: &pipeline.get_bind_group_layout(7),
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: light_buffer.as_entire_binding(),
+            }],
+        });
+
         Self {
             output_buffer,
             depth_buffer,
@@ -244,6 +273,7 @@ impl RasterBindings {
             texture_buffer,
             texture_infos_buffer,
             camera_buffer,
+            light_buffer,
         }
     }
 }
@@ -265,6 +295,7 @@ impl<'a> RasterPass {
         cpass.set_bind_group(4, &bindings.camera_buffer, &[]);
         cpass.set_bind_group(5, &bindings.texture_buffer, &[]);
         cpass.set_bind_group(6, &bindings.texture_infos_buffer, &[]);
+        cpass.set_bind_group(7, &bindings.light_buffer, &[]);
         cpass.dispatch_workgroups(dispatch_size, 1, 1);
     }
 }

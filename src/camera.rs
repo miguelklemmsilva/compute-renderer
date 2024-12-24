@@ -85,12 +85,12 @@ impl Camera {
         self.yaw = self.time * speed; // Rotate at a speed of 2.0 radians per second
 
         // Vary the pitch to move the camera up and down
-        self.pitch = (self.time * speed).sin();
+        // self.pitch = (self.time * speed).sin();
 
-        self.zoom = 3.0 + 5.0 * ((speed * self.time).sin() + 1.0);
+        // self.zoom = 3.0 + 5.0 * ((speed * self.time).sin() + 1.0);
 
         // Optionally, move the target to create a more dynamic scene
-        self.target.y = (self.time * speed).sin() * 2.0; // Move target up and down
+        // self.target.y = (self.time * speed).sin() * 2.0; // Move target up and down
 
         // Ensure the camera is always looking at the target
         self.up = Vec3::Y;
