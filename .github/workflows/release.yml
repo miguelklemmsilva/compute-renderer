@@ -31,10 +31,10 @@ jobs:
       - name: Package binary + assets (Linux)
         if: runner.os == 'Linux'
         run: |
-          mkdir -p artifacts
+          mkdir -p artifacts/assets
           # Copy assets
-          cp -r assets artifacts/assets
-          # Copy the compiled binary (adjust if your binary name differs)
+          cp -r assets/* artifacts/assets/
+          # Copy the binary
           cp target/release/compute-renderer artifacts/
           cd artifacts
           zip -r compute-renderer-linux.zip compute-renderer assets
@@ -45,9 +45,15 @@ jobs:
       - name: Package binary + assets into a .app (macOS)
         if: runner.os == 'macOS'
         run: |
-          # 1) Create .app folder structure
+          # Create .app folder structure
           mkdir -p "ComputeRenderer.app/Contents/MacOS"
-          mkdir -p "ComputeRenderer.app/Contents/Resources"
+          mkdir -p "ComputeRenderer.app/Contents/Resources/assets"  # Note the /assets subfolder
+
+          # Copy the binary
+          cp target/release/compute-renderer ComputeRenderer.app/Contents/MacOS/
+
+          # Copy assets into Resources/assets directory
+          cp -R assets/* ComputeRenderer.app/Contents/Resources/assets/
 
           # 2) Minimal Info.plist
           cat > ComputeRenderer.app/Contents/Info.plist << 'EOF'
@@ -71,12 +77,6 @@ jobs:
           </plist>
           EOF
 
-          # 3) Copy the compiled binary
-          cp target/release/compute-renderer ComputeRenderer.app/Contents/MacOS/
-
-          # 4) Optionally copy assets into the app’s Resources
-          cp -R assets ComputeRenderer.app/Contents/Resources/
-
           # 5) Zip the .app for distribution
           mkdir -p artifacts
           zip -r artifacts/compute-renderer-macos.zip ComputeRenderer.app
@@ -88,9 +88,15 @@ jobs:
         if: runner.os == 'Windows'
         run: |
           powershell -Command "
+            # Create directory structure
             New-Item -ItemType Directory -Force -Path artifacts;
-            Copy-Item -Recurse -Force assets artifacts\assets;
+            New-Item -ItemType Directory -Force -Path artifacts\assets;
+            
+            # Copy assets and binary
+            Copy-Item -Recurse -Force assets\* artifacts\assets\;
             Copy-Item target\release\compute-renderer.exe artifacts\;
+            
+            # Create zip
             Compress-Archive -Path artifacts\* -DestinationPath artifacts\compute-renderer-windows.zip;
           "
 
@@ -109,7 +115,6 @@ jobs:
   create-release:
     needs: build-matrix
     runs-on: ubuntu-latest
-    if: startsWith(github.ref, 'refs/tags/')
 
     steps:
       - name: Download all artifacts
