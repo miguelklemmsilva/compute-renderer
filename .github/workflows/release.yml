@@ -3,10 +3,9 @@ name: Build and Release
 on:
   # Trigger a build when pushing to master
   push:
-    branches: ["master"]
-  # Trigger on new tags
+    # Trigger on new tags
     tags:
-      - 'v*'
+      - "v*"
 
 jobs:
   # -----------------------------------------------------------
