@@ -120,6 +120,22 @@ impl RasterPass {
                 ],
             });
 
+        // Effect bind group layout
+        let effect_bind_group_layout =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("Effect Bind Group Layout"),
+                entries: &[wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                }],
+            });
+
         // Create Pipeline Layout with consolidated bind group layouts
         let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Raster Pipeline Layout"),
@@ -129,6 +145,7 @@ impl RasterPass {
                 &camera_bind_group_layout,
                 &geometry_bind_group_layout,
                 &texture_bind_group_layout,
+                &effect_bind_group_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -156,6 +173,7 @@ pub struct RasterBindings {
     pub camera: wgpu::BindGroup,
     pub geometry: wgpu::BindGroup,
     pub texture: wgpu::BindGroup,
+    pub effect: wgpu::BindGroup,
 }
 
 impl RasterBindings {
@@ -170,6 +188,7 @@ impl RasterBindings {
         screen_uniform: &wgpu::Buffer,
         camera_buffer: &wgpu::Buffer,
         light_buffer: &wgpu::Buffer,
+        effect_buffer: &wgpu::Buffer,
     ) -> Self {
         // Frame buffer bind group (color + depth)
         let frame_buffer = device.create_bind_group(&wgpu::BindGroupDescriptor {
@@ -239,12 +258,23 @@ impl RasterBindings {
             ],
         });
 
+        // Effect bind group
+        let effect = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Effect Bind Group"),
+            layout: &pipeline.get_bind_group_layout(5),
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: effect_buffer.as_entire_binding(),
+            }],
+        });
+
         Self {
             frame_buffer,
             screen,
             camera,
             geometry,
             texture,
+            effect,
         }
     }
 }
@@ -264,6 +294,7 @@ impl<'a> RasterPass {
         cpass.set_bind_group(2, &bindings.camera, &[]);
         cpass.set_bind_group(3, &bindings.geometry, &[]);
         cpass.set_bind_group(4, &bindings.texture, &[]);
+        cpass.set_bind_group(5, &bindings.effect, &[]);
         cpass.dispatch_workgroups(dispatch_size, 1, 1);
     }
 }

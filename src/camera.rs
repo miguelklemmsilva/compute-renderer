@@ -79,23 +79,25 @@ impl Camera {
         // Update the time variable
         self.time += delta_time;
 
-        let speed = 1.;
+        // Rotate the camera around the target over time
+        // Complete one rotation every 8 seconds
+        const ROTATION_SPEED: f32 = 2.0 * std::f32::consts::PI / 8.0;
+        self.yaw = self.time * ROTATION_SPEED;
 
-        // Adjust the yaw to rotate around the model
-        self.yaw = self.time * speed; // Rotate at a speed of 2.0 radians per second
-
-        // Vary the pitch to move the camera up and down
-        // self.pitch = (self.time * speed).sin();
-
-        // self.zoom = 3.0 + 5.0 * ((speed * self.time).sin() + 1.0);
-
-        // Optionally, move the target to create a more dynamic scene
-        // self.target.y = (self.time * speed).sin() * 2.0; // Move target up and down
+        // Add a gentle bobbing motion in pitch
+        // Oscillate between -0.2 and 0.2 radians with a 4 second period
+        const PITCH_AMPLITUDE: f32 = 0.2;
+        const PITCH_FREQUENCY: f32 = 2.0 * std::f32::consts::PI / 4.0;
+        self.pitch = PITCH_AMPLITUDE * (self.time * PITCH_FREQUENCY).sin();
 
         // Ensure the camera is always looking at the target
         self.up = Vec3::Y;
 
         // Update the camera's position based on the new parameters
         self.update();
+    }
+
+    pub fn build_view_matrix(&self) -> Mat4 {
+        Mat4::look_at_rh(self.eye, self.target, self.up)
     }
 }

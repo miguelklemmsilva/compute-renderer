@@ -3,6 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     clear_pass::ClearPass,
+    effect::EffectUniform,
     raster_pass::{RasterBindings, RasterPass},
     scene,
     util::{dispatch_size, Uniform, Vertex},
@@ -14,6 +15,7 @@ pub struct GPU {
 
     pub camera_buffer: wgpu::Buffer,
     pub light_buffer: wgpu::Buffer,
+    pub effect_buffer: wgpu::Buffer,
     output_buffer: wgpu::Buffer,
 
     pub raster_pass: RasterPass,
@@ -163,6 +165,13 @@ impl GPU {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
+        let effect_uniform = EffectUniform::default();
+        let effect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Effect Buffer"),
+            contents: bytemuck::bytes_of(&effect_uniform),
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        });
+
         let raster_bindings = RasterBindings::new(
             &device,
             &raster_pass,
@@ -174,6 +183,7 @@ impl GPU {
             &screen_uniform,
             &camera_buffer,
             &light_buffer,
+            &effect_buffer,
         );
 
         GPU {
@@ -182,6 +192,7 @@ impl GPU {
 
             camera_buffer,
             light_buffer,
+            effect_buffer,
             output_buffer,
 
             raster_pass,

@@ -1,4 +1,5 @@
 use pollster::block_on;
+use std::time::Duration;
 
 use crate::{gpu, scene};
 
@@ -32,8 +33,8 @@ impl Window {
         }
     }
 
-    pub async fn update(&mut self) {
-        self.scene.update(&mut self.gpu);
+    pub async fn update(&mut self, delta_time: Duration) {
+        self.scene.update(&mut self.gpu, delta_time);
 
         let buffer = self
             .gpu

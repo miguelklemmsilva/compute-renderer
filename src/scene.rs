@@ -1,11 +1,14 @@
 use crate::model::{Material, Model, Texture};
-use crate::{camera, gpu, util::process_obj_model};
+use crate::{camera, effect::Effect, gpu, util::process_obj_model};
+use std::time::Duration;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct Light {
-    pub position: [f32; 3],
+    pub world_position: [f32; 3],
     _padding1: f32,
+    pub view_position: [f32; 3],
+    _padding2: f32,
     pub color: [f32; 3],
     pub intensity: f32,
 }
@@ -13,8 +16,10 @@ pub struct Light {
 impl Default for Light {
     fn default() -> Self {
         Self {
-            position: [5.0, 5.0, 5.0],
+            world_position: [5.0, 5.0, 5.0],
             _padding1: 0.0,
+            view_position: [0.0, 0.0, 0.0],
+            _padding2: 0.0,
             color: [1.0, 1.0, 1.0],
             intensity: 1.0,
         }
@@ -27,6 +32,8 @@ pub struct Scene {
     active_camera: Option<usize>,
     pub materials: Vec<Material>,
     pub lights: Vec<Light>,
+    pub effects: Vec<Effect>,
+    pub time: f32,
 }
 
 impl Scene {
@@ -37,6 +44,8 @@ impl Scene {
             active_camera: None,
             materials: vec![],
             lights: vec![],
+            effects: vec![],
+            time: 0.0,
         }
     }
 
@@ -95,11 +104,27 @@ impl Scene {
         self.active_camera.and_then(|index| self.cameras.get(index))
     }
 
-    pub fn update(&mut self, gpu: &mut gpu::GPU) {
-        // Update camera
+    pub fn update(&mut self, gpu: &mut gpu::GPU, delta_time: Duration) {
+        self.time += delta_time.as_secs_f32();
+
+        // Update effects
+        for effect in &mut self.effects {
+            effect.update(delta_time);
+        }
+
+        // Update camera and get view matrix
         if let Some(camera) = self.get_active_camera() {
             let mut camera_uniform = camera::CameraUniform::default();
             camera_uniform.update_view_proj(camera);
+
+            // Transform light positions to view space using only view matrix
+            let view_matrix = camera.build_view_matrix(); // Use view matrix only
+            for light in &mut self.lights {
+                let world_pos = glam::Vec3::from_slice(&light.world_position);
+                let view_pos = view_matrix.transform_point3(world_pos);
+                light.view_position = view_pos.to_array();
+            }
+
             gpu.queue
                 .write_buffer(&gpu.camera_buffer, 0, bytemuck::bytes_of(&camera_uniform));
         }
@@ -107,12 +132,22 @@ impl Scene {
         // Update lights
         gpu.queue
             .write_buffer(&gpu.light_buffer, 0, bytemuck::cast_slice(&self.lights));
+
+        // Update effects
+        if let Some(effect) = self.effects.first() {
+            let mut effect_uniform = crate::effect::EffectUniform::default();
+            effect_uniform.update(effect, self.time);
+            gpu.queue
+                .write_buffer(&gpu.effect_buffer, 0, bytemuck::bytes_of(&effect_uniform));
+        }
     }
 
     pub fn add_light(&mut self, position: [f32; 3], color: [f32; 3], intensity: f32) -> usize {
         let light = Light {
-            position,
+            world_position: position,
             _padding1: 0.0,
+            view_position: [0.0, 0.0, 0.0],
+            _padding2: 0.0,
             color,
             intensity,
         };
@@ -129,7 +164,7 @@ impl Scene {
     ) {
         if let Some(light) = self.lights.get_mut(index) {
             if let Some(pos) = position {
-                light.position = pos;
+                light.world_position = pos;
             }
             if let Some(col) = color {
                 light.color = col;
@@ -143,6 +178,23 @@ impl Scene {
     pub fn get_lights(&self) -> &[Light] {
         &self.lights
     }
+
+    pub fn add_effect(&mut self, effect: Effect) -> usize {
+        self.effects.push(effect);
+        self.effects.len() - 1
+    }
+
+    pub fn update_effect(&mut self, index: usize, effect: Effect) {
+        if let Some(existing_effect) = self.effects.get_mut(index) {
+            *existing_effect = effect;
+        }
+    }
+
+    pub fn remove_effect(&mut self, index: usize) {
+        if index < self.effects.len() {
+            self.effects.remove(index);
+        }
+    }
 }
 
 pub struct SceneConfig {
@@ -154,4 +206,5 @@ pub struct SceneConfig {
         /* color */ [f32; 3],
         /* intensity */ f32,
     )>,
+    pub effects: Vec<Effect>,
 }
