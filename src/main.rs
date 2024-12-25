@@ -1,5 +1,6 @@
 use std::time::{Duration, Instant};
 
+use effect::{Effect, WaveDirection};
 use scene::SceneConfig;
 
 use sysinfo::{get_current_pid, System};
@@ -8,6 +9,7 @@ use window::Window;
 
 mod camera;
 mod clear_pass;
+mod effect;
 mod gpu;
 mod model;
 mod raster_pass;
@@ -22,7 +24,7 @@ fn main() {
     // List of scenes to benchmark
     let scenes = vec![
         SceneConfig {
-            name: "African head".to_string(),
+            name: "African head - Wave Effect".to_string(),
             model_path: get_asset_path("african_head.obj")
                 .to_string_lossy()
                 .to_string(),
@@ -31,13 +33,68 @@ fn main() {
                     .to_string_lossy()
                     .to_string(),
             ),
-            lights: vec![([1.0, 1.0, 1.0], [1.0, 1.0, 1.0], 3.0)],
+            lights: vec![
+                ([0.0, 10.0, 5.0], [1.0, 0.2, 0.2], 5.0),  // Red top light
+                // ([-10.0, 0.0, 5.0], [0.2, 0.2, 1.0], 3.0), // Blue left light
+                // ([10.0, 0.0, 5.0], [0.2, 1.0, 0.2], 3.0),  // Green right light
+            ],
+            effects: vec![Effect::wave_vertical(0.3, 4.0, 1.0)],
         },
         SceneConfig {
-            name: "Suzanne".to_string(),
+            name: "African head - Dissolve Effect".to_string(),
+            model_path: get_asset_path("african_head.obj")
+                .to_string_lossy()
+                .to_string(),
+            texture_path: Some(
+                get_asset_path("african_head_diffuse.tga")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            lights: vec![
+                ([0.0, 10.0, 5.0], [1.0, 0.8, 0.0], 3.0), // Yellow top light
+                // ([-10.0, 0.0, 5.0], [0.0, 1.0, 1.0], 3.0), // Cyan left light
+                // ([10.0, 0.0, 5.0], [1.0, 0.0, 1.0], 3.0), // Magenta right light
+            ],
+            effects: vec![Effect::dissolve(20.0, 1.0, 3.0)],
+        },
+        SceneConfig {
+            name: "Suzanne - Smooth to Flat".to_string(),
             model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
             texture_path: None,
-            lights: vec![([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0)],
+            lights: vec![
+                ([0.0, 10.0, 5.0], [1.0, 0.2, 0.2], 3.0),  // Red top light
+                ([-10.0, 0.0, 5.0], [0.2, 0.2, 1.0], 3.0), // Blue left light
+                ([10.0, 0.0, 5.0], [0.2, 1.0, 0.2], 3.0),  // Green right light
+            ],
+            effects: vec![Effect::smooth_to_flat(1.0, 4.0)],
+        },
+        SceneConfig {
+            name: "African head - Pixelate".to_string(),
+            model_path: get_asset_path("african_head.obj")
+                .to_string_lossy()
+                .to_string(),
+            texture_path: Some(
+                get_asset_path("african_head_diffuse.tga")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            lights: vec![
+                ([0.0, 10.0, 5.0], [1.0, 0.8, 0.0], 3.0), // Yellow top light
+                ([-10.0, 0.0, 5.0], [0.0, 1.0, 1.0], 3.0), // Cyan left light
+                ([10.0, 0.0, 5.0], [1.0, 0.0, 1.0], 3.0), // Magenta right light
+            ],
+            effects: vec![Effect::pixelate(4.0, 32.0, 2.0)],
+        },
+        SceneConfig {
+            name: "Suzanne - Voxelize".to_string(),
+            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
+            texture_path: None,
+            lights: vec![
+                ([0.0, 10.0, 5.0], [1.0, 0.2, 0.2], 3.0),  // Red top light
+                ([-10.0, 0.0, 5.0], [0.2, 0.2, 1.0], 3.0), // Blue left light
+                ([10.0, 0.0, 5.0], [0.2, 1.0, 0.2], 3.0),  // Green right light
+            ],
+            effects: vec![Effect::voxelize(5.0, 40.0, 1.5)],
         },
     ];
 
@@ -59,6 +116,11 @@ fn main() {
         // Add lights from config
         for (position, color, intensity) in &scene_config.lights {
             scene.add_light(*position, *color, *intensity);
+        }
+
+        // Add effects from config
+        for effect in &scene_config.effects {
+            scene.add_effect(effect.clone());
         }
 
         // Add camera and set active
@@ -98,7 +160,7 @@ fn main() {
             }
 
             // Render and display the frame
-            pollster::block_on(window.update());
+            pollster::block_on(window.update(Duration::from_secs_f32(delta_time)));
 
             last_frame_time = frame_start_time; // Update last_frame_time for next delta_time calculation
 
@@ -189,6 +251,7 @@ fn main() {
         println!("----------------------------------------");
     }
 }
+
 struct PerformanceData {
     avg_fps: f64,
     min_fps: f64,
