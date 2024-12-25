@@ -3,6 +3,7 @@ use std::time::{Duration, Instant};
 use scene::SceneConfig;
 
 use sysinfo::{get_current_pid, System};
+use util::get_asset_path;
 use window::Window;
 
 mod camera;
@@ -22,31 +23,22 @@ fn main() {
     let scenes = vec![
         SceneConfig {
             name: "African head".to_string(),
-            model_path: format!("{}/assets/african_head.obj", env!("CARGO_MANIFEST_DIR")),
-            texture_path: Some(format!(
-                "{}/assets/african_head_diffuse.tga",
-                env!("CARGO_MANIFEST_DIR")
-            )),
-            lights: vec![
-                ([1.0, 1.0, 1.0], [1.0, 1.0, 1.0], 3.0),
-            ],
+            model_path: get_asset_path("african_head.obj")
+                .to_string_lossy()
+                .to_string(),
+            texture_path: Some(
+                get_asset_path("african_head_diffuse.tga")
+                    .to_string_lossy()
+                    .to_string(),
+            ),
+            lights: vec![([1.0, 1.0, 1.0], [1.0, 1.0, 1.0], 3.0)],
         },
         SceneConfig {
             name: "Suzanne".to_string(),
-            model_path: format!("{}/assets/suzanne.obj", env!("CARGO_MANIFEST_DIR")),
+            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
             texture_path: None,
-            lights: vec![
-                ([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0),
-            ],
+            lights: vec![([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0)],
         },
-        SceneConfig {
-            name: "Desk".to_string(),
-            model_path: format!("{}/assets/test.obj", env!("CARGO_MANIFEST_DIR")),
-            texture_path: None,
-            lights: vec![
-                ([1.0, 1.0, 1.0], [1.0, 1., 1.], 1.0),
-            ],
-        }
     ];
 
     // Initialize the system information once
@@ -71,7 +63,7 @@ fn main() {
 
         // Add camera and set active
         scene.add_camera(camera::Camera::new(
-            15., // Starting zoom
+            5., // Starting zoom
             0.,
             0.,
             glam::Vec3::ZERO,
