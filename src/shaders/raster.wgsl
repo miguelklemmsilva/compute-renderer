@@ -59,13 +59,16 @@ struct LightBuffer {
 };
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
-@group(1) @binding(0) var<storage, read_write> depth_buffer: DepthBuffer;
-@group(2) @binding(0) var<uniform> screen_dims: Uniform;
+@group(0) @binding(1) var<storage, read_write> depth_buffer: DepthBuffer;
+
+@group(1) @binding(0) var<uniform> screen_dims: Uniform;
+@group(2) @binding(0) var<uniform> camera: Camera;
+
 @group(3) @binding(0) var<storage, read> vertex_buffer: VertexBuffer;
-@group(4) @binding(0) var<uniform> camera: Camera;
-@group(5) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
-@group(6) @binding(0) var<storage, read> texture_infos: TextureInfos;
-@group(7) @binding(0) var<storage, read> lights: LightBuffer;
+@group(3) @binding(1) var<storage, read> lights: LightBuffer;
+
+@group(4) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
+@group(4) @binding(1) var<storage, read> texture_infos: TextureInfos;
 
 fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
     return max(dot(normalize(normal), normalize(light_dir)), 0.0);

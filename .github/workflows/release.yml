@@ -4,6 +4,9 @@ on:
   # Trigger a build when pushing to master
   push:
     branches: ["master"]
+  # Trigger on new tags
+    tags:
+      - 'v*'
 
 jobs:
   # -----------------------------------------------------------
