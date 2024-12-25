@@ -49,7 +49,10 @@ struct TextureInfo {
 };
 
 struct Light {
-    position: vec3<f32>,
+    world_position: vec3<f32>,
+    _padding1: f32,
+    view_position: vec3<f32>,
+    _padding2: f32,
     color: vec3<f32>,
     intensity: f32,
 };
@@ -57,6 +60,16 @@ struct Light {
 struct LightBuffer {
     lights: array<Light>,
 };
+
+struct EffectUniform {
+    effect_type: u32,
+    param1: f32,
+    param2: f32,
+    param3: f32,
+    param4: f32,
+    time: f32,
+    _padding: vec2<f32>,
+}
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
 @group(0) @binding(1) var<storage, read_write> depth_buffer: DepthBuffer;
@@ -69,6 +82,8 @@ struct LightBuffer {
 
 @group(4) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
 @group(4) @binding(1) var<storage, read> texture_infos: TextureInfos;
+
+@group(5) @binding(0) var<uniform> effect: EffectUniform;
 
 fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
     return max(dot(normalize(normal), normalize(light_dir)), 0.0);
@@ -102,12 +117,82 @@ fn sample_texture(uv: vec2<f32>, texture_index: u32) -> vec4<f32> {
     return vec4<f32>(r, g, b, a);
 }
 
-fn project(v: Vertex) -> Vertex {
-    // Transform the vertex position to clip space
-    let clip_pos = camera.view_proj * vec4<f32>(v.x, v.y, v.z, 1.0);
+fn hash(p: vec2<f32>) -> f32 {
+    var p3 = fract(vec3<f32>(p.xyx) * 0.1031);
+    p3 += dot(p3, p3.yzx + 33.33);
+    return fract((p3.x + p3.y) * p3.z);
+}
 
-    // Store world space position for lighting calculations
-    let world_pos = vec3<f32>(v.x, v.y, v.z);
+fn noise(p: vec2<f32>) -> f32 {
+    let i = floor(p);
+    let f = fract(p);
+    let u = f * f * (3.0 - 2.0 * f);
+    return mix(
+        mix(hash(i + vec2<f32>(0.0, 0.0)), hash(i + vec2<f32>(1.0, 0.0)), u.x),
+        mix(hash(i + vec2<f32>(0.0, 1.0)), hash(i + vec2<f32>(1.0, 1.0)), u.x),
+        u.y
+    );
+}
+
+fn apply_wave_effect(pos: vec3<f32>) -> vec3<f32> {
+    var modified_pos = pos;
+    let amplitude = effect.param1;
+    let frequency = effect.param2;
+    let phase = effect.param3;
+    let direction = effect.param4;
+
+    if direction < 0.5 { // Vertical
+        modified_pos.y += amplitude * sin(frequency * pos.x + phase);
+    } else if direction < 1.5 { // Horizontal
+        modified_pos.x += amplitude * sin(frequency * pos.y + phase);
+    } else { // Radial
+        let dist = length(pos.xy);
+        modified_pos.z += amplitude * sin(frequency * dist + phase);
+    }
+
+    return modified_pos;
+}
+
+fn apply_dissolve_effect(color: vec4<f32>, uv: vec2<f32>) -> vec4<f32> {
+    let threshold = effect.param1;
+    let noise_scale = effect.param2;
+    let n = noise(uv * noise_scale);
+    
+    if n < threshold {
+        return vec4<f32>(0.0);
+    }
+    return color;
+}
+
+fn apply_smooth_to_flat_effect(normal: vec3<f32>) -> vec3<f32> {
+    let progress = effect.param1;
+    let up = vec3<f32>(0.0, 1.0, 0.0);
+    return normalize(mix(normal, up, progress));
+}
+
+fn apply_pixelate_effect(uv: vec2<f32>) -> vec2<f32> {
+    let pixel_size = effect.param1;
+    return floor(uv * pixel_size) / pixel_size;
+}
+
+fn apply_voxelize_effect(pos: vec3<f32>) -> vec3<f32> {
+    let grid_size = effect.param1;
+    return floor(pos * grid_size) / grid_size;
+}
+
+fn project(v: Vertex) -> Vertex {
+    var modified_v = v;
+    var world_pos = vec3<f32>(v.x, v.y, v.z);
+    
+    // Apply position-based effects before projection
+    if effect.effect_type == 1u { // Wave
+        world_pos = apply_wave_effect(world_pos);
+    } else if effect.effect_type == 5u { // Voxelize
+        world_pos = apply_voxelize_effect(world_pos);
+    }
+
+    // Transform the vertex position to clip space
+    let clip_pos = camera.view_proj * vec4<f32>(world_pos, 1.0);
 
     // Perform the perspective divide to get NDC
     let ndc_pos = clip_pos.xyz / clip_pos.w;
@@ -119,17 +204,17 @@ fn project(v: Vertex) -> Vertex {
         ndc_pos.z
     );
 
-    // Return the Vertex, including w_clip
+    // Return the modified Vertex with original world position stored
     return Vertex(
         screen_pos.x,
         screen_pos.y,
         screen_pos.z,
-        v.u,
-        v.v,
-        v.nx,
-        v.ny,
-        v.nz,
-        v.texture_index,
+        modified_v.u,
+        modified_v.v,
+        world_pos.x,  // Store world position in normal fields
+        world_pos.y,  // for use in lighting calculations
+        world_pos.z,
+        modified_v.texture_index,
         clip_pos.w
     );
 }
@@ -187,31 +272,33 @@ fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
 
 fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>) -> vec3<f32> {
     let normal_normalized = normalize(normal);
-
-    // Ambient component
     let ambient = vec3<f32>(0.1, 0.1, 0.1);
-
     var total_diffuse = vec3<f32>(0.0);
     var total_specular = vec3<f32>(0.0);
 
-    // Calculate contribution from each light
     for (var i = 0u; i < arrayLength(&lights.lights); i = i + 1u) {
         let light = lights.lights[i];
-        let light_dir = normalize(light.position - position);
+        
+        // Calculate light direction in world space
+        let light_dir = normalize(light.world_position - position);
+        let light_distance = length(light.world_position - position);
+        let attenuation = 1.0 / (1.0 + 0.1 * light_distance + 0.01 * light_distance * light_distance);
 
-        // Diffuse component
+        // Diffuse
         let diff = max(dot(normal_normalized, light_dir), 0.0);
-        total_diffuse = total_diffuse + light.color * diff * light.intensity;
+        let diffuse = light.color * diff * light.intensity * attenuation;
+        total_diffuse = total_diffuse + diffuse;
 
-        // Specular component
+        // Specular
         let view_dir = normalize(camera.view_pos.xyz - position);
         let reflect_dir = reflect(-light_dir, normal_normalized);
         let spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
-        total_specular = total_specular + light.color * spec * light.intensity * 0.5;
+        let specular = light.color * spec * light.intensity * attenuation * 0.5;
+        total_specular = total_specular + specular;
     }
 
-    // Combine all contributions and clamp to avoid exceeding maximum brightness
-    return min(ambient + total_diffuse + total_specular, vec3<f32>(1.0, 1.0, 1.0));
+    // Combine ambient, diffuse, and specular, ensuring we don't exceed 1.0
+    return min(ambient + total_diffuse + total_specular, vec3<f32>(1.0));
 }
 
 fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
@@ -227,6 +314,11 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
     let startY = u32(clamp(min_max.y, 0.0, screen_dims.height - 1.0));
     let endX = u32(clamp(min_max.z, 0.0, screen_dims.width - 1.0));
     let endY = u32(clamp(min_max.w, 0.0, screen_dims.height - 1.0));
+
+    // Get world positions from the normal fields where we stored them
+    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz);
+    let world_pos2 = vec3<f32>(v2.nx, v2.ny, v2.nz);
+    let world_pos3 = vec3<f32>(v3.nx, v3.ny, v3.nz);
 
     for (var x: u32 = startX; x <= endX; x = x + 1u) {
         for (var y: u32 = startY; y <= endY; y = y + 1u) {
@@ -249,22 +341,30 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
             // Interpolated 1/w
             let interpolated_one_over_w = bc.x * one_over_w1 + bc.y * one_over_w2 + bc.z * one_over_w3;
 
+            // Interpolate world position
+            let world_pos = (world_pos1 * bc.x + world_pos2 * bc.y + world_pos3 * bc.z);
+
             // Interpolate UV coordinates
             let interpolated_uv_over_w = bc.x * vec2<f32>(v1.u, v1.v) * one_over_w1 +
                                        bc.y * vec2<f32>(v2.u, v2.v) * one_over_w2 +
                                        bc.z * vec2<f32>(v3.u, v3.v) * one_over_w3;
-            let uv = interpolated_uv_over_w / interpolated_one_over_w;
+            var uv = interpolated_uv_over_w / interpolated_one_over_w;
 
-            // Interpolate world position for lighting calculations
-            let world_pos = (vec3<f32>(v1.x, v1.y, v1.z) * bc.x +
-                             vec3<f32>(v2.x, v2.y, v2.z) * bc.y +
-                             vec3<f32>(v3.x, v3.y, v3.z) * bc.z);
+            // Apply UV-based effects
+            if effect.effect_type == 4u { // Pixelate
+                uv = apply_pixelate_effect(uv);
+            }
 
             // Interpolate normal (perspective-correct)
             let normal_over_w = (bc.x * vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1 +
                                 bc.y * vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2 +
                                 bc.z * vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3);
-            let interpolated_normal = normalize(normal_over_w / interpolated_one_over_w);
+            var interpolated_normal = normalize(normal_over_w / interpolated_one_over_w);
+
+            // Apply normal-based effects
+            if effect.effect_type == 3u { // Smooth to flat
+                interpolated_normal = apply_smooth_to_flat_effect(interpolated_normal);
+            }
 
             // Interpolate depth
             let interpolated_z_over_w = bc.x * v1.z * one_over_w1 +
@@ -276,11 +376,16 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
             // Sample the texture
             let tex_color = sample_texture(uv, texture_index);
 
-            // Calculate lighting
+            // Calculate lighting using world-space position and normal
             let lighting = calculate_lighting(interpolated_normal, world_pos);
 
             // Apply lighting to texture color
-            let final_color = vec4<f32>(tex_color.rgb * lighting, tex_color.a);
+            var final_color = vec4<f32>(tex_color.rgb * lighting, tex_color.a);
+
+            // Apply color-based effects
+            if effect.effect_type == 2u { // Dissolve
+                final_color = apply_dissolve_effect(final_color, uv);
+            }
 
             // Convert color to u32
             let R = u32(final_color.r * 255.0);
