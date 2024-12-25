@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 
-use effect::{Effect, WaveDirection};
+use effect::{Effect};
 use scene::SceneConfig;
 
 use sysinfo::{get_current_pid, System};
@@ -52,8 +52,8 @@ fn main() {
             ),
             lights: vec![
                 ([0.0, 10.0, 5.0], [1.0, 0.8, 0.0], 3.0), // Yellow top light
-                // ([-10.0, 0.0, 5.0], [0.0, 1.0, 1.0], 3.0), // Cyan left light
-                // ([10.0, 0.0, 5.0], [1.0, 0.0, 1.0], 3.0), // Magenta right light
+                ([-10.0, 0.0, 5.0], [0.0, 1.0, 1.0], 3.0), // Cyan left light
+                ([10.0, 0.0, 5.0], [1.0, 0.0, 1.0], 3.0), // Magenta right light
             ],
             effects: vec![Effect::dissolve(20.0, 1.0, 3.0)],
         },
