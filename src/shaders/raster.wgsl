@@ -184,11 +184,13 @@ fn project(v: Vertex) -> Vertex {
     var modified_v = v;
     var world_pos = vec3<f32>(v.x, v.y, v.z);
     
-    // Apply position-based effects before projection
-    if effect.effect_type == 1u { // Wave
-        world_pos = apply_wave_effect(world_pos);
-    } else if effect.effect_type == 5u { // Voxelize
-        world_pos = apply_voxelize_effect(world_pos);
+    // Apply position-based effects before projection only if an effect is active
+    if effect.effect_type != 0u { // 0 means no effect
+        if effect.effect_type == 1u { // Wave
+            world_pos = apply_wave_effect(world_pos);
+        } else if effect.effect_type == 5u { // Voxelize
+            world_pos = apply_voxelize_effect(world_pos);
+        }
     }
 
     // Transform the vertex position to clip space

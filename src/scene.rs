@@ -107,9 +107,11 @@ impl Scene {
     pub fn update(&mut self, gpu: &mut gpu::GPU, delta_time: Duration) {
         self.time += delta_time.as_secs_f32();
 
-        // Update effects
-        for effect in &mut self.effects {
-            effect.update(delta_time);
+        // Update effects only if there are any
+        if !self.effects.is_empty() {
+            for effect in &mut self.effects {
+                effect.update(delta_time);
+            }
         }
 
         // Update camera and get view matrix
@@ -118,7 +120,7 @@ impl Scene {
             camera_uniform.update_view_proj(camera);
 
             // Transform light positions to view space using only view matrix
-            let view_matrix = camera.build_view_matrix(); // Use view matrix only
+            let view_matrix = camera.build_view_matrix();
             for light in &mut self.lights {
                 let world_pos = glam::Vec3::from_slice(&light.world_position);
                 let view_pos = view_matrix.transform_point3(world_pos);
@@ -133,10 +135,15 @@ impl Scene {
         gpu.queue
             .write_buffer(&gpu.light_buffer, 0, bytemuck::cast_slice(&self.lights));
 
-        // Update effects
+        // Update effects only if there are any
         if let Some(effect) = self.effects.first() {
             let mut effect_uniform = crate::effect::EffectUniform::default();
             effect_uniform.update(effect, self.time);
+            gpu.queue
+                .write_buffer(&gpu.effect_buffer, 0, bytemuck::bytes_of(&effect_uniform));
+        } else {
+            // Write a default "no effect" state
+            let effect_uniform = crate::effect::EffectUniform::default();
             gpu.queue
                 .write_buffer(&gpu.effect_buffer, 0, bytemuck::bytes_of(&effect_uniform));
         }
@@ -206,5 +213,5 @@ pub struct SceneConfig {
         /* color */ [f32; 3],
         /* intensity */ f32,
     )>,
-    pub effects: Vec<Effect>,
+    pub effects: Option<Vec<Effect>>,
 }
