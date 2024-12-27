@@ -5,11 +5,11 @@ edition = "2021"
 
 [dependencies]
 minifb = "0.27.0"
-wgpu = "23.0.0"
+wgpu = "23.0.1"
 pollster = "0.4.0"
 bytemuck = { version = "1.20.0", features = ["derive"] }
 glam = "0.29.2"
 futures-intrusive = "0.5.0"
 image = "0.25.5"
 tobj = "4.0.2"
-sysinfo = "0.32.0"
+sysinfo = "0.33.0"
