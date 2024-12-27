@@ -24,7 +24,43 @@ pub struct GPU {
     clear_pass: ClearPass,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
+struct TextureInfo {
+    offset: u32,
+    width: u32,
+    height: u32,
+    _padding: u32,
+}
+
 impl GPU {
+    fn create_buffer<T: bytemuck::Pod>(
+        device: &wgpu::Device,
+        label: &str,
+        contents: &[T],
+        usage: wgpu::BufferUsages,
+    ) -> wgpu::Buffer {
+        device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some(label),
+            contents: bytemuck::cast_slice(contents),
+            usage,
+        })
+    }
+
+    fn create_empty_buffer(
+        device: &wgpu::Device,
+        label: &str,
+        size: u64,
+        usage: wgpu::BufferUsages,
+    ) -> wgpu::Buffer {
+        device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some(label),
+            size,
+            usage,
+            mapped_at_creation: false,
+        })
+    }
+
     pub async fn new(width: usize, height: usize, scene: &scene::Scene) -> GPU {
         let instance = wgpu::Instance::default();
         let adapter = instance
@@ -32,15 +68,12 @@ impl GPU {
             .await
             .expect("Failed to find an appropriate adapter");
 
-        let limits = adapter.limits();
-        let features = adapter.features();
-
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
                     label: Some("Device"),
-                    required_features: features,
-                    required_limits: limits,
+                    required_features: adapter.features(),
+                    required_limits: adapter.limits(),
                     memory_hints: wgpu::MemoryHints::Performance,
                 },
                 None,
@@ -51,126 +84,129 @@ impl GPU {
         let raster_pass = RasterPass::new(&device);
         let clear_pass = ClearPass::new(&device);
 
-        let screen_uniform = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Screen Uniform Buffer"),
-            contents: bytemuck::bytes_of(&Uniform::new(width as _, height as _)),
-            usage: wgpu::BufferUsages::UNIFORM
+        // Create uniform buffers
+        let screen_uniform = Self::create_buffer(
+            &device,
+            "Screen Uniform Buffer",
+            &[Uniform::new(width as _, height as _)],
+            wgpu::BufferUsages::UNIFORM
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::STORAGE,
-        });
+        );
 
+        // Create vertex buffer
         let vertices = scene
             .models
             .iter()
             .flat_map(|model| model.vertices.clone())
             .collect::<Vec<Vertex>>();
-
-        let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Vertex Buffer"),
-            contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::STORAGE
+        let vertex_buffer = Self::create_buffer(
+            &device,
+            "Vertex Buffer",
+            &vertices,
+            wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
-        });
+        );
 
-        #[repr(C)]
-        #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
-        struct TextureInfo {
-            offset: u32,
-            width: u32,
-            height: u32,
-            _padding: u32,
-        }
+        // Create texture buffers
+        let (texture_buffer, texture_infos_buffer) = {
+            let mut flattened_texture_data = Vec::new();
+            let mut texture_infos = Vec::new();
 
-        let mut flattened_texture_data = Vec::new();
-        let mut texture_infos = Vec::new();
+            for material in &scene.materials {
+                let offset = flattened_texture_data.len() as u32;
+                flattened_texture_data.extend_from_slice(&material.texture.data);
+                texture_infos.push(TextureInfo {
+                    offset,
+                    width: material.texture.width,
+                    height: material.texture.height,
+                    _padding: 0,
+                });
+            }
 
-        for material in &scene.materials {
-            let offset = flattened_texture_data.len() as u32;
+            let fallback_data = vec![0xffffffffu32]; // White pixel
+            let texture_data = if flattened_texture_data.is_empty() {
+                &fallback_data
+            } else {
+                &flattened_texture_data
+            };
 
-            flattened_texture_data.extend_from_slice(&material.texture.data);
+            let texture_infos_data = if texture_infos.is_empty() {
+                vec![TextureInfo {
+                    offset: 0,
+                    width: 1,
+                    height: 1,
+                    _padding: 0,
+                }]
+            } else {
+                texture_infos
+            };
 
-            texture_infos.push(TextureInfo {
-                offset,
-                width: material.texture.width,
-                height: material.texture.height,
-                _padding: 0,
-            });
-        }
-
-        let fallback_data = vec![0xffffffffu32]; // White pixel
-
-        let texture_data = if flattened_texture_data.is_empty() {
-            &fallback_data
-        } else {
-            &flattened_texture_data
+            (
+                Self::create_buffer(
+                    &device,
+                    "Texture Buffer",
+                    texture_data,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                ),
+                Self::create_buffer(
+                    &device,
+                    "Texture Info Buffer",
+                    &texture_infos_data,
+                    wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                ),
+            )
         };
 
-        let texture_infos_data = if texture_infos.is_empty() {
-            vec![TextureInfo {
-                offset: 0,
-                width: 1,
-                height: 1,
-                _padding: 0,
-            }]
-        } else {
-            texture_infos
-        };
-
-        let texture_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Texture Buffer"),
-            contents: bytemuck::cast_slice(texture_data),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
-
-        let texture_infos_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Texture Info Buffer"),
-            contents: bytemuck::cast_slice(&texture_infos_data),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
-
+        // Create camera buffer
         let active_camera = scene.get_active_camera().expect("No active camera");
         let mut camera_uniform = camera::CameraUniform::default();
         camera_uniform.update_view_proj(&active_camera);
-
-        let camera_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Camera Buffer"),
-            contents: bytemuck::bytes_of(&camera_uniform),
-            usage: wgpu::BufferUsages::UNIFORM
+        let camera_buffer = Self::create_buffer(
+            &device,
+            "Camera Buffer",
+            &[camera_uniform],
+            wgpu::BufferUsages::UNIFORM
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::STORAGE,
-        });
+        );
 
-        let depth_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Depth Buffer"),
-            size: (height as usize * width as usize * std::mem::size_of::<f32>())
-                as wgpu::BufferAddress,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
+        // Create depth buffer
+        let depth_buffer = Self::create_empty_buffer(
+            &device,
+            "Depth Buffer",
+            (height * width * std::mem::size_of::<f32>()) as u64,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        );
 
-        let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Output Buffer"),
-            size: (width * height * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE
+        // Create output buffer
+        let output_buffer = Self::create_empty_buffer(
+            &device,
+            "Output Buffer",
+            (width * height * std::mem::size_of::<u32>()) as u64,
+            wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::MAP_READ,
-            mapped_at_creation: false,
-        });
+        );
 
+        // Create light buffer
         let lights = scene.get_lights();
-        let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Light Buffer"),
-            contents: bytemuck::cast_slice(lights),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
+        let light_buffer = Self::create_buffer(
+            &device,
+            "Light Buffer",
+            lights,
+            wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        );
 
+        // Create effect buffer
         let effect_uniform = EffectUniform::default();
-        let effect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Effect Buffer"),
-            contents: bytemuck::bytes_of(&effect_uniform),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
+        let effect_buffer = Self::create_buffer(
+            &device,
+            "Effect Buffer",
+            &[effect_uniform],
+            wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+        );
 
         let raster_bindings = RasterBindings::new(
             &device,
@@ -189,15 +225,12 @@ impl GPU {
         GPU {
             device,
             queue,
-
             camera_buffer,
             light_buffer,
             effect_buffer,
             output_buffer,
-
             raster_pass,
             raster_bindings,
-
             clear_pass,
         }
     }
@@ -258,7 +291,6 @@ impl GPU {
         rx.receive().await.unwrap().unwrap();
 
         let data = buffer_slice.get_mapped_range();
-
         let buffer = bytemuck::cast_slice(&data).to_vec();
         drop(data);
         self.output_buffer.unmap();
