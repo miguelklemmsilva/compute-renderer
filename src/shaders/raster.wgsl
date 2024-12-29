@@ -134,6 +134,35 @@ fn noise(p: vec2<f32>) -> f32 {
     );
 }
 
+fn apply_cross_hatch_effect(pixelCoord: vec2<f32>, color: vec4<f32>) -> vec4<f32> {
+    let spacing = effect.param1;   // line_spacing
+    let line_width = effect.param2;  // line_width
+    let hatch_intensity = 1.0;  // Full intensity
+    
+    // Scale coordinates based on screen dimensions for consistent size
+    let localCoord = pixelCoord / vec2<f32>(0.01);
+    
+    // For the +1 slope:
+    let p1 = fract((localCoord.x + localCoord.y) / spacing);
+    // For the -1 slope:
+    let p2 = fract((localCoord.x - localCoord.y) / spacing);
+    
+    var finalColor = color.rgb;
+    let lineColor = vec3<f32>(0.0, 0.0, 0.0); // black lines
+
+    // If p1 < line_width, we are "on" a line of slope +1
+    if p1 < line_width {
+        finalColor = mix(finalColor, lineColor, hatch_intensity);
+    }
+    
+    // If p2 < line_width, we are "on" a line of slope -1
+    if p2 < line_width {
+        finalColor = mix(finalColor, lineColor, hatch_intensity);
+    }
+    
+    return vec4<f32>(finalColor, color.a);
+}
+
 fn apply_wave_effect(pos: vec3<f32>) -> vec3<f32> {
     var modified_pos = pos;
     let amplitude = effect.param1;
@@ -387,6 +416,9 @@ fn draw_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
             // Apply color-based effects
             if effect.effect_type == 2u { // Dissolve
                 final_color = apply_dissolve_effect(final_color, uv);
+            }
+             if effect.effect_type == 6u { // Cross Hatch
+                final_color = apply_cross_hatch_effect(vec2<f32>(f32(x), f32(y)), final_color);
             }
 
             // Convert color to u32
