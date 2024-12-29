@@ -40,7 +40,7 @@ pub fn benchmark_scene(scene_config: &SceneConfig, width: usize, height: usize) 
 
     // Add camera and set active
     scene.add_camera(crate::camera::Camera::new(
-        5., // Starting zoom
+        3., // Starting zoom
         0.,
         0.,
         glam::Vec3::ZERO,

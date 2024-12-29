@@ -36,6 +36,11 @@ pub enum Effect {
         speed: f32,
         time: f32,
     },
+    CrossHatch {
+        line_spacing: f32,
+        line_width: f32,
+        time: f32,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -95,6 +100,9 @@ impl Effect {
                 *time += dt * *speed;
                 let t = (time.sin() + 1.0) * 0.5;
                 *grid_size = *min_size + (*max_size - *min_size) * t;
+            }
+            Effect::CrossHatch { time, .. } => {
+                *time += dt;
             }
         }
     }
@@ -167,6 +175,14 @@ impl Effect {
             time: 0.0,
         }
     }
+
+    pub fn cross_hatch(line_spacing: f32, line_width: f32, time: f32) -> Self {
+        Effect::CrossHatch {
+            line_spacing,
+            line_width,
+            time,
+        }
+    }
 }
 
 #[repr(C)]
@@ -236,13 +252,34 @@ impl EffectUniform {
                 self.effect_type = 3;
                 self.param1 = *progress;
             }
-            Effect::Pixelate { pixel_size, .. } => {
+            Effect::Pixelate {
+                pixel_size,
+                min_size: _,
+                max_size: _,
+                speed: _,
+                time: _,
+            } => {
                 self.effect_type = 4;
                 self.param1 = *pixel_size;
             }
-            Effect::Voxelize { grid_size, .. } => {
+            Effect::Voxelize {
+                grid_size,
+                min_size: _,
+                max_size: _,
+                speed: _,
+                time: _,
+            } => {
                 self.effect_type = 5;
                 self.param1 = *grid_size;
+            }
+            Effect::CrossHatch {
+                line_spacing,
+                line_width,
+                time: _,
+            } => {
+                self.effect_type = 6;
+                self.param1 = *line_spacing;
+                self.param2 = *line_width;
             }
         }
     }
