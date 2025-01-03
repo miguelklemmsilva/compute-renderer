@@ -202,6 +202,88 @@ impl Scene {
             self.effects.remove(index);
         }
     }
+
+    /// Duplicates a model multiple times for stress testing purposes
+    /// Returns a vector of the new model indices
+    pub fn duplicate_model_for_stress_test(
+        &mut self,
+        model_index: usize,
+        count: usize,
+        grid_spacing: f32,
+    ) -> Vec<usize> {
+        let mut new_indices = Vec::with_capacity(count);
+
+        // Clone the original model's vertices first to avoid multiple borrows
+        let vertices = if let Some(original_model) = self.models.get(model_index) {
+            original_model.vertices.clone()
+        } else {
+            return new_indices;
+        };
+
+        // Calculate grid dimensions for a square-ish layout
+        let grid_size = (count as f32).sqrt().ceil() as usize;
+
+        // Now create new models with the cloned vertices
+        for i in 0..count {
+            let row = i / grid_size;
+            let col = i % grid_size;
+
+            // Calculate offset from center
+            let x_offset = (col as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
+            let z_offset = (row as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
+
+            // Create new vertices with offset
+            let mut new_vertices = vertices.clone();
+            for vertex in &mut new_vertices {
+                vertex.position[0] += x_offset;
+                vertex.position[2] += z_offset;
+            }
+
+            let new_model = Model {
+                vertices: new_vertices,
+            };
+            self.models.push(new_model);
+            new_indices.push(self.models.len() - 1);
+        }
+
+        // Clear existing lights as we'll set up new ones for the stress test
+        self.lights.clear();
+
+        // Calculate the total size of the grid
+        let total_width = grid_size as f32 * grid_spacing;
+        let grid_height = 8.0; // Height of lights above the grid
+
+        // Add a brighter central light above the scene
+        self.add_light([0.0, grid_height, 0.0], [1.0, 1.0, 1.0], 2.0);
+
+        // Add corner lights to ensure good coverage
+        let corner_intensity = 1.5;
+        let half_width = total_width / 2.0;
+
+        // Add lights at each corner of the grid
+        self.add_light(
+            [half_width, grid_height, half_width],
+            [1.0, 0.9, 0.8],
+            corner_intensity,
+        );
+        self.add_light(
+            [-half_width, grid_height, half_width],
+            [1.0, 0.9, 0.8],
+            corner_intensity,
+        );
+        self.add_light(
+            [half_width, grid_height, -half_width],
+            [1.0, 0.9, 0.8],
+            corner_intensity,
+        );
+        self.add_light(
+            [-half_width, grid_height, -half_width],
+            [1.0, 0.9, 0.8],
+            corner_intensity,
+        );
+
+        new_indices
+    }
 }
 
 pub struct SceneConfig {
@@ -214,4 +296,48 @@ pub struct SceneConfig {
         /* intensity */ f32,
     )>,
     pub effects: Option<Vec<Effect>>,
+    // New stress test configuration
+    pub stress_test: Option<StressTestConfig>,
+    // Camera configuration
+    pub camera_config: CameraConfig,
+    // Benchmark duration in seconds
+    pub benchmark_duration_secs: u64,
+}
+
+pub struct StressTestConfig {
+    pub model_count: usize,
+    pub grid_spacing: f32,
+}
+
+pub struct CameraConfig {
+    pub distance: f32,
+    pub theta: f32,
+    pub phi: f32,
+    pub target: [f32; 3],
+}
+
+impl Default for CameraConfig {
+    fn default() -> Self {
+        Self {
+            distance: 3.0,
+            theta: 0.0,
+            phi: 0.0,
+            target: [0.0, 0.0, 0.0],
+        }
+    }
+}
+
+impl Default for SceneConfig {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            model_path: String::new(),
+            texture_path: None,
+            lights: Vec::new(),
+            effects: None,
+            stress_test: None,
+            camera_config: CameraConfig::default(),
+            benchmark_duration_secs: 10,
+        }
+    }
 }
