@@ -20,25 +20,23 @@ fn main() {
     let width = 1600;
 
     let lights = vec![
-        ([0.0, 10.0, 5.0], [1.0, 0.8, 0.0], 3.0), // Yellow top light
-        ([-10.0, 0.0, 5.0], [0.0, 1.0, 1.0], 3.0), // Cyan left light
-        ([10.0, 0.0, 5.0], [1.0, 0.0, 1.0], 3.0), // Magenta right light
+        ([0.0, 10.0, 5.0], [1.0, 1.0, 1.0], 1.0), // Yellow top light
+        ([-10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 1.0), // Cyan left light
+        ([10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 1.0), // Magenta right light
     ];
 
     // List of scenes to benchmark
     let scenes = vec![
         SceneConfig {
-            name: "African head - Crosshatch Effect".to_string(),
-            model_path: get_asset_path("african_head.obj")
-                .to_string_lossy()
-                .to_string(),
-            texture_path: Some(
-                get_asset_path("african_head_diffuse.tga")
-                    .to_string_lossy()
-                    .to_string(),
-            ),
+            name: "Suzanne - Wave Effect".to_string(),
+            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
+            texture_path: None,
             lights: lights.clone(),
-            effects: Some(vec![Effect::cross_hatch(0.3, 0.001, 1.0)]),
+            effects: Some(vec![Effect::wave_horizontal(
+                0.5,
+                3.0,
+                1.0
+            )]),
         },
         SceneConfig {
             name: "African head - Dissolve Effect".to_string(),
@@ -85,7 +83,8 @@ fn main() {
     for (i, scene_config) in scenes.iter().enumerate() {
         println!("Benchmarking scene {}: {}", i + 1, scene_config.name);
 
-        let performance_data: performance::PerformanceData = performance::benchmark_scene(scene_config, width, height);
+        let performance_data: performance::PerformanceData =
+            performance::benchmark_scene(scene_config, width, height);
         performance::print_performance_data(&scene_config.name, i, &performance_data);
     }
 }
