@@ -89,6 +89,17 @@ The project includes built-in stress testing capabilities for performance evalua
 - Automated benchmarking tools
 - Performance metrics collection
 
+## Releases
+
+You can find the latest releases on the [GitHub Releases page](https://github.com/miguel4521/compute-renderer/releases).
+
+To use the latest release:
+1. Download the appropriate binary for your platform from the releases page
+2. Extract the archive
+3. Run the executable from the terminal/command prompt
+
+For development, it's recommended to build from source following the instructions in the Building section above.
+
 ## Acknowledgments
 
 This project is being developed as part of a third-year computer science project at Lancaster University, focusing on exploring alternative approaches to real-time 3D rendering using modern GPU compute capabilities. 
