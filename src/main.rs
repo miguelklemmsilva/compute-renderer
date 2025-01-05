@@ -14,6 +14,8 @@ mod raster_pass;
 mod scene;
 mod util;
 mod window;
+mod vertex_pass;
+mod fragment_pass;
 
 fn main() {
     let height = 900;
