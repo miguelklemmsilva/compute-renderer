@@ -1,12 +1,10 @@
-use crate::raster_pass::RasterBindings;
-
 pub struct ClearPass {
     pub pipeline: wgpu::ComputePipeline,
 }
 
 impl ClearPass {
     pub fn new(device: &wgpu::Device) -> Self {
-        // Combined frame buffer bind group layout (color + depth)
+        // Combined frame buffer bind group layout (color + depth + fragment counter + fragment buffer)
         let frame_buffer_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Clear: Frame Buffer Bind Group Layout"),
@@ -23,6 +21,26 @@ impl ClearPass {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
                         visibility: wgpu::ShaderStages::COMPUTE,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -57,35 +75,19 @@ impl ClearPass {
             push_constant_ranges: &[],
         });
 
-        // Create Shader Module
-        let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/raster.wgsl"));
+        // Create Shader Module using our new dedicated clear shader
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/clear.wgsl"));
 
-        // Create Compute Pipeline
+        // Create Compute Pipeline with the new entry point
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Clear Pipeline"),
             layout: Some(&layout),
             module: &shader,
-            entry_point: Option::Some("clear"),
+            entry_point: Some("clear_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         });
 
         Self { pipeline }
-    }
-}
-
-impl<'a> ClearPass {
-    pub fn record<'pass>(
-        &'a self,
-        cpass: &mut wgpu::ComputePass<'pass>,
-        bindings: &'a RasterBindings,
-        dispatch_size: u32,
-    ) where
-        'a: 'pass,
-    {
-        cpass.set_pipeline(&self.pipeline);
-        cpass.set_bind_group(0, &bindings.frame_buffer, &[]);
-        cpass.set_bind_group(1, &bindings.screen, &[]);
-        cpass.dispatch_workgroups(dispatch_size, 1, 1);
     }
 }
