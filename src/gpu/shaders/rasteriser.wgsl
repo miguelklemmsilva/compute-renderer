@@ -109,24 +109,31 @@ fn rasterize_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
 
     for (var x: u32 = startX; x <= endX; x = x + 1u) {
         for (var y: u32 = startY; y <= endY; y = y + 1u) {
-            let bc = barycentric(
+            var bc = barycentric(
                 vec3<f32>(v1.x, v1.y, v1.z),
                 vec3<f32>(v2.x, v2.y, v2.z),
                 vec3<f32>(v3.x, v3.y, v3.z),
                 vec2<f32>(f32(x), f32(y))
             );
-            if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
+
+            var threshold = 0.0;
+
+            if effect.effect_type == 3u { // voxelization
+                threshold = -effect.param1;
+            } 
+
+            if bc.x < threshold || bc.y < threshold || bc.z < threshold {
                 continue;
             }
 
-            if effect.effect_type == 2u {
+            if effect.effect_type == 2u { // melt effect
                 // We animate meltdown with time. For a triangle to be drawn,
                 // min(bc.x, bc.y, bc.z) must exceed some threshold.
                 // That threshold can be something that grows or shrinks over time.
                 let amplitude = effect.param1;
                 let phase = effect.param2;
 
-                let wave = 0.5 + 0.5 * sin(effect.time + phase);   // ranges [0..1]
+                let wave = 0.5 + 0.5 * sin(effect.time + phase);
                 let meltdownThreshold = amplitude * wave;
 
                 let min_bc = min(bc.x, min(bc.y, bc.z));
@@ -174,7 +181,7 @@ fn rasterize_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
                         let pos_over_w3 = bc.z * world_pos3 * one_over_w3;
                         let interpolated_world_pos = (pos_over_w1 + pos_over_w2 + pos_over_w3)
                                                     / interpolated_one_over_w;
-
+                        
                         // Create a new fragment
                         fragment_buffer.frags[pixel_id].screen_x = x;
                         fragment_buffer.frags[pixel_id].screen_y = y;
