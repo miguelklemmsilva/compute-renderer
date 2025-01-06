@@ -5,17 +5,13 @@ use scene::{CameraConfig, SceneConfig, StressTestConfig};
 use util::get_asset_path;
 
 mod camera;
-mod clear_pass;
 mod effect;
-mod gpu;
 mod model;
 mod performance;
-mod raster_pass;
 mod scene;
 mod util;
 mod window;
-mod vertex_pass;
-mod fragment_pass;
+mod gpu;
 
 fn main() {
     let height = 900;

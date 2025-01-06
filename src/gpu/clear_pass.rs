@@ -1,10 +1,13 @@
+use super::{dispatch_size, GpuBuffers};
+
 pub struct ClearPass {
     pub pipeline: wgpu::ComputePipeline,
+    pub bind_group_0: wgpu::BindGroup,
+    pub bind_group_1: wgpu::BindGroup,
 }
 
 impl ClearPass {
-    pub fn new(device: &wgpu::Device) -> Self {
-        // Combined frame buffer bind group layout (color + depth + fragment counter + fragment buffer)
+    pub fn new(device: &wgpu::Device, buffers: &GpuBuffers) -> Self {
         let frame_buffer_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Clear: Frame Buffer Bind Group Layout"),
@@ -32,7 +35,6 @@ impl ClearPass {
                 ],
             });
 
-        // Screen dimensions bind group layout
         let screen_bind_group_layout =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Clear: Screen Bind Group Layout"),
@@ -48,26 +50,65 @@ impl ClearPass {
                 }],
             });
 
-        // Create Pipeline Layout with consolidated bind group layouts
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Clear Pipeline Layout"),
             bind_group_layouts: &[&frame_buffer_bind_group_layout, &screen_bind_group_layout],
             push_constant_ranges: &[],
         });
 
-        // Create Shader Module using our new dedicated clear shader
         let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/clear.wgsl"));
 
-        // Create Compute Pipeline with the new entry point
         let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Clear Pipeline"),
-            layout: Some(&layout),
+            layout: Some(&pipeline_layout),
             module: &shader,
             entry_point: Some("clear_main"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         });
 
-        Self { pipeline }
+        let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Clear: Frame Buffer Bind Group"),
+            layout: &frame_buffer_bind_group_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffers.fragment_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let bind_group_1 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Clear: Screen Bind Group"),
+            layout: &screen_bind_group_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffers.screen_buffer.as_entire_binding(),
+            }],
+        });
+
+        Self {
+            pipeline,
+            bind_group_0,
+            bind_group_1,
+        }
+    }
+
+    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, width: usize, height: usize) {
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("Clear Pass"),
+            timestamp_writes: None,
+        });
+
+        cpass.set_pipeline(&self.pipeline);
+        cpass.set_bind_group(0, &self.bind_group_0, &[]);
+        cpass.set_bind_group(1, &self.bind_group_1, &[]);
+
+        let total_threads = (width * height) as u32;
+        cpass.dispatch_workgroups(dispatch_size(total_threads), 1, 1);
     }
 }
