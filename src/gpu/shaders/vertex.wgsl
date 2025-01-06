@@ -33,7 +33,6 @@ struct ProjectedVertexBuffer {
     values: array<Vertex>,
 };
 
-// The same effect uniform.
 struct EffectUniform {
     effect_type: u32,
     param1: f32,
@@ -43,11 +42,6 @@ struct EffectUniform {
     time: f32,
     _padding: vec2<f32>,
 }
-
-// -- Effects and other helper functions (exactly as before, but cut down
-//    or re-copied so the logic stays the same). You can keep all the code
-//    from your original file—hash, noise, wave, voxelize, etc. This snippet
-//    just shows the main ones you likely need for the vertex pass.
 
 fn hash(p: vec2<f32>) -> f32 {
     var p3 = fract(vec3<f32>(p.xyx) * 0.1031);
