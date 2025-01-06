@@ -5,7 +5,7 @@ use crate::{gpu, scene};
 
 pub struct Window {
     window: minifb::Window,
-    pub gpu: gpu::GPU,
+    pub gpu: gpu::gpu::GPU,
     height: usize,
     width: usize,
     pub scene: scene::Scene,
@@ -13,7 +13,7 @@ pub struct Window {
 
 impl Window {
     pub fn new(width: usize, height: usize, scene: scene::Scene) -> Window {
-        let gpu = block_on(gpu::GPU::new(width, height, &scene));
+        let gpu = block_on(gpu::gpu::GPU::new(width, height, &scene));
         let window = minifb::Window::new(
             "Minimal Renderer - ESC to exit",
             width,
