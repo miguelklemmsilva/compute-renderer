@@ -1,10 +1,6 @@
 // -----------------------------------------------------------------------------
 // RASTER STAGE
 // -----------------------------------------------------------------------------
-// This stage figures out which screen pixels belong to which triangles, plus
-// all the interpolated data needed in the fragment stage. Instead of calling
-// color_pixel immediately, we'll store "fragments" to a buffer. The fragment
-// pass will then do shading.
 
 struct Uniform {
     width: f32,
@@ -28,7 +24,6 @@ struct ProjectedVertexBuffer {
     values: array<Vertex>,
 };
 
-// Stores each "fragment candidate" that we'll pass to the fragment stage.
 struct Fragment {
     screen_x: u32,
     screen_y: u32,
@@ -39,23 +34,23 @@ struct Fragment {
     texture_index: u32,
 };
 
-// We'll store all fragments in a giant array. In practice, you might need
-// a more sophisticated approach (atomic bins, tile-based, etc.) to avoid
-// huge memory overhead. This is just to illustrate the separation of stages.
 struct FragmentBuffer {
     frags: array<Fragment>,
 };
 
-// We need an atomic counter to know how many fragments we've emitted so far.
-struct FragmentCounter {
-    counter: atomic<u32>,
-};
-
 struct UniformRaster {
-    // If you want any additional raster-related uniform data, put it here.
-    // In this simple example, we just reuse the screen dims from your original code.
     width: f32,
     height: f32,
+}
+
+struct EffectUniform {
+    effect_type: u32,
+    param1: f32,
+    param2: f32,
+    param3: f32,
+    param4: f32,
+    time: f32,
+    _padding: vec2<f32>,
 }
 
 // -- BINDINGS
@@ -63,6 +58,8 @@ struct UniformRaster {
 @group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: UniformRaster;
+
+@group(2) @binding(0) var<uniform> effect: EffectUniform;
 
 // -----------------------------------------------------------------------------
 // HELPERS
@@ -120,6 +117,22 @@ fn rasterize_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
             );
             if bc.x < 0.0 || bc.y < 0.0 || bc.z < 0.0 {
                 continue;
+            }
+
+            if effect.effect_type == 2u {
+                // We animate meltdown with time. For a triangle to be drawn,
+                // min(bc.x, bc.y, bc.z) must exceed some threshold.
+                // That threshold can be something that grows or shrinks over time.
+                let amplitude = effect.param1;
+                let phase = effect.param2;
+
+                let wave = 0.5 + 0.5 * sin(effect.time + phase);   // ranges [0..1]
+                let meltdownThreshold = amplitude * wave;
+
+                let min_bc = min(bc.x, min(bc.y, bc.z));
+                if min_bc < meltdownThreshold {
+                    continue;
+                }
             }
 
             // Perspective correction
