@@ -26,10 +26,8 @@ pub struct GPU {
 
     // For collecting all pixel coverage from raster stage
     pub fragment_buffer: wgpu::Buffer,
-    pub fragment_count: wgpu::Buffer,
 
     pub output_buffer: wgpu::Buffer,
-    pub depth_buffer: wgpu::Buffer,
 
     // Textures
     pub texture_buffer: wgpu::Buffer,
@@ -141,13 +139,6 @@ impl GPU {
             mapped_at_creation: false,
         });
 
-        // 5) fragment counter (u32 atomic)
-        let fragment_count = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Fragment Counter"),
-            contents: bytemuck::bytes_of(&0u32),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
-
         // 6) camera buffer
         let active_camera = scene.get_active_camera().expect("No active camera");
         let mut camera_uniform = camera::CameraUniform::default();
@@ -184,15 +175,7 @@ impl GPU {
             mapped_at_creation: false,
         });
 
-        // 10) depth buffer
-        let depth_buffer = device.create_buffer(&wgpu::BufferDescriptor {
-            label: Some("Depth Buffer"),
-            size: (width * height * std::mem::size_of::<u32>()) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-            mapped_at_creation: false,
-        });
-
-        // 11) texture buffers
+        // 10) texture buffers
         let mut flattened_texture_data = Vec::new();
         let mut texture_infos = Vec::new();
         for material in &scene.materials {
@@ -247,14 +230,6 @@ impl GPU {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: depth_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: fragment_count.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
                     resource: fragment_buffer.as_entire_binding(),
                 },
             ],
@@ -334,10 +309,6 @@ impl GPU {
                     binding: 1,
                     resource: fragment_buffer.as_entire_binding(),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: fragment_count.as_entire_binding(),
-                },
             ],
         });
         // group(1) -> screen
@@ -361,10 +332,6 @@ impl GPU {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: depth_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -434,10 +401,6 @@ impl GPU {
                     binding: 0,
                     resource: fragment_buffer.as_entire_binding(),
                 },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: fragment_count.as_entire_binding(),
-                },
             ],
         });
 
@@ -453,10 +416,8 @@ impl GPU {
             vertex_buffer,
             projected_buffer,
             fragment_buffer,
-            fragment_count,
 
             output_buffer,
-            depth_buffer,
 
             texture_buffer,
             texture_info_buffer,
