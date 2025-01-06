@@ -18,7 +18,7 @@ struct FragmentCounter {
 struct Fragment {
     screen_x: u32,
     screen_y: u32,
-    depth: f32,
+    depth: atomic<u32>,
     uv: vec2<f32>,
     normal: vec3<f32>,
     world_pos: vec3<f32>,
@@ -35,9 +35,7 @@ struct Uniform {
 };
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
-@group(0) @binding(1) var<storage, read_write> depth_buffer: DepthBuffer;
-@group(0) @binding(2) var<storage, read_write> fragment_counter: FragmentCounter;
-@group(0) @binding(3) var<storage, read_write> fragment_buffer: FragmentBuffer;
+@group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 
@@ -57,23 +55,12 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // Clear color buffer to black (0x000000)
     atomicStore(&output_buffer.data[idx], 0u);
-    
-    // Clear depth buffer to maximum depth (0xFFFFFFFF)
-    atomicStore(&depth_buffer.depth[idx], 0xFFFFFFFFu);
 
-    // Clear fragment buffer entry (set to default/empty values)
-    fragment_buffer.frags[idx] = Fragment(
-        0u,        // screen_x
-        0u,        // screen_y
-        0.0,       // depth
-        vec2<f32>(0.0, 0.0),  // uv
-        vec3<f32>(0.0, 0.0, 0.0),  // normal
-        vec3<f32>(0.0, 0.0, 0.0),  // world_pos
-        0xFFFFFFFFu  // texture_index (invalid)
-    );
-
-    // Only thread 0 needs to clear the fragment counter
-    if idx == 0u {
-        atomicStore(&fragment_counter.counter, 0u);
-    }
+    atomicStore(&fragment_buffer.frags[idx].depth, 0xFFFFFFFFu);
+    fragment_buffer.frags[idx].screen_x = 0u;
+    fragment_buffer.frags[idx].screen_y = 0u;
+    fragment_buffer.frags[idx].uv = vec2<f32>(0.0, 0.0);
+    fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
+    fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
+    fragment_buffer.frags[idx].texture_index = 0u;
 } 

@@ -4,7 +4,7 @@
 // This stage figures out which screen pixels belong to which triangles, plus
 // all the interpolated data needed in the fragment stage. Instead of calling
 // color_pixel immediately, we'll store "fragments" to a buffer. The fragment
-// pass will then do shading + depth test.
+// pass will then do shading.
 
 struct Uniform {
     width: f32,
@@ -32,7 +32,7 @@ struct ProjectedVertexBuffer {
 struct Fragment {
     screen_x: u32,
     screen_y: u32,
-    depth: f32,
+    depth: atomic<u32>,
     uv: vec2<f32>,
     normal: vec3<f32>,
     world_pos: vec3<f32>,
@@ -61,7 +61,6 @@ struct UniformRaster {
 // -- BINDINGS
 @group(0) @binding(0) var<storage, read> projected_buffer: ProjectedVertexBuffer;
 @group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
-@group(0) @binding(2) var<storage, read_write> fragment_count: FragmentCounter;
 
 @group(1) @binding(0) var<uniform> screen_dims: UniformRaster;
 
@@ -87,6 +86,11 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
         return vec3<f32>(-1.0, 1.0, 1.0);
     }
     return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
+}
+
+fn float_to_depth_int(depth: f32) -> u32 {
+    // Ensure we handle the full range properly
+    return u32(depth * 4294967295.0);
 }
 
 // Rasterizes a single triangle, pushing fragments out to the fragment buffer.
@@ -123,26 +127,7 @@ fn rasterize_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
             let one_over_w2 = 1.0 / v2.w_clip;
             let one_over_w3 = 1.0 / v3.w_clip;
 
-            let interpolated_one_over_w =
-                bc.x * one_over_w1 + bc.y * one_over_w2 + bc.z * one_over_w3;
-
-            let uv_over_w1 = bc.x * vec2<f32>(v1.u, v1.v) * one_over_w1;
-            let uv_over_w2 = bc.y * vec2<f32>(v2.u, v2.v) * one_over_w2;
-            let uv_over_w3 = bc.z * vec2<f32>(v3.u, v3.v) * one_over_w3;
-            let interpolated_uv_over_w = uv_over_w1 + uv_over_w2 + uv_over_w3;
-            let uv = interpolated_uv_over_w / interpolated_one_over_w;
-
-            let norm_over_w1 = bc.x * vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
-            let norm_over_w2 = bc.y * vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
-            let norm_over_w3 = bc.z * vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
-            let interpolated_normal = normalize((norm_over_w1 + norm_over_w2 + norm_over_w3)
-                                                 / interpolated_one_over_w);
-
-            let pos_over_w1 = bc.x * world_pos1 * one_over_w1;
-            let pos_over_w2 = bc.y * world_pos2 * one_over_w2;
-            let pos_over_w3 = bc.z * world_pos3 * one_over_w3;
-            let interpolated_world_pos = (pos_over_w1 + pos_over_w2 + pos_over_w3)
-                                         / interpolated_one_over_w;
+            let interpolated_one_over_w = bc.x * one_over_w1 + bc.y * one_over_w2 + bc.z * one_over_w3;
 
             let z_over_w1 = bc.x * v1.z * one_over_w1;
             let z_over_w2 = bc.y * v2.z * one_over_w2;
@@ -150,17 +135,49 @@ fn rasterize_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
             let interpolated_z = (z_over_w1 + z_over_w2 + z_over_w3) / interpolated_one_over_w;
             let depth = clamp(interpolated_z, 0.0, 1.0);
 
-            // Create a new fragment
-            let frag_index = atomicAdd(&fragment_count.counter, 1u);
-            fragment_buffer.frags[frag_index] = Fragment(
-                x,
-                y,
-                depth,
-                uv,
-                interpolated_normal,
-                interpolated_world_pos,
-                v1.texture_index
-            );
+            // Do an atomic depth test with the per-pixel buffer
+            let pixel_id = x + y * u32(screen_dims.width);
+            let new_depth_int = float_to_depth_int(depth);
+
+            loop {
+                let old_depth = atomicLoad(&fragment_buffer.frags[pixel_id].depth);
+                if new_depth_int < old_depth {
+                    let exchanged = atomicCompareExchangeWeak(&fragment_buffer.frags[pixel_id].depth, old_depth, new_depth_int);
+                    if exchanged.exchanged {
+                        let uv_over_w1 = bc.x * vec2<f32>(v1.u, v1.v) * one_over_w1;
+                        let uv_over_w2 = bc.y * vec2<f32>(v2.u, v2.v) * one_over_w2;
+                        let uv_over_w3 = bc.z * vec2<f32>(v3.u, v3.v) * one_over_w3;
+                        let interpolated_uv_over_w = uv_over_w1 + uv_over_w2 + uv_over_w3;
+                        let uv = interpolated_uv_over_w / interpolated_one_over_w;
+
+                        let norm_over_w1 = bc.x * vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
+                        let norm_over_w2 = bc.y * vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
+                        let norm_over_w3 = bc.z * vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
+                        let interpolated_normal = normalize((norm_over_w1 + norm_over_w2 + norm_over_w3)
+                                                            / interpolated_one_over_w);
+
+                        let pos_over_w1 = bc.x * world_pos1 * one_over_w1;
+                        let pos_over_w2 = bc.y * world_pos2 * one_over_w2;
+                        let pos_over_w3 = bc.z * world_pos3 * one_over_w3;
+                        let interpolated_world_pos = (pos_over_w1 + pos_over_w2 + pos_over_w3)
+                                                    / interpolated_one_over_w;
+
+                        // Create a new fragment
+                        fragment_buffer.frags[pixel_id].screen_x = x;
+                        fragment_buffer.frags[pixel_id].screen_y = y;
+                        fragment_buffer.frags[pixel_id].uv = uv;
+                        fragment_buffer.frags[pixel_id].normal = interpolated_normal;
+                        fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
+                        fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
+
+                        atomicExchange(&fragment_buffer.frags[pixel_id].depth, new_depth_int);
+                        break;
+                    }
+                } else {
+                    // The fragment is behind the one already in the buffer; ignore it.
+                    break;
+                }
+            }
         }
     }
 }
@@ -172,7 +189,6 @@ fn rasterize_triangle(v1: Vertex, v2: Vertex, v3: Vertex) {
 fn raster_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let triangle_idx = global_id.x * 3u;
 
-    // We assume the same # of vertices in projected_buffer as in the original vertex buffer.
     if triangle_idx + 2u >= arrayLength(&projected_buffer.values) {
         return;
     }
@@ -180,6 +196,16 @@ fn raster_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let v1 = projected_buffer.values[triangle_idx];
     let v2 = projected_buffer.values[triangle_idx + 1u];
     let v3 = projected_buffer.values[triangle_idx + 2u];
+
+        let a = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
+    let b = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
+    let cross_z = a.x * b.y - a.y * b.x;
+
+    // If cross_z <= 0, this triangle is back-facing (depending on your winding convention).
+    // We'll skip rasterizing in that case. 
+    if cross_z >= 0.0 {
+        return;
+    }
 
     rasterize_triangle(v1, v2, v3);
 }

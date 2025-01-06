@@ -8,10 +8,6 @@ struct OutputBuffer {
     data: array<atomic<u32>>,
 };
 
-struct DepthBuffer {
-    depth: array<atomic<u32>>,
-};
-
 struct Uniform {
     width: f32,
     height: f32,
@@ -63,7 +59,7 @@ struct EffectUniform {
 struct Fragment {
     screen_x: u32,
     screen_y: u32,
-    depth: f32,
+    depth: atomic<u32>,
     uv: vec2<f32>,
     normal: vec3<f32>,
     world_pos: vec3<f32>,
@@ -74,15 +70,10 @@ struct FragmentBuffer {
     frags: array<Fragment>,
 };
 
-struct FragmentCounter {
-    counter: atomic<u32>,
-};
-
 // -----------------------------------------------------------------------------
 // BINDINGS
 // -----------------------------------------------------------------------------
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
-@group(0) @binding(1) var<storage, read_write> depth_buffer: DepthBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
@@ -96,7 +87,6 @@ struct FragmentCounter {
 
 // The fragment data & count from the raster pass
 @group(6) @binding(0) var<storage, read> fragment_buffer: FragmentBuffer;
-@group(6) @binding(1) var<storage, read_write> fragment_count: FragmentCounter;
 
 // -----------------------------------------------------------------------------
 // HELPER FUNCTIONS (lighting, texturing, depth test, etc.)
@@ -104,33 +94,6 @@ struct FragmentCounter {
 fn rgb(r: u32, g: u32, b: u32) -> u32 {
     return (r << 16) | (g << 8) | b;
 }
-
-fn color_pixel(x: u32, y: u32, depth: f32, color: u32) {
-    let pixelID = x + y * u32(screen_dims.width);
-    let depth_int = float_to_depth_int(depth);
-
-    loop {
-        let old_depth = atomicLoad(&depth_buffer.depth[pixelID]);
-        // Only proceed if the new depth is nearer (less than) the existing one.
-        if depth_int < old_depth {
-            let exchanged = atomicCompareExchangeWeak(&depth_buffer.depth[pixelID], old_depth, depth_int);
-            if exchanged.exchanged {
-                // We successfully updated the depth, so now we update the color.
-                atomicExchange(&output_buffer.data[pixelID], color);
-                break;
-            }
-        } else {
-            // The fragment is behind the one already in the buffer; ignore it.
-            break;
-        }
-    }
-}
-
-fn float_to_depth_int(depth: f32) -> u32 {
-    // Ensure we handle the full range properly
-    return u32(clamp(depth, 0.0, 1.0) * 4294967295.0);
-}
-
 
 fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
     return max(dot(normalize(normal), normalize(light_dir)), 0.0);
@@ -205,31 +168,28 @@ fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>) -> vec3<f32> {
 // -----------------------------------------------------------------------------
 @compute @workgroup_size(256)
 fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let idx = global_id.x;
-    
-    let count = atomicLoad(&fragment_count.counter);
-    if idx >= count {
+    let idx = global_id.x + global_id.y * u32(screen_dims.width);
+
+    if idx >= arrayLength(&fragment_buffer.frags) || fragment_buffer.frags[idx].depth == 0xFFFFFFFFu {
         return;
     }
 
-    let frag = fragment_buffer.frags[idx];
-
     // Possibly apply normal effect
-    var normal = frag.normal;
+    var normal = fragment_buffer.frags[idx].normal;
     if effect.effect_type == 3u { // SmoothToFlat
         normal = apply_smooth_to_flat_effect(normal, effect);
     }
 
     // Sample texture
-    let tex_color = sample_texture(frag.uv, frag.texture_index);
+    let tex_color = sample_texture(fragment_buffer.frags[idx].uv, fragment_buffer.frags[idx].texture_index);
 
     // Compute lighting
-    let lighting = calculate_lighting(normal, frag.world_pos);
+    let lighting = calculate_lighting(normal, fragment_buffer.frags[idx].world_pos);
     var final_color = vec4<f32>(tex_color.rgb * lighting, tex_color.a);
 
     // Possibly apply dissolve
     if effect.effect_type == 2u {
-        final_color = apply_dissolve_effect(final_color, frag.uv);
+        final_color = apply_dissolve_effect(final_color, fragment_buffer.frags[idx].uv);
     }
 
     // Convert float color to integer
@@ -237,5 +197,7 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let G = u32(final_color.g * 255.0);
     let B = u32(final_color.b * 255.0);
 
-    color_pixel(frag.screen_x, frag.screen_y, frag.depth, rgb(R, G, B));
+    let color = rgb(R, G, B);
+
+    atomicStore(&output_buffer.data[idx], color);
 }
