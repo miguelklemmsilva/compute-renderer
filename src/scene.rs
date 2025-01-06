@@ -191,18 +191,6 @@ impl Scene {
         self.effects.len() - 1
     }
 
-    pub fn update_effect(&mut self, index: usize, effect: Effect) {
-        if let Some(existing_effect) = self.effects.get_mut(index) {
-            *existing_effect = effect;
-        }
-    }
-
-    pub fn remove_effect(&mut self, index: usize) {
-        if index < self.effects.len() {
-            self.effects.remove(index);
-        }
-    }
-
     /// Duplicates a model multiple times for stress testing purposes
     /// Returns a vector of the new model indices
     pub fn duplicate_model_for_stress_test(
