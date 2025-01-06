@@ -95,6 +95,15 @@ pub struct Vertex {
     pub w_clip: f32,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct TextureInfo {
+    pub offset: u32,
+    pub width: u32,
+    pub height: u32,
+    pub _padding: u32,
+}
+
 pub fn get_asset_path(asset: &str) -> PathBuf {
     // First, try looking for assets relative to the executable
     let executable_path = std::env::current_exe().expect("Failed to get executable path");
