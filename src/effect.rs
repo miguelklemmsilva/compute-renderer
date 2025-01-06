@@ -21,14 +21,11 @@ pub struct EdgeMeltEffect {
     pub amplitude: f32, // Should be clamped between 0.0 and 0.33
     pub phase: f32,
     pub speed: f32,
-    pub time: f32,
 }
 
 #[derive(Debug, Clone)]
 pub struct VoxelizeEffect {
-    pub grid_size: f32,
-    pub min_size: f32,
-    pub max_size: f32,
+    pub voxel_size: f32,
     pub speed: f32,
     pub time: f32,
 }
@@ -66,15 +63,12 @@ impl Effect {
             amplitude: amplitude.clamp(0.0, 0.33), // Ensure amplitude is within valid range
             phase: 0.0,
             speed,
-            time: 0.0,
         })
     }
 
-    pub fn voxelize(min_size: f32, max_size: f32, speed: f32) -> Self {
+    pub fn voxelize(voxel_size: f32, speed: f32) -> Self {
         Effect::Voxelize(VoxelizeEffect {
-            grid_size: min_size,
-            min_size,
-            max_size,
+            voxel_size,
             speed,
             time: 0.0,
         })
@@ -99,8 +93,8 @@ impl EdgeMeltEffect {
 impl VoxelizeEffect {
     pub fn update(&mut self, delta_time: f32) {
         self.time += delta_time * self.speed;
-        let t = (self.time.sin() + 1.0) * 0.5;
-        self.grid_size = self.min_size + (self.max_size - self.min_size) * t;
+        let t = ((self.time - std::f32::consts::FRAC_PI_2).sin() + 1.0) * 0.5; // Start at t = 0.0
+        self.voxel_size = t * 1.0; // Now t will start at 0.0
     }
 }
 
@@ -151,8 +145,8 @@ impl EffectUniform {
                 self.param2 = edge_melt.phase;
             }
             Effect::Voxelize(voxelize) => {
-                self.effect_type = 5;
-                self.param1 = voxelize.grid_size;
+                self.effect_type = 3;
+                self.param1 = voxelize.voxel_size;
             }
         }
     }

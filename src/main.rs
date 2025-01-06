@@ -18,9 +18,9 @@ fn main() {
     let width = 1600;
 
     let lights = vec![
-        ([0.0, 10.0, 5.0], [1.0, 1.0, 1.0], 1.0),
-        ([-10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 1.0),
-        ([10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 1.0),
+        ([0.0, 10.0, 5.0], [1.0, 1.0, 1.0], 3.0),
+        ([-10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 3.0),
+        ([10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 3.0),
     ];
 
     // List of scenes to benchmark
@@ -38,7 +38,7 @@ fn main() {
         SceneConfig {
             name: "Suzanne - Edge Melt Effect".to_string(),
             model_path: get_asset_path("african_head.obj").to_string_lossy().to_string(),
-            texture_path: None,
+            texture_path: Some(get_asset_path("african_head_diffuse.tga").to_string_lossy().to_string()),
             lights: lights.clone(),
             effects: Some(vec![Effect::edge_melt(0.33, 1.0)]),
             stress_test: None,
@@ -50,7 +50,7 @@ fn main() {
             model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
-            effects: Some(vec![Effect::voxelize(15.0, 40.0, 1.)]),
+            effects: Some(vec![Effect::voxelize(0.5, 5.0)]),
             stress_test: None,
             camera_config: CameraConfig::default(),
             benchmark_duration_secs: 10,
@@ -94,7 +94,7 @@ fn main() {
         },
         SceneConfig {
             name: "Stress Test - 1000 Models".to_string(),
-            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
+            model_path: get_asset_path("african_head.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
