@@ -5,6 +5,7 @@ pub struct RasterPass {
     pub pipeline: wgpu::ComputePipeline,
     pub bind_group_0: wgpu::BindGroup,
     pub bind_group_1: wgpu::BindGroup,
+    pub bind_group_2: wgpu::BindGroup,
 }
 
 impl RasterPass {
@@ -49,9 +50,23 @@ impl RasterPass {
             }],
         });
 
+        let group2_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Raster Pass: Group2 Layout (Effect)"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Raster Pipeline Layout"),
-            bind_group_layouts: &[&group0_layout, &group1_layout],
+            bind_group_layouts: &[&group0_layout, &group1_layout, &group2_layout],
             push_constant_ranges: &[],
         });
 
@@ -89,10 +104,20 @@ impl RasterPass {
             }],
         });
 
+        let bind_group_2 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Raster Pass: Group2"),
+            layout: &group2_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffers.effect_buffer.as_entire_binding(),
+            }],
+        });
+
         Self {
             pipeline,
             bind_group_0,
             bind_group_1,
+            bind_group_2
         }
     }
 
@@ -105,6 +130,7 @@ impl RasterPass {
         cpass.set_pipeline(&self.pipeline);
         cpass.set_bind_group(0, &self.bind_group_0, &[]);
         cpass.set_bind_group(1, &self.bind_group_1, &[]);
+        cpass.set_bind_group(2, &self.bind_group_2, &[]);
 
         let total_triangles = scene
             .models

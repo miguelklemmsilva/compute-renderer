@@ -30,52 +30,20 @@ fn main() {
             model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
-            effects: Some(vec![Effect::wave_horizontal(0.5, 3.0, 1.0)]),
+            effects: Some(vec![Effect::wave(0.5, 3.0, 1.0, effect::WaveDirection::Horizontal)]),
             stress_test: None,
             camera_config: CameraConfig::default(),
             benchmark_duration_secs: 10,
         },
         SceneConfig {
-            name: "African head - Dissolve Effect".to_string(),
-            model_path: get_asset_path("african_head.obj")
-                .to_string_lossy()
-                .to_string(),
-            texture_path: Some(
-                get_asset_path("african_head_diffuse.tga")
-                    .to_string_lossy()
-                    .to_string(),
-            ),
-            lights: lights.clone(),
-            effects: Some(vec![Effect::dissolve(20.0, 1.0, 3.0)]),
-            stress_test: None,
-            camera_config: CameraConfig::default(),
-            benchmark_duration_secs: 10,
-        },
-        SceneConfig {
-            name: "Suzanne - Smooth to Flat".to_string(),
-            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
+            name: "Suzanne - Edge Melt Effect".to_string(),
+            model_path: get_asset_path("african_head.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
-            effects: Some(vec![Effect::smooth_to_flat(1.0, 4.0)]),
+            effects: Some(vec![Effect::edge_melt(0.33, 1.0)]),
             stress_test: None,
             camera_config: CameraConfig::default(),
-            benchmark_duration_secs: 10,
-        },
-        SceneConfig {
-            name: "African head - Pixelate".to_string(),
-            model_path: get_asset_path("african_head.obj")
-                .to_string_lossy()
-                .to_string(),
-            texture_path: Some(
-                get_asset_path("african_head_diffuse.tga")
-                    .to_string_lossy()
-                    .to_string(),
-            ),
-            lights: lights.clone(),
-            effects: Some(vec![Effect::pixelate(4.0, 32.0, 2.0)]),
-            stress_test: None,
-            camera_config: CameraConfig::default(),
-            benchmark_duration_secs: 10,
+            benchmark_duration_secs: 100,
         },
         SceneConfig {
             name: "Suzanne - Voxelize".to_string(),
