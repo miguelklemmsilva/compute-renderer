@@ -4,7 +4,7 @@ use std::u32;
 use bytemuck::{Pod, Zeroable};
 
 pub fn process_obj_model(file: &str) -> Vec<Vertex> {
-    let (models, materials) = tobj::load_obj(
+    let (models, _) = tobj::load_obj(
         file,
         &tobj::LoadOptions {
             triangulate: true,
@@ -14,52 +14,43 @@ pub fn process_obj_model(file: &str) -> Vec<Vertex> {
     )
     .expect("Failed to load OBJ file");
 
-    let mut vertices = vec![];
+    let mut vertices = Vec::with_capacity(models.iter().map(|m| m.mesh.indices.len()).sum());
     for model in models.iter() {
         let mesh = &model.mesh;
 
+        let has_texcoords = !mesh.texcoords.is_empty();
+        let has_normals = !mesh.normals.is_empty();
+
         for &index in &mesh.indices {
-            let index = index as usize;
-            let pos_index = 3 * index;
-            let tex_index = 2 * index;
-            let normal_index = 3 * index;
-
-            let position = [
-                mesh.positions[pos_index],
-                mesh.positions[pos_index + 1],
-                mesh.positions[pos_index + 2],
-            ];
-
-            let tex_coords = if !mesh.texcoords.is_empty() {
-                [mesh.texcoords[tex_index], mesh.texcoords[tex_index + 1]]
-            } else {
-                [0.0, 0.0]
-            };
-
-            let normal = if !mesh.normals.is_empty() {
-                [
-                    mesh.normals[normal_index],
-                    mesh.normals[normal_index + 1],
-                    mesh.normals[normal_index + 2],
-                ]
-            } else {
-                [0.0, 1.0, 0.0] // Default normal pointing up
-            };
-
-            let material_index = u32::MAX;
+            let idx = index as usize;
 
             vertices.push(Vertex {
-                position,
-                tex_coords,
-                normal,
-                texture_index: material_index,
+                position: [
+                    mesh.positions[3 * idx],
+                    mesh.positions[3 * idx + 1],
+                    mesh.positions[3 * idx + 2],
+                ],
+                tex_coords: if has_texcoords {
+                    [mesh.texcoords[2 * idx], mesh.texcoords[2 * idx + 1]]
+                } else {
+                    [0.0, 0.0]
+                },
+                normal: if has_normals {
+                    [
+                        mesh.normals[3 * idx],
+                        mesh.normals[3 * idx + 1],
+                        mesh.normals[3 * idx + 2],
+                    ]
+                } else {
+                    [0.0, 1.0, 0.0]
+                },
+                texture_index: u32::MAX,
                 w_clip: 0.0,
             });
         }
     }
 
     println!("Amount of vertices: {}", vertices.len());
-
     vertices
 }
 
