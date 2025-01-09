@@ -57,9 +57,10 @@ fn triangle_overlaps_tile(min_max: vec4<f32>, tile_x: u32, tile_y: u32) -> bool 
     return !(min_max.z < tile_min_x || min_max.x > tile_max_x || min_max.w < tile_min_y || min_max.y > tile_max_y);
 }
 
-@compute @workgroup_size(256)
-fn bin_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let triangle_index = global_id.x * 3u;
+@compute @workgroup_size(16, 16)
+fn bin_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+    let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
+    let triangle_index = idx * 3u;
     let num_triangles = arrayLength(&projected_buffer.values);
     
     // Early exit if this thread is beyond the number of triangles
