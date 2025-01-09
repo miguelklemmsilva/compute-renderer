@@ -57,8 +57,6 @@ struct EffectUniform {
 };
 
 struct Fragment {
-    screen_x: u32,
-    screen_y: u32,
     depth: atomic<u32>,
     uv: vec2<f32>,
     normal: vec3<f32>,
