@@ -1,7 +1,7 @@
 use super::GpuBuffers;
 use crate::{scene, util::dispatch_size};
 
-pub const MAX_TRIANGLES_PER_TILE: u32 = 2048;
+pub const MAX_TRIANGLES_PER_TILE: u32 = 1024;
 
 pub struct BinningPass {
     pub pipeline: wgpu::ComputePipeline,

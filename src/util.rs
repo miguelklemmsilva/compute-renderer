@@ -95,6 +95,17 @@ pub struct TextureInfo {
     pub _padding: u32,
 }
 
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct Fragment {
+    pub depth: u32,
+    pub uv: [f32; 2],
+    pub normal: [f32; 3],
+    pub world_pos: [f32; 3],
+    pub texture_index: u32,
+    pub _padding: [u32; 2],
+}
+
 pub fn get_asset_path(asset: &str) -> PathBuf {
     // First, try looking for assets relative to the executable
     let executable_path = std::env::current_exe().expect("Failed to get executable path");

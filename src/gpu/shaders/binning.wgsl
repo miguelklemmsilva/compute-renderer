@@ -72,12 +72,22 @@ fn bin_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let v2 = projected_buffer.values[triangle_index + 1u];
     let v3 = projected_buffer.values[triangle_index + 2u];
 
+    // Skip triangles with any vertices behind the near plane
+    if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
+        return;
+    }
+
     // Calculate triangle bounding box
     let min_max = get_min_max(
         vec3<f32>(v1.x, v1.y, v1.z),
         vec3<f32>(v2.x, v2.y, v2.z),
         vec3<f32>(v3.x, v3.y, v3.z)
     );
+
+    // Skip triangles completely outside NDC space
+    if min_max.z < 0.0 || min_max.x > screen_dims.width || min_max.w < 0.0 || min_max.y > screen_dims.height {
+        return;
+    }
 
     // Calculate which tiles this triangle might overlap
     let start_tile_x = u32(max(floor(min_max.x / f32(TILE_SIZE)), 0.0));
