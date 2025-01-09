@@ -1,5 +1,7 @@
+use super::GpuBuffers;
 use crate::scene;
-use super::{dispatch_size, GpuBuffers};
+
+const TILE_SIZE: u32 = 32;
 
 pub struct RasterPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -117,11 +119,17 @@ impl RasterPass {
             pipeline,
             bind_group_0,
             bind_group_1,
-            bind_group_2
+            bind_group_2,
         }
     }
 
-    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, scene: &scene::Scene) {
+    pub fn execute(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        width: u32,
+        height: u32,
+        _scene: &scene::Scene,
+    ) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Raster Pass"),
             timestamp_writes: None,
@@ -132,13 +140,10 @@ impl RasterPass {
         cpass.set_bind_group(1, &self.bind_group_1, &[]);
         cpass.set_bind_group(2, &self.bind_group_2, &[]);
 
-        let total_triangles = scene
-            .models
-            .iter()
-            .map(|m| m.vertices.len() / 3)
-            .sum::<usize>() as u32;
+        // Calculate number of tiles needed in each dimension
+        let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
+        let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
 
-        let workgroups = dispatch_size(total_triangles);
-        cpass.dispatch_workgroups(workgroups, 1, 1);
+        cpass.dispatch_workgroups(num_tiles_x, num_tiles_y, 1);
     }
 }

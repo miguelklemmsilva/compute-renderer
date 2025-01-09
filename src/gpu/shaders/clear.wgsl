@@ -16,8 +16,6 @@ struct FragmentCounter {
 };
 
 struct Fragment {
-    screen_x: u32,
-    screen_y: u32,
     depth: atomic<u32>,
     uv: vec2<f32>,
     normal: vec3<f32>,
@@ -57,8 +55,6 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     atomicStore(&output_buffer.data[idx], 0u);
 
     atomicStore(&fragment_buffer.frags[idx].depth, 0xFFFFFFFFu);
-    fragment_buffer.frags[idx].screen_x = 0u;
-    fragment_buffer.frags[idx].screen_y = 0u;
     fragment_buffer.frags[idx].uv = vec2<f32>(0.0, 0.0);
     fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
     fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);

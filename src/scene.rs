@@ -307,7 +307,7 @@ pub struct CameraConfig {
 impl Default for CameraConfig {
     fn default() -> Self {
         Self {
-            distance: 3.0,
+            distance: 2.0,
             theta: 0.0,
             phi: 0.0,
             target: [0.0, 0.0, 0.0],
