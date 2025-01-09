@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use camera::CameraMode;
-use effect::Effect;
+use effect::{Effect, WaveDirection};
 use scene::{CameraConfig, SceneConfig, StressTestConfig};
 use util::get_asset_path;
 
@@ -40,24 +40,20 @@ fn main() {
                 theta: 0.0,
                 phi: 0.0,
                 target: [0.0, 0.0, 0.0],
-                position: [0.0, 0.0, 5.0],
+                position: [0.0, 0.0, 0.0],
             },
             benchmark_duration_secs: u64::MAX, // Run indefinitely until ESC
         },
         SceneConfig {
             name: "Suzanne - Wave Effect".to_string(),
-            model_path: get_asset_path("room obj.obj").to_string_lossy().to_string(),
+            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
-            effects: None,
+            effects: Some(vec![Effect::wave(0.5, 1.0, 1.0, WaveDirection::Horizontal)]),
             stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
-                distance: 0.0,
-                theta: 0.0,
-                phi: 0.0,
-                target: [20.0, 5.0, 20.0],
-                position: [0.0, 2.0, 5.0],
+                ..Default::default()
             },
             benchmark_duration_secs: 10,
         },
