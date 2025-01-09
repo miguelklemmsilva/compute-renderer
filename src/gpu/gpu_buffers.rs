@@ -56,7 +56,7 @@ impl GpuBuffers {
         let max_fragments = (width * height) as u64; // example
                                                      // For the actual struct size, replicate your "Fragment" struct if needed
                                                      // This is just a placeholder:
-        let fragment_size_bytes = 48 /* or however large each Fragment is */;
+        let fragment_size_bytes = 40 /* or however large each Fragment is */;
         let fragment_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fragment Buffer"),
             size: max_fragments * fragment_size_bytes,

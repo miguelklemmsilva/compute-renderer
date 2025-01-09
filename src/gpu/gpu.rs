@@ -67,7 +67,8 @@ impl GPU {
         // Dispatch each pass in order
         self.clear_pass.execute(&mut encoder, width, height);
         self.vertex_pass.execute(&mut encoder, scene);
-        self.raster_pass.execute(&mut encoder, scene);
+        self.raster_pass
+            .execute(&mut encoder, width as u32, height as u32, scene);
         self.fragment_pass.execute(&mut encoder, width, height);
 
         self.queue.submit(Some(encoder.finish()));
