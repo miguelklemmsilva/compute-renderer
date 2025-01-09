@@ -116,6 +116,17 @@ impl BinningPass {
             .map(|m| m.vertices.len() / 3)
             .sum::<usize>() as u32;
 
-        cpass.dispatch_workgroups(dispatch_size(total_triangles), 1, 1);
+        let workgroup_size = 16u32;
+        let total_threads_needed =
+            ((total_triangles as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
+
+        // Decide how to split total_threads_needed between X and Y dimensions.
+        // For a near-square distribution:
+        let dispatch_x = (total_threads_needed as f32).sqrt().ceil() as u32;
+        let dispatch_y = ((total_threads_needed as f32) / (dispatch_x as f32)).ceil() as u32;
+
+        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+
+        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
     }
 }
