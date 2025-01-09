@@ -1,6 +1,6 @@
 use crate::scene;
 
-use super::{ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass};
+use super::{binning_pass::BinningPass, ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass};
 
 pub struct GPU {
     pub device: wgpu::Device,
@@ -12,6 +12,7 @@ pub struct GPU {
     pub vertex_pass: VertexPass,
     pub raster_pass: RasterPass,
     pub fragment_pass: FragmentPass,
+    pub binning_pass: BinningPass,
 }
 
 impl GPU {
@@ -40,6 +41,7 @@ impl GPU {
         let vertex_pass = VertexPass::new(&device, &buffers);
         let raster_pass = RasterPass::new(&device, &buffers);
         let fragment_pass = FragmentPass::new(&device, &buffers);
+        let binning_pass = BinningPass::new(&device, &buffers);
 
         Self {
             device,
@@ -49,6 +51,7 @@ impl GPU {
             vertex_pass,
             raster_pass,
             fragment_pass,
+            binning_pass,
         }
     }
 
@@ -67,6 +70,7 @@ impl GPU {
         // Dispatch each pass in order
         self.clear_pass.execute(&mut encoder, width, height);
         self.vertex_pass.execute(&mut encoder, scene);
+        self.binning_pass.execute(&mut encoder, scene);
         self.raster_pass
             .execute(&mut encoder, width as u32, height as u32, scene);
         self.fragment_pass.execute(&mut encoder, width, height);

@@ -3,6 +3,8 @@
 // -----------------------------------------------------------------------------
 // Efficiently clears both the output and depth buffers in parallel.
 
+const MAX_TRIANGLES_PER_TILE: u32 = 1024u;
+
 struct OutputBuffer {
     data: array<atomic<u32>>,
 };
@@ -11,9 +13,14 @@ struct DepthBuffer {
     depth: array<atomic<u32>>,
 };
 
-struct FragmentCounter {
-    counter: atomic<u32>,
+struct TileTriangles {
+    count: atomic<u32>, 
+    triangle_indices: array<u32, MAX_TRIANGLES_PER_TILE>,
 };
+
+struct TileBuffer {
+    triangle_indices: array<TileTriangles>,
+}
 
 struct Fragment {
     depth: atomic<u32>,
@@ -34,6 +41,7 @@ struct Uniform {
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
 @group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
+@group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 
@@ -59,4 +67,10 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
     fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
     fragment_buffer.frags[idx].texture_index = 0u;
+
+    tile_buffer.triangle_indices[idx].count = 0u;
+
+    for (var i: u32 = 0u; i < MAX_TRIANGLES_PER_TILE; i = i + 1u) {
+        tile_buffer.triangle_indices[idx].triangle_indices[i] = 0u;
+    }
 } 
