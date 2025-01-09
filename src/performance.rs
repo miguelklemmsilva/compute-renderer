@@ -104,7 +104,7 @@ pub fn benchmark_scene_with_duration(window: &mut Window, duration: Duration) ->
 
         // Update the camera (automatic movement)
         if let Some(camera) = window.scene.get_active_camera_mut() {
-            // camera.update_over_time(delta_time);
+            camera.update_over_time(delta_time);
         }
 
         // Render and display the frame
