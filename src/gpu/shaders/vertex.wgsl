@@ -43,23 +43,6 @@ struct EffectUniform {
     _padding: vec2<f32>,
 }
 
-fn hash(p: vec2<f32>) -> f32 {
-    var p3 = fract(vec3<f32>(p.xyx) * 0.1031);
-    p3 += dot(p3, p3.yzx + 33.33);
-    return fract((p3.x + p3.y) * p3.z);
-}
-
-fn noise(p: vec2<f32>) -> f32 {
-    let i = floor(p);
-    let f = fract(p);
-    let u = f * f * (3.0 - 2.0 * f);
-    return mix(
-        mix(hash(i + vec2<f32>(0.0, 0.0)), hash(i + vec2<f32>(1.0, 0.0)), u.x),
-        mix(hash(i + vec2<f32>(0.0, 1.0)), hash(i + vec2<f32>(1.0, 1.0)), u.x),
-        u.y
-    );
-}
-
 fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
     var modified_pos = pos;
     let amplitude = effect.param1;
@@ -77,11 +60,6 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
     }
 
     return modified_pos;
-}
-
-fn apply_voxelize_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
-    let grid_size = effect.param1;
-    return floor(pos * grid_size) / grid_size;
 }
 
 // -----------------------------------------------------------------------------
@@ -106,12 +84,23 @@ fn project_vertex(v: Vertex) -> Vertex {
     // If there's an effect that modifies position, apply it:
     if effect.effect_type == 1u { // Wave
         world_pos = apply_wave_effect(world_pos, effect);
-    } else if effect.effect_type == 5u { // Voxelize
-        world_pos = apply_voxelize_effect(world_pos, effect);
     }
 
     // Multiply by the view-projection matrix.
     let clip_pos = camera.view_proj * vec4<f32>(world_pos, 1.0);
+
+    // Check if vertex is behind near plane (w < 0)
+    // We'll mark these vertices with a special w value that the rasterizer can check
+    if clip_pos.w <= 0.0 {
+        return Vertex(
+            0.0, 0.0, 0.0,  // Invalid screen position
+            v.u, v.v,
+            world_pos.x, world_pos.y, world_pos.z,
+            v.texture_index,
+            -1.0  // Special marker for invalid vertices
+        );
+    }
+
     let ndc_pos = clip_pos.xyz / clip_pos.w;
 
     // Convert NDC -> screen

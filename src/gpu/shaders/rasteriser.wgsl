@@ -108,13 +108,27 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let tile_end_x = min(tile_start_x + TILE_SIZE, u32(screen_dims.width));
     let tile_end_y = min(tile_start_y + TILE_SIZE, u32(screen_dims.height));
 
-    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz);
+    // Pre-compute 1/w for perspective correction
+    let w1 = v1.w_clip;
+    let w2 = v2.w_clip;
+    let w3 = v3.w_clip;
+    let one_over_w1 = 1.0 / w1;
+    let one_over_w2 = 1.0 / w2;
+    let one_over_w3 = 1.0 / w3;
+
+    // Pre-divide attributes by w
+    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz);  // Don't divide world pos by w
     let world_pos2 = vec3<f32>(v2.nx, v2.ny, v2.nz);
     let world_pos3 = vec3<f32>(v3.nx, v3.ny, v3.nz);
 
-    let one_over_w1 = 1.0 / v1.w_clip;
-    let one_over_w2 = 1.0 / v2.w_clip;
-    let one_over_w3 = 1.0 / v3.w_clip;
+    let uv1 = vec2<f32>(v1.u, v1.v) * one_over_w1;
+    let uv2 = vec2<f32>(v2.u, v2.v) * one_over_w2;
+    let uv3 = vec2<f32>(v3.u, v3.v) * one_over_w3;
+
+    // Pre-divide z by w for perspective-correct depth interpolation
+    let z1 = v1.z * one_over_w1;
+    let z2 = v2.z * one_over_w2;
+    let z3 = v3.z * one_over_w3;
 
     for (var x: u32 = tile_start_x; x < tile_end_x; x = x + 1u) {
         for (var y: u32 = tile_start_y; y < tile_end_y; y = y + 1u) {
@@ -135,7 +149,6 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 continue;
             }
 
-
             if effect.effect_type == 2u { // melt effect
                 let amplitude = effect.param1;
                 let phase = effect.param2;
@@ -147,44 +160,41 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 }
             }
 
-            // Only calculate perspective correction if we actually need to draw this pixel
+            // Perspective-correct interpolation
             let interpolated_one_over_w = bc.x * one_over_w1 + bc.y * one_over_w2 + bc.z * one_over_w3;
+            let w = 1.0 / interpolated_one_over_w;
 
-            let z_over_w1 = bc.x * v1.z * one_over_w1;
-            let z_over_w2 = bc.y * v2.z * one_over_w2;
-            let z_over_w3 = bc.z * v3.z * one_over_w3;
-            let interpolated_z = (z_over_w1 + z_over_w2 + z_over_w3) / interpolated_one_over_w;
-            let depth = clamp(interpolated_z, 0.0, 1.0);
+            // Interpolate z (already divided by w)
+            let interpolated_z = (bc.x * z1 + bc.y * z2 + bc.z * z3) * w;
 
+            // Skip if depth is outside valid range (relaxed bounds)
+            if interpolated_z < -1.0 || interpolated_z > 1.0 {
+                continue;
+            }
+
+            // Convert to [0,1] range for depth buffer
+            let depth = (interpolated_z + 1.0) * 0.5;
             let pixel_id = x + y * u32(screen_dims.width);
             let new_depth_int = float_to_depth_int(depth);
 
             // Early depth test before doing expensive interpolations
             let old_depth = atomicLoad(&fragment_buffer.frags[pixel_id].depth);
-
             if new_depth_int >= old_depth {
                 continue;
             }
 
-            let uv_over_w1 = bc.x * vec2<f32>(v1.u, v1.v) * one_over_w1;
-            let uv_over_w2 = bc.y * vec2<f32>(v2.u, v2.v) * one_over_w2;
-            let uv_over_w3 = bc.z * vec2<f32>(v3.u, v3.v) * one_over_w3;
-            let interpolated_uv_over_w = uv_over_w1 + uv_over_w2 + uv_over_w3;
-            let uv = interpolated_uv_over_w / interpolated_one_over_w;
+            // Interpolate UV coordinates (already divided by w)
+            let interpolated_uv = (bc.x * uv1 + bc.y * uv2 + bc.z * uv3) * w;
 
-            let norm_over_w1 = bc.x * vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
-            let norm_over_w2 = bc.y * vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
-            let norm_over_w3 = bc.z * vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
-            let interpolated_normal = normalize((norm_over_w1 + norm_over_w2 + norm_over_w3) / interpolated_one_over_w);
+            // Interpolate world position (using barycentric directly since these are in world space)
+            let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
 
-            let pos_over_w1 = bc.x * world_pos1 * one_over_w1;
-            let pos_over_w2 = bc.y * world_pos2 * one_over_w2;
-            let pos_over_w3 = bc.z * world_pos3 * one_over_w3;
-            let interpolated_world_pos = (pos_over_w1 + pos_over_w2 + pos_over_w3) / interpolated_one_over_w;
+            // Calculate normal in world space
+            let normal = normalize(interpolated_world_pos);
 
             atomicStore(&fragment_buffer.frags[pixel_id].depth, new_depth_int);
-            fragment_buffer.frags[pixel_id].uv = uv;
-            fragment_buffer.frags[pixel_id].normal = interpolated_normal;
+            fragment_buffer.frags[pixel_id].uv = interpolated_uv;
+            fragment_buffer.frags[pixel_id].normal = normal;
             fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
             fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
         }
@@ -209,7 +219,6 @@ fn raster_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     let tile_idx = tile_x + tile_y * num_tiles_x;
-
     let triangle_count = atomicLoad(&tile_buffer.triangle_indices[tile_idx].count);
 
     // Process each triangle
@@ -219,12 +228,19 @@ fn raster_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let v2 = projected_buffer.values[triangle_idx + 1u];
         let v3 = projected_buffer.values[triangle_idx + 2u];
 
+        // Skip triangles with any vertices behind the near plane
+        if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
+            continue;
+        }
+
+        // Calculate triangle winding in screen space
         let a = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
         let b = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
         let cross_z = a.x * b.y - a.y * b.x;
 
-        // Skip back-facing triangles
-        if cross_z >= 0.0 {
+        // Skip back-facing triangles only if effect doesn't require seeing inside
+        // For now, we'll keep back-face culling disabled when inside objects
+        if effect.effect_type != 3u && cross_z >= 0.0 {
             continue;
         }
 

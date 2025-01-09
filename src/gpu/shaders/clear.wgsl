@@ -67,10 +67,8 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
     fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
     fragment_buffer.frags[idx].texture_index = 0u;
+    
+    atomicStore(&tile_buffer.triangle_indices[idx].count, 0u);
 
-    tile_buffer.triangle_indices[idx].count = 0u;
-
-    for (var i: u32 = 0u; i < MAX_TRIANGLES_PER_TILE; i = i + 1u) {
-        tile_buffer.triangle_indices[idx].triangle_indices[i] = 0u;
-    }
+    tile_buffer.triangle_indices[idx].triangle_indices = array<u32, MAX_TRIANGLES_PER_TILE>();
 } 
