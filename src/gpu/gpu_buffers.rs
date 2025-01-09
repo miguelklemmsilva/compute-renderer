@@ -1,6 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::{camera, effect::EffectUniform, scene, util::{TextureInfo, Uniform, Vertex}};
+use crate::{camera, effect::EffectUniform, scene, util::{Fragment, TextureInfo, Uniform, Vertex}};
 
 use super::{binning_pass::MAX_TRIANGLES_PER_TILE, raster_pass::TILE_SIZE};
 
@@ -61,10 +61,9 @@ impl GpuBuffers {
         let max_fragments = (width * height) as u64; // example
                                                      // For the actual struct size, replicate your "Fragment" struct if needed
                                                      // This is just a placeholder:
-        let fragment_size_bytes = 40 /* or however large each Fragment is */;
         let fragment_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fragment Buffer"),
-            size: max_fragments * fragment_size_bytes,
+            size: max_fragments * std::mem::size_of::<Fragment>() as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });

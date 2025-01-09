@@ -24,36 +24,65 @@ impl Default for CameraUniform {
 }
 
 #[derive(Debug, Clone, Copy)]
+pub enum CameraMode {
+    Orbit,
+    FirstPerson,
+}
+
+#[derive(Debug, Clone, Copy)]
 pub struct Camera {
-    pub zoom: f32,
-    pub target: Vec3,
+    pub mode: CameraMode,
     pub eye: Vec3,
-    pub pitch: f32,
-    pub yaw: f32,
+    pub target: Vec3,
     pub up: Vec3,
     pub aspect: f32,
-    pub time: f32,
+    pub yaw: f32,
+    pub pitch: f32,
+    pub movement_speed: f32,
+    pub mouse_sensitivity: f32,
 }
 
 impl Camera {
-    const ZFAR: f32 = 1000000.;
+    const ZFAR: f32 = 10000.0;
     const ZNEAR: f32 = 0.1;
     const FOVY: f32 = std::f32::consts::PI / 2.0;
     const UP: Vec3 = Vec3::Y;
 
-    pub fn new(zoom: f32, pitch: f32, yaw: f32, target: Vec3, aspect: f32) -> Self {
+    pub fn new(distance: f32, theta: f32, phi: f32, target: Vec3, aspect: f32) -> Self {
         let mut camera = Self {
-            zoom,
-            pitch,
-            yaw,
+            mode: CameraMode::Orbit,
             eye: Vec3::ZERO,
             target,
             up: Self::UP,
             aspect,
-            time: 0.0,
+            yaw: theta,
+            pitch: phi,
+            movement_speed: 5.0,
+            mouse_sensitivity: 0.1,
         };
-        camera.update();
+
+        // Calculate initial eye position
+        let pitch_cos = phi.cos();
+        let x = distance * theta.cos() * pitch_cos;
+        let y = distance * phi.sin();
+        let z = distance * theta.sin() * pitch_cos;
+        camera.eye = Vec3::new(x, y, z) + target;
+
         camera
+    }
+
+    pub fn new_first_person(position: Vec3, aspect: f32) -> Self {
+        Self {
+            mode: CameraMode::FirstPerson,
+            eye: position,
+            target: position - Vec3::Z,
+            up: Self::UP,
+            aspect,
+            yaw: -90.0,
+            pitch: 0.0,
+            movement_speed: 5.0,
+            mouse_sensitivity: 0.1,
+        }
     }
 
     pub fn build_view_projection_matrix(&self) -> Mat4 {
@@ -62,42 +91,88 @@ impl Camera {
         proj * view
     }
 
-    pub fn update(&mut self) {
-        let pitch_cos = self.pitch.cos();
+    pub fn process_keyboard(
+        &mut self,
+        forward: bool,
+        backward: bool,
+        left: bool,
+        right: bool,
+        up: bool,
+        down: bool,
+        delta_time: f32,
+    ) {
+        if let CameraMode::FirstPerson = self.mode {
+            let velocity = self.movement_speed * delta_time;
+            let front = (self.target - self.eye).normalize();
+            let right_vec = front.cross(self.up).normalize();
 
-        // Calculate the new position of the camera along an elliptical orbit
-        let radius = self.zoom;
-        let x = radius * self.yaw.cos() * pitch_cos;
-        let y = radius * self.pitch.sin();
-        let z = radius * self.yaw.sin() * pitch_cos;
+            let mut movement = Vec3::ZERO;
+            if forward {
+                movement += front;
+            }
+            if backward {
+                movement -= front;
+            }
+            if right {
+                movement += right_vec;
+            }
+            if left {
+                movement -= right_vec;
+            }
+            if up {
+                movement += Vec3::Y;
+            }
+            if down {
+                movement -= Vec3::Y;
+            }
 
-        // Update the eye position
-        self.eye = Vec3::new(x, y, z) + self.target;
+            if movement != Vec3::ZERO {
+                movement = movement.normalize() * velocity;
+                self.eye += movement;
+                self.target += movement;
+            }
+        }
     }
 
-    pub fn update_over_time(&mut self, delta_time: f32) {
-        // Update the time variable
-        self.time += delta_time;
+    pub fn process_mouse(&mut self, x_offset: f32, y_offset: f32) {
+        if let CameraMode::FirstPerson = self.mode {
+            self.yaw += x_offset * self.mouse_sensitivity;
+            self.pitch += y_offset * self.mouse_sensitivity;
 
-        // Rotate the camera around the target over time
-        // Complete one rotation every 8 seconds
-        const ROTATION_SPEED: f32 = 2.0 * std::f32::consts::PI / 8.0;
-        self.yaw = self.time * ROTATION_SPEED;
+            // Constrain pitch
+            self.pitch = self.pitch.clamp(-89.0, 89.0);
 
-        // Add a gentle bobbing motion in pitch
-        // Oscillate between -0.2 and 0.2 radians with a 4 second period
-        const PITCH_AMPLITUDE: f32 = 0.2;
-        const PITCH_FREQUENCY: f32 = 2.0 * std::f32::consts::PI / 4.0;
-        self.pitch = PITCH_AMPLITUDE * (self.time * PITCH_FREQUENCY).sin();
+            // Update target based on new angles
+            let pitch_rad = self.pitch.to_radians();
+            let yaw_rad = self.yaw.to_radians();
 
-        // Ensure the camera is always looking at the target
-        self.up = Vec3::Y;
+            let front = Vec3::new(
+                yaw_rad.cos() * pitch_rad.cos(),
+                pitch_rad.sin(),
+                yaw_rad.sin() * pitch_rad.cos(),
+            )
+            .normalize();
 
-        // Update the camera's position based on the new parameters
-        self.update();
+            self.target = self.eye + front;
+        }
     }
 
     pub fn build_view_matrix(&self) -> Mat4 {
         Mat4::look_at_rh(self.eye, self.target, self.up)
+    }
+
+    pub fn update_over_time(&mut self, delta_time: f32) {
+        if let CameraMode::Orbit = self.mode {
+            self.yaw += delta_time * 0.5; // Rotate around target
+
+            // Calculate new eye position
+            let pitch_cos = self.pitch.cos();
+            let distance = (self.eye - self.target).length();
+            let x = distance * self.yaw.cos() * pitch_cos;
+            let y = distance * self.pitch.sin();
+            let z = distance * self.yaw.sin() * pitch_cos;
+
+            self.eye = Vec3::new(x, y, z) + self.target;
+        }
     }
 }

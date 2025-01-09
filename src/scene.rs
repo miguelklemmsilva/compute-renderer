@@ -127,25 +127,37 @@ impl Scene {
                 light.view_position = view_pos.to_array();
             }
 
-            gpu.queue
-                .write_buffer(&gpu.buffers.camera_buffer, 0, bytemuck::bytes_of(&camera_uniform));
+            gpu.queue.write_buffer(
+                &gpu.buffers.camera_buffer,
+                0,
+                bytemuck::bytes_of(&camera_uniform),
+            );
         }
 
         // Update lights
-        gpu.queue
-            .write_buffer(&gpu.buffers.light_buffer, 0, bytemuck::cast_slice(&self.lights));
+        gpu.queue.write_buffer(
+            &gpu.buffers.light_buffer,
+            0,
+            bytemuck::cast_slice(&self.lights),
+        );
 
         // Update effects only if there are any
         if let Some(effect) = self.effects.first() {
             let mut effect_uniform = crate::effect::EffectUniform::default();
             effect_uniform.update(effect, self.time);
-            gpu.queue
-                .write_buffer(&gpu.buffers.effect_buffer, 0, bytemuck::bytes_of(&effect_uniform));
+            gpu.queue.write_buffer(
+                &gpu.buffers.effect_buffer,
+                0,
+                bytemuck::bytes_of(&effect_uniform),
+            );
         } else {
             // Write a default "no effect" state
             let effect_uniform = crate::effect::EffectUniform::default();
-            gpu.queue
-                .write_buffer(&gpu.buffers.effect_buffer, 0, bytemuck::bytes_of(&effect_uniform));
+            gpu.queue.write_buffer(
+                &gpu.buffers.effect_buffer,
+                0,
+                bytemuck::bytes_of(&effect_uniform),
+            );
         }
     }
 
@@ -302,6 +314,8 @@ pub struct CameraConfig {
     pub theta: f32,
     pub phi: f32,
     pub target: [f32; 3],
+    pub mode: crate::camera::CameraMode,
+    pub position: [f32; 3],
 }
 
 impl Default for CameraConfig {
@@ -311,6 +325,8 @@ impl Default for CameraConfig {
             theta: 0.0,
             phi: 0.0,
             target: [0.0, 0.0, 0.0],
+            mode: crate::camera::CameraMode::Orbit,
+            position: [0.0, 2.0, 5.0],
         }
     }
 }
