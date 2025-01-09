@@ -4,6 +4,7 @@ pub mod gpu;
 mod gpu_buffers;
 mod raster_pass;
 mod vertex_pass;
+mod binning_pass;
 
 use crate::util::dispatch_size;
 use clear_pass::ClearPass;
