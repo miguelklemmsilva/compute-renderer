@@ -69,8 +69,10 @@ impl Window {
                 let x_offset = x - last_x;
                 let y_offset = last_y - y; // Reversed since y-coordinates range from bottom to top
 
-                if let Some(camera) = self.scene.get_active_camera_mut() {
-                    camera.process_mouse(x_offset, y_offset);
+                if self.window.get_mouse_down(minifb::MouseButton::Left) {
+                    if let Some(camera) = self.scene.get_active_camera_mut() {
+                        camera.process_mouse(x_offset, y_offset);
+                    }
                 }
             }
 
