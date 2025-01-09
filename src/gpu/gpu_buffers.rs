@@ -2,6 +2,8 @@ use wgpu::util::DeviceExt;
 
 use crate::{camera, effect::EffectUniform, scene, util::{TextureInfo, Uniform, Vertex}};
 
+use super::{binning_pass::MAX_TRIANGLES_PER_TILE, raster_pass::TILE_SIZE};
+
 pub struct GpuBuffers {
     // Buffers
     pub camera_buffer: wgpu::Buffer,
@@ -20,6 +22,9 @@ pub struct GpuBuffers {
     // Textures
     pub texture_buffer: wgpu::Buffer,
     pub texture_info_buffer: wgpu::Buffer,
+
+    // Tile buffer
+    pub tile_buffer: wgpu::Buffer,
 }
 
 impl GpuBuffers {
@@ -138,6 +143,18 @@ impl GpuBuffers {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
+        let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
+        let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
+
+        let num_tiles = num_tiles_x * num_tiles_y;
+
+        let tile_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Tile Buffer"),
+            size: (num_tiles * (std::mem::size_of::<u32>() * 2 + std::mem::size_of::<u32>() * MAX_TRIANGLES_PER_TILE as usize)) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
             camera_buffer,
             light_buffer,
@@ -149,6 +166,7 @@ impl GpuBuffers {
             output_buffer,
             texture_buffer,
             texture_info_buffer,
+            tile_buffer,
         }
     }
 }
