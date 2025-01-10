@@ -90,7 +90,8 @@ struct FragmentBuffer {
 // HELPER FUNCTIONS (lighting, texturing, depth test, etc.)
 // -----------------------------------------------------------------------------
 fn rgb(r: u32, g: u32, b: u32) -> u32 {
-    return (r << 16) | (g << 8) | b;
+    // BGRA format (0xFF for alpha)
+    return (0xFFu << 24) | (b << 16) | (g << 8) | r;
 }
 
 fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
@@ -117,7 +118,7 @@ fn sample_texture(uv: vec2<f32>, texture_index: u32) -> vec4<f32> {
 
     let r = f32((texel >> 24) & 0xFFu) / 255.0;
     let g = f32((texel >> 16) & 0xFFu) / 255.0;
-    let b = f32((texel >> 8)  & 0xFFu) / 255.0;
+    let b = f32((texel >> 8) & 0xFFu) / 255.0;
     let a = f32(texel & 0xFFu) / 255.0;
     return vec4<f32>(r, g, b, a);
 }
@@ -174,9 +175,6 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // Possibly apply normal effect
     var normal = fragment_buffer.frags[idx].normal;
-    if effect.effect_type == 3u { // SmoothToFlat
-        normal = apply_smooth_to_flat_effect(normal, effect);
-    }
 
     // Sample texture
     let tex_color = sample_texture(fragment_buffer.frags[idx].uv, fragment_buffer.frags[idx].texture_index);
@@ -185,17 +183,11 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let lighting = calculate_lighting(normal, fragment_buffer.frags[idx].world_pos);
     var final_color = vec4<f32>(tex_color.rgb * lighting, tex_color.a);
 
-    // Possibly apply dissolve
-    if effect.effect_type == 2u {
-        final_color = apply_dissolve_effect(final_color, fragment_buffer.frags[idx].uv);
-    }
-
     // Convert float color to integer
     let R = u32(final_color.r * 255.0);
     let G = u32(final_color.g * 255.0);
     let B = u32(final_color.b * 255.0);
 
     let color = rgb(R, G, B);
-
     atomicStore(&output_buffer.data[idx], color);
 }

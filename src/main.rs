@@ -1,9 +1,17 @@
+use std::sync::Arc;
 use std::time::Duration;
 
 use camera::CameraMode;
 use effect::{Effect, WaveDirection};
+use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig, StressTestConfig};
 use util::get_asset_path;
+use window::Window;
+use winit::{
+    event::{Event, WindowEvent},
+    event_loop::EventLoop,
+    keyboard::{KeyCode, PhysicalKey},
+};
 
 mod camera;
 mod effect;
@@ -29,18 +37,14 @@ fn main() {
         // Interactive Scene
         SceneConfig {
             name: "Interactive Scene".to_string(),
-            model_path: get_asset_path("san-miguel-low-poly.obj").to_string_lossy().to_string(),
+            model_path: get_asset_path("bmw.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
             stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::FirstPerson,
-                distance: 0.0,
-                theta: 0.0,
-                phi: 0.0,
-                target: [0.0, 0.0, 0.0],
-                position: [0.0, 0.0, 0.0],
+                ..Default::default()
             },
             benchmark_duration_secs: u64::MAX, // Run indefinitely until ESC
         },
@@ -73,10 +77,7 @@ fn main() {
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 2.0,
-                theta: 0.0,
-                phi: 0.0,
-                target: [0.0, 0.0, 0.0],
-                position: [0.0, 2.0, 5.0],
+                ..Default::default()
             },
             benchmark_duration_secs: 100,
         },
@@ -90,10 +91,7 @@ fn main() {
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 2.0,
-                theta: 0.0,
-                phi: 0.0,
-                target: [0.0, 0.0, 0.0],
-                position: [0.0, 2.0, 5.0],
+                ..Default::default()
             },
             benchmark_duration_secs: 10,
         },
@@ -111,10 +109,7 @@ fn main() {
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 3.0 * (10_f32).sqrt(),
-                theta: 0.0,
-                phi: 0.0,
-                target: [0.0, 0.0, 0.0],
-                position: [0.0, 2.0, 5.0],
+                ..Default::default()
             },
             benchmark_duration_secs: 10,
         },
@@ -131,10 +126,7 @@ fn main() {
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 3.0 * (100_f32).sqrt(),
-                theta: 0.0,
-                phi: 0.0,
-                target: [0.0, 0.0, 0.0],
-                position: [0.0, 2.0, 5.0],
+                ..Default::default()
             },
             benchmark_duration_secs: 10,
         },
@@ -153,72 +145,100 @@ fn main() {
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 3.0 * (1000_f32).sqrt(),
-                theta: 0.0,
-                phi: 0.0,
-                target: [0.0, 0.0, 0.0],
-                position: [0.0, 2.0, 5.0],
+                ..Default::default()
             },
             benchmark_duration_secs: 10,
         },
     ];
 
-    for (i, scene_config) in scenes.iter().enumerate() {
-        println!("Benchmarking scene {}: {}", i + 1, scene_config.name);
-        let mut scene = crate::scene::Scene::new();
-        let base_model = scene.add_model(&scene_config.model_path);
+    // Create a single event loop and window for all scenes
+    let event_loop = winit::event_loop::EventLoop::new().expect("Failed to create event loop");
+    let window_builder = winit::window::WindowBuilder::new()
+        .with_title("Minimal Renderer - ESC to exit")
+        .with_inner_size(winit::dpi::LogicalSize::new(width as f64, height as f64))
+        .with_resizable(true);
+    let winit_window = Arc::new(
+        window_builder
+            .build(&event_loop)
+            .expect("Failed to create window"),
+    );
 
-        // Handle stress test if configured
-        if let Some(stress_config) = &scene_config.stress_test {
-            if stress_config.model_count > 1 {
-                scene.duplicate_model_for_stress_test(
-                    base_model,
-                    stress_config.model_count - 1,
-                    stress_config.grid_spacing,
-                );
-            }
+    let scene = &scenes[0];
+
+    let collector: PerformanceCollector = PerformanceCollector::new(
+        scene.name.clone(),
+        1,
+        Duration::from_secs(scene.benchmark_duration_secs),
+    );
+
+    // Create the first scene
+    let window = match create_scene_window(scene, width, height, &winit_window, collector) {
+        Ok(window) => window,
+        Err(e) => {
+            eprintln!("Failed to create scene {}: {}", scene.name, e);
+            return;
         }
+    };
 
-        // Add texture if specified
-        if let Some(texture_path) = &scene_config.texture_path {
-            scene.add_texture_to_model(base_model, texture_path);
+    window.run_with_event_loop(event_loop);
+}
+
+fn create_scene_window(
+    scene_config: &SceneConfig,
+    width: usize,
+    height: usize,
+    winit_window: &winit::window::Window,
+    collector: PerformanceCollector,
+) -> Result<Window, Box<dyn std::error::Error>> {
+    let mut scene = scene::Scene::new();
+
+    // Setup scene
+    let base_model = scene.add_model(&scene_config.model_path);
+
+    // Handle stress test if configured
+    if let Some(stress_config) = &scene_config.stress_test {
+        if stress_config.model_count > 1 {
+            scene.duplicate_model_for_stress_test(
+                base_model,
+                stress_config.model_count - 1,
+                stress_config.grid_spacing,
+            );
         }
-
-        // Add lights from config
-        for (position, color, intensity) in &scene_config.lights {
-            scene.add_light(*position, *color, *intensity);
-        }
-
-        // Add effects if specified
-        if let Some(effects) = &scene_config.effects {
-            for effect in effects {
-                scene.add_effect(effect.clone());
-            }
-        }
-
-        // Add camera and set active
-        let camera = match scene_config.camera_config.mode {
-            camera::CameraMode::FirstPerson => camera::Camera::new_first_person(
-                glam::Vec3::from(scene_config.camera_config.position),
-                (width as f32) / (height as f32),
-            ),
-            camera::CameraMode::Orbit => camera::Camera::new(
-                scene_config.camera_config.distance,
-                scene_config.camera_config.theta,
-                scene_config.camera_config.phi,
-                glam::Vec3::from(scene_config.camera_config.target),
-                (width as f32) / (height as f32),
-            ),
-        };
-        scene.add_camera(camera);
-        scene.set_active_camera(0);
-
-        // Create window and run benchmark
-        let mut window = window::Window::new(width, height, scene);
-        let performance_data = performance::benchmark_scene_with_duration(
-            &mut window,
-            Duration::from_secs(scene_config.benchmark_duration_secs),
-        );
-
-        performance::print_performance_data(&scene_config.name, i, &performance_data);
     }
+
+    // Add texture if specified
+    if let Some(texture_path) = &scene_config.texture_path {
+        scene.add_texture_to_model(base_model, texture_path);
+    }
+
+    // Add lights from config
+    for (position, color, intensity) in &scene_config.lights {
+        scene.add_light(*position, *color, *intensity);
+    }
+
+    // Add effects if specified
+    if let Some(effects) = &scene_config.effects {
+        for effect in effects {
+            scene.add_effect(effect.clone());
+        }
+    }
+
+    // Add camera and set active
+    let camera = match scene_config.camera_config.mode {
+        camera::CameraMode::FirstPerson => camera::Camera::new_first_person(
+            glam::Vec3::from(scene_config.camera_config.position),
+            (width as f32) / (height as f32),
+        ),
+        camera::CameraMode::Orbit => camera::Camera::new(
+            scene_config.camera_config.distance,
+            scene_config.camera_config.theta,
+            scene_config.camera_config.phi,
+            glam::Vec3::from(scene_config.camera_config.target),
+            (width as f32) / (height as f32),
+        ),
+    };
+    scene.add_camera(camera);
+    scene.set_active_camera(0);
+
+    Window::new_with_window(width, height, scene, winit_window, collector)
 }
