@@ -37,7 +37,7 @@ fn main() {
         // Interactive Scene
         SceneConfig {
             name: "Interactive Scene".to_string(),
-            model_path: get_asset_path("bmw.obj").to_string_lossy().to_string(),
+            model_path: get_asset_path("bunny.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
@@ -53,7 +53,7 @@ fn main() {
             model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
-            effects: Some(vec![Effect::wave(0.5, 1.0, 1.0, WaveDirection::Horizontal)]),
+            effects: None,
             stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
@@ -163,7 +163,7 @@ fn main() {
             .expect("Failed to create window"),
     );
 
-    let scene = &scenes[0];
+    let scene = &scenes[1];
 
     let collector: PerformanceCollector = PerformanceCollector::new(
         scene.name.clone(),
