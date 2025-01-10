@@ -1,6 +1,6 @@
 use crate::scene;
 
-use super::{dispatch_size, gpu_buffers::GpuBuffers};
+use super::gpu_buffers::GpuBuffers;
 
 pub struct VertexPass {
     pub pipeline: wgpu::ComputePipeline,
