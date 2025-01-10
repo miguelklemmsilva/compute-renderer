@@ -1,17 +1,11 @@
-use std::sync::Arc;
 use std::time::Duration;
 
 use camera::CameraMode;
-use effect::{Effect, WaveDirection};
+use effect::Effect;
 use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig, StressTestConfig};
 use util::get_asset_path;
 use window::Window;
-use winit::{
-    event::{Event, WindowEvent},
-    event_loop::EventLoop,
-    keyboard::{KeyCode, PhysicalKey},
-};
 
 mod camera;
 mod effect;
@@ -37,7 +31,9 @@ fn main() {
         // Interactive Scene
         SceneConfig {
             name: "Interactive Scene".to_string(),
-            model_path: get_asset_path("bunny.obj").to_string_lossy().to_string(),
+            model_path: get_asset_path("san-miguel-low-poly.obj")
+                .to_string_lossy()
+                .to_string(),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
@@ -153,17 +149,14 @@ fn main() {
 
     // Create a single event loop and window for all scenes
     let event_loop = winit::event_loop::EventLoop::new().expect("Failed to create event loop");
-    let window_builder = winit::window::WindowBuilder::new()
+    let window = winit::window::WindowBuilder::new()
         .with_title("Minimal Renderer - ESC to exit")
         .with_inner_size(winit::dpi::LogicalSize::new(width as f64, height as f64))
-        .with_resizable(true);
-    let winit_window = Arc::new(
-        window_builder
-            .build(&event_loop)
-            .expect("Failed to create window"),
-    );
+        .with_resizable(true)
+        .build(&event_loop)
+        .expect("Failed to create window");
 
-    let scene = &scenes[1];
+    let scene = &scenes[0];
 
     let collector: PerformanceCollector = PerformanceCollector::new(
         scene.name.clone(),
@@ -172,7 +165,7 @@ fn main() {
     );
 
     // Create the first scene
-    let window = match create_scene_window(scene, width, height, &winit_window, collector) {
+    let window = match create_scene_window(scene, width, height, &window, collector) {
         Ok(window) => window,
         Err(e) => {
             eprintln!("Failed to create scene {}: {}", scene.name, e);
