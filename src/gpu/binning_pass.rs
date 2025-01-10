@@ -126,7 +126,5 @@ impl BinningPass {
         let dispatch_y = ((total_threads_needed as f32) / (dispatch_x as f32)).ceil() as u32;
 
         cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
-
-        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
     }
 }

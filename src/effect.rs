@@ -30,6 +30,7 @@ pub struct VoxelizeEffect {
     pub time: f32,
 }
 
+#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum WaveDirection {
     Vertical,
@@ -37,6 +38,7 @@ pub enum WaveDirection {
     Radial,
 }
 
+#[allow(dead_code)]
 impl Effect {
     pub fn update(&mut self, delta_time: Duration) {
         let dt = delta_time.as_secs_f32();
