@@ -1,11 +1,10 @@
 use pixels::{Pixels, SurfaceTexture};
-use std::{collections::HashSet, sync::Arc, time::Duration};
+use std::{collections::HashSet, time::Duration};
 use winit::{
-    dpi::LogicalSize,
     event::{ElementState, Event, MouseButton, WindowEvent},
     event_loop::{ControlFlow, EventLoop},
     keyboard::{KeyCode, PhysicalKey},
-    window::{self, Window as WinitWindow, WindowBuilder},
+    window::Window as WinitWindow,
 };
 
 use crate::{gpu, performance::PerformanceCollector, scene};
@@ -53,10 +52,6 @@ impl Window {
     }
 
     pub async fn update(&mut self, delta_time: Duration) -> bool {
-        if self.collector.update() {
-            return false;
-        }
-
         // Handle keyboard input with constant movement speed
         const BASE_MOVEMENT_SPEED: f32 = 2.0; // Units per second
         let movement_speed = BASE_MOVEMENT_SPEED * delta_time.as_secs_f32();
@@ -95,7 +90,7 @@ impl Window {
             return false;
         }
 
-        true
+        return !self.collector.update();
     }
 
     pub fn run_with_event_loop(mut self, event_loop: EventLoop<()>) {

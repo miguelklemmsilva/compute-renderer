@@ -74,19 +74,6 @@ impl Scene {
         }
     }
 
-    pub fn add_texture(&mut self, texture_file: &str) -> u32 {
-        let texture = Texture::load(texture_file);
-        let texture_index = self.materials.len() as u32;
-
-        let material = Material {
-            texture,
-            texture_index,
-        };
-        self.materials.push(material);
-
-        texture_index
-    }
-
     pub fn add_camera(&mut self, camera: camera::Camera) {
         self.cameras.push(camera);
     }
@@ -172,26 +159,6 @@ impl Scene {
         };
         self.lights.push(light);
         self.lights.len() - 1
-    }
-
-    pub fn update_light(
-        &mut self,
-        index: usize,
-        position: Option<[f32; 3]>,
-        color: Option<[f32; 3]>,
-        intensity: Option<f32>,
-    ) {
-        if let Some(light) = self.lights.get_mut(index) {
-            if let Some(pos) = position {
-                light.world_position = pos;
-            }
-            if let Some(col) = color {
-                light.color = col;
-            }
-            if let Some(int) = intensity {
-                light.intensity = int;
-            }
-        }
     }
 
     pub fn get_lights(&self) -> &[Light] {
