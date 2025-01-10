@@ -79,13 +79,17 @@ impl Window {
             return false;
         }
 
-        self.collector.update();
+        if self.collector.update() {
+            return false;
+        }
 
         // Handle keyboard input with constant movement speed
         const BASE_MOVEMENT_SPEED: f32 = 2.0; // Units per second
         let movement_speed = BASE_MOVEMENT_SPEED * delta_time.as_secs_f32();
 
+
         if let Some(camera) = self.scene.get_active_camera_mut() {
+            camera.update_over_time(delta_time.as_secs_f32());
             camera.process_keyboard(
                 self.keys_down.contains(&KeyCode::KeyW),
                 self.keys_down.contains(&KeyCode::KeyS),
