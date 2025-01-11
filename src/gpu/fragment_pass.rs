@@ -1,4 +1,4 @@
-use super::{dispatch_size, GpuBuffers};
+use super::{util::dispatch_size, GpuBuffers};
 
 pub struct FragmentPass {
     pub pipeline: wgpu::ComputePipeline,

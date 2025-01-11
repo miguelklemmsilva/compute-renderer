@@ -31,7 +31,7 @@ fn main() {
         // Interactive Scene
         SceneConfig {
             name: "Interactive Scene".to_string(),
-            model_path: get_asset_path("san-miguel-low-poly.obj")
+            model_path: get_asset_path("erato.obj")
                 .to_string_lossy()
                 .to_string(),
             texture_path: None,

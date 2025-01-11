@@ -1,5 +1,6 @@
+use crate::gpu::util::process_obj_model;
 use crate::model::{Material, Model, Texture};
-use crate::{camera, effect::Effect, gpu, util::process_obj_model};
+use crate::{camera, effect::Effect, gpu};
 use std::time::Duration;
 
 #[repr(C)]
