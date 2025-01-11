@@ -1,4 +1,6 @@
-use super::{dispatch_size, GpuBuffers};
+use wgpu::BindingResource;
+
+use super::{util::dispatch_size, GpuBuffers};
 
 pub struct ClearPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -34,6 +36,16 @@ impl ClearPass {
                     },
                     wgpu::BindGroupLayoutEntry {
                         binding: 2,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 3,
                         visibility: wgpu::ShaderStages::COMPUTE,
                         ty: wgpu::BindingType::Buffer {
                             ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -93,6 +105,10 @@ impl ClearPass {
                     binding: 2,
                     resource: buffers.tile_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: buffers.triangle_list_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -124,5 +140,30 @@ impl ClearPass {
 
         let total_threads = (width * height) as u32;
         cpass.dispatch_workgroups(dispatch_size(total_threads), 1, 1);
+    }
+
+    pub fn rebind(&mut self, device: &wgpu::Device, buffers: &GpuBuffers, triangle_list_buffer: BindingResource) {
+        self.bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Clear: Frame Buffer Bind Group"),
+            layout: &self.pipeline.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffers.fragment_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: buffers.tile_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: triangle_list_buffer,
+                },
+            ],
+        });
     }
 }
