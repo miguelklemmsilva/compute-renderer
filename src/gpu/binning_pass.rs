@@ -6,7 +6,8 @@ use crate::scene;
 pub struct BinningPass {
     pub pipeline_count: wgpu::ComputePipeline,
     pub pipeline_store: wgpu::ComputePipeline,
-    pub pipeline_calculate_offsets: wgpu::ComputePipeline,
+    pub pipeline_scan_first: wgpu::ComputePipeline,
+    pub pipeline_scan_second: wgpu::ComputePipeline,
     pub bind_group_0: wgpu::BindGroup,
     pub bind_group_1: wgpu::BindGroup,
 }
@@ -38,6 +39,16 @@ impl BinningPass {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -89,12 +100,22 @@ impl BinningPass {
             cache: None,
         });
 
-        let pipeline_calculate_offsets =
+        let pipeline_scan_first =
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-                label: Some("Binning Pipeline - Calculate Offsets"),
+                label: Some("Binning Pipeline - Scan First Pass"),
                 layout: Some(&pipeline_layout),
                 module: &shader,
-                entry_point: Some("calculate_offsets"),
+                entry_point: Some("scan_first_pass"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: None,
+            });
+
+        let pipeline_scan_second =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Binning Pipeline - Scan Second Pass"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: Some("scan_second_pass"),
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
                 cache: None,
             });
@@ -115,6 +136,10 @@ impl BinningPass {
                     binding: 2,
                     resource: buffers.triangle_list_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: buffers.partial_sums_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -130,7 +155,8 @@ impl BinningPass {
         Self {
             pipeline_count,
             pipeline_store,
-            pipeline_calculate_offsets,
+            pipeline_scan_first,
+            pipeline_scan_second,
             bind_group_0,
             bind_group_1,
         }
@@ -164,27 +190,41 @@ impl BinningPass {
         let total_threads_needed =
             ((total_triangles as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
 
-        // Decide how to split total_threads_needed between X and Y dimensions.
-        // For a near-square distribution:
         let dispatch_x = (total_threads_needed as f32).sqrt().ceil() as u32;
         let dispatch_y = ((total_threads_needed as f32) / (dispatch_x as f32)).ceil() as u32;
 
         cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
         drop(cpass);
 
+        // Parallel scan first pass
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("Binning Pass - Calculate Offsets"),
+            label: Some("Binning Pass - Scan First Pass"),
             timestamp_writes: None,
         });
 
-        cpass.set_pipeline(&self.pipeline_calculate_offsets);
+        cpass.set_pipeline(&self.pipeline_scan_first);
         cpass.set_bind_group(0, &self.bind_group_0, &[]);
         cpass.set_bind_group(1, &self.bind_group_1, &[]);
 
         let num_tiles_x = (width + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
         let num_tiles_y = (height + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
+        let dispatch_x = (num_tiles_x + 31) / 32;
+        let dispatch_y = (num_tiles_y + 31) / 32;
 
-        cpass.dispatch_workgroups(num_tiles_x, num_tiles_y, 1);
+        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+        drop(cpass);
+
+        // Parallel scan second pass
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("Binning Pass - Scan Second Pass"),
+            timestamp_writes: None,
+        });
+
+        cpass.set_pipeline(&self.pipeline_scan_second);
+        cpass.set_bind_group(0, &self.bind_group_0, &[]);
+        cpass.set_bind_group(1, &self.bind_group_1, &[]);
+
+        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
         drop(cpass);
 
         // Second pass: Store triangle indices
@@ -221,6 +261,10 @@ impl BinningPass {
                 wgpu::BindGroupEntry {
                     binding: 2,
                     resource: triangle_list_buffer,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: buffers.partial_sums_buffer.as_entire_binding(),
                 },
             ],
         });
