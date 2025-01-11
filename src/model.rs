@@ -1,7 +1,7 @@
-use crate::util::Vertex;
+use crate::gpu;
 
 pub struct Model {
-    pub vertices: Vec<Vertex>,
+    pub vertices: Vec<gpu::util::Vertex>,
 }
 
 impl Model {

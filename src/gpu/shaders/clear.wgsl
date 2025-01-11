@@ -3,23 +3,23 @@
 // -----------------------------------------------------------------------------
 // Efficiently clears both the output and depth buffers in parallel.
 
-const MAX_TRIANGLES_PER_TILE: u32 = 1024u;
-
 struct OutputBuffer {
     data: array<atomic<u32>>,
 };
 
-struct DepthBuffer {
-    depth: array<atomic<u32>>,
-};
-
 struct TileTriangles {
-    count: atomic<u32>, 
-    triangle_indices: array<u32, MAX_TRIANGLES_PER_TILE>,
+    count: atomic<u32>,
+    offset: u32, 
+    write_index: atomic<u32>,
+    padding: u32,
 };
 
 struct TileBuffer {
     triangle_indices: array<TileTriangles>,
+}
+
+struct TriangleListBuffer {
+    indices: array<u32>,
 }
 
 struct Fragment {
@@ -42,6 +42,7 @@ struct Uniform {
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
 @group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
 @group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
+@group(0) @binding(3) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 
@@ -53,22 +54,31 @@ struct Uniform {
 fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x;
     let total_pixels = u32(screen_dims.width) * u32(screen_dims.height);
+    let num_tiles_x = (u32(screen_dims.width) + 8u - 1u) / 8u;  // TILE_SIZE = 8
+    let num_tiles_y = (u32(screen_dims.height) + 8u - 1u) / 8u;
+    let total_tiles = num_tiles_x * num_tiles_y;
     
-    // Early exit if we're beyond the screen dimensions
-    if idx >= total_pixels {
-        return;
+    // Clear pixel-dependent buffers
+    if idx < total_pixels {
+        // Clear color buffer to black (0x000000)
+        atomicStore(&output_buffer.data[idx], 0u);
+
+        // Clear fragment buffer
+        atomicStore(&fragment_buffer.frags[idx].depth, 0xFFFFFFFFu);
+        fragment_buffer.frags[idx].uv = vec2<f32>(0.0, 0.0);
+        fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
+        fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
+        fragment_buffer.frags[idx].texture_index = 0u;
     }
 
-    // Clear color buffer to black (0x000000)
-    atomicStore(&output_buffer.data[idx], 0u);
-
-    atomicStore(&fragment_buffer.frags[idx].depth, 0xFFFFFFFFu);
-    fragment_buffer.frags[idx].uv = vec2<f32>(0.0, 0.0);
-    fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
-    fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
-    fragment_buffer.frags[idx].texture_index = 0u;
-    
+    // // Clear tile buffer and set up offsets
+    // if idx < total_tiles {
     atomicStore(&tile_buffer.triangle_indices[idx].count, 0u);
+    tile_buffer.triangle_indices[idx].offset = 0u;
+    tile_buffer.triangle_indices[idx].write_index = 0u;
 
-    tile_buffer.triangle_indices[idx].triangle_indices = array<u32, MAX_TRIANGLES_PER_TILE>();
+    //     // Set up offsets for binning - each tile gets a portion of the triangle list buffer
+    //     let max_triangles_per_tile = arrayLength(&triangle_list_buffer.indices) / total_tiles;
+    //     // tile_buffer.triangle_indices[idx].offset = idx * max_triangles_per_tile;
+    // }
 } 
