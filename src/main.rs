@@ -156,7 +156,7 @@ fn main() {
         .build(&event_loop)
         .expect("Failed to create window");
 
-    let scene = &scenes[0];
+    let scene = &scenes[1];
 
     let collector: PerformanceCollector = PerformanceCollector::new(
         scene.name.clone(),
