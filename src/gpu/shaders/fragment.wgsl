@@ -181,7 +181,7 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // Compute lighting
     let lighting = calculate_lighting(normal, fragment_buffer.frags[idx].world_pos);
-    var final_color = vec4<f32>(tex_color.rgb * lighting, tex_color.a);
+    var final_color = vec4<f32>(tex_color.rgb * lighting * vec3<f32>(1.0, 1.0, 1.0), tex_color.a);
 
     // Convert float color to integer
     let R = u32(final_color.r * 255.0);

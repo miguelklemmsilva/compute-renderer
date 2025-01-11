@@ -1,10 +1,12 @@
-use super::GpuBuffers;
-use crate::{scene, util::dispatch_size};
+use wgpu::BindingResource;
 
-pub const MAX_TRIANGLES_PER_TILE: u32 = 1024;
+use super::{raster_pass::TILE_SIZE, util::dispatch_size, GpuBuffers};
+use crate::scene;
 
 pub struct BinningPass {
-    pub pipeline: wgpu::ComputePipeline,
+    pub pipeline_count: wgpu::ComputePipeline,
+    pub pipeline_store: wgpu::ComputePipeline,
+    pub pipeline_calculate_offsets: wgpu::ComputePipeline,
     pub bind_group_0: wgpu::BindGroup,
     pub bind_group_1: wgpu::BindGroup,
 }
@@ -26,6 +28,16 @@ impl BinningPass {
                 },
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -59,14 +71,33 @@ impl BinningPass {
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/binning.wgsl"));
 
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Binning Pipeline"),
+        let pipeline_count = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Binning Pipeline - Count"),
             layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: Some("bin_triangles"),
+            entry_point: Some("count_triangles"),
             compilation_options: wgpu::PipelineCompilationOptions::default(),
             cache: None,
         });
+
+        let pipeline_store = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Binning Pipeline - Store"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("store_triangles"),
+            compilation_options: wgpu::PipelineCompilationOptions::default(),
+            cache: None,
+        });
+
+        let pipeline_calculate_offsets =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Binning Pipeline - Calculate Offsets"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: Some("calculate_offsets"),
+                compilation_options: wgpu::PipelineCompilationOptions::default(),
+                cache: None,
+            });
 
         let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Binning Pass: Group0"),
@@ -79,6 +110,10 @@ impl BinningPass {
                 wgpu::BindGroupEntry {
                     binding: 1,
                     resource: buffers.tile_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: buffers.triangle_list_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -93,19 +128,28 @@ impl BinningPass {
         });
 
         Self {
-            pipeline,
+            pipeline_count,
+            pipeline_store,
+            pipeline_calculate_offsets,
             bind_group_0,
             bind_group_1,
         }
     }
 
-    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, scene: &scene::Scene) {
+    pub fn execute(
+        &self,
+        encoder: &mut wgpu::CommandEncoder,
+        scene: &scene::Scene,
+        width: u32,
+        height: u32,
+    ) {
+        // First pass: Count triangles per tile
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-            label: Some("Binning Pass"),
+            label: Some("Binning Pass - Count"),
             timestamp_writes: None,
         });
 
-        cpass.set_pipeline(&self.pipeline);
+        cpass.set_pipeline(&self.pipeline_count);
         cpass.set_bind_group(0, &self.bind_group_0, &[]);
         cpass.set_bind_group(1, &self.bind_group_1, &[]);
 
@@ -126,5 +170,59 @@ impl BinningPass {
         let dispatch_y = ((total_threads_needed as f32) / (dispatch_x as f32)).ceil() as u32;
 
         cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+        drop(cpass);
+
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("Binning Pass - Calculate Offsets"),
+            timestamp_writes: None,
+        });
+
+        cpass.set_pipeline(&self.pipeline_calculate_offsets);
+        cpass.set_bind_group(0, &self.bind_group_0, &[]);
+        cpass.set_bind_group(1, &self.bind_group_1, &[]);
+
+        let num_tiles_x = (width + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
+        let num_tiles_y = (height + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
+
+        cpass.dispatch_workgroups(num_tiles_x, num_tiles_y, 1);
+        drop(cpass);
+
+        // Second pass: Store triangle indices
+        let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("Binning Pass - Store"),
+            timestamp_writes: None,
+        });
+
+        cpass.set_pipeline(&self.pipeline_store);
+        cpass.set_bind_group(0, &self.bind_group_0, &[]);
+        cpass.set_bind_group(1, &self.bind_group_1, &[]);
+
+        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+    }
+
+    pub fn rebind(
+        &mut self,
+        device: &wgpu::Device,
+        buffers: &GpuBuffers,
+        triangle_list_buffer: BindingResource,
+    ) {
+        self.bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Binning Pass: Group0"),
+            layout: &self.pipeline_count.get_bind_group_layout(0),
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.projected_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffers.tile_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: triangle_list_buffer,
+                },
+            ],
+        });
     }
 }

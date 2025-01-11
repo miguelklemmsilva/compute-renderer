@@ -1,6 +1,8 @@
 use crate::scene;
 
-use super::{binning_pass::BinningPass, ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass};
+use super::{
+    binning_pass::BinningPass, ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass,
+};
 
 pub struct GPU {
     pub device: wgpu::Device,
@@ -39,9 +41,9 @@ impl GPU {
 
         let clear_pass = ClearPass::new(&device, &buffers);
         let vertex_pass = VertexPass::new(&device, &buffers);
+        let binning_pass = BinningPass::new(&device, &buffers);
         let raster_pass = RasterPass::new(&device, &buffers);
         let fragment_pass = FragmentPass::new(&device, &buffers);
-        let binning_pass = BinningPass::new(&device, &buffers);
 
         Self {
             device,
@@ -67,24 +69,23 @@ impl GPU {
                 label: Some("Command Encoder"),
             });
 
-        // Dispatch each pass in order
         self.clear_pass.execute(&mut encoder, width, height);
         self.vertex_pass.execute(&mut encoder, scene);
-        self.binning_pass.execute(&mut encoder, scene);
+        self.binning_pass.execute(&mut encoder, scene, width as u32, height as u32);
         self.raster_pass
             .execute(&mut encoder, width as u32, height as u32, scene);
         self.fragment_pass.execute(&mut encoder, width, height);
 
         self.queue.submit(Some(encoder.finish()));
 
-        // Handle buffer mapping and reading as before
+        // Read the output buffer for the final pixels
         let buffer_slice = self.buffers.output_buffer.slice(..);
-        let (tx, rx) = futures_intrusive::channel::shared::oneshot_channel();
+        let (tx, rx_output) = futures_intrusive::channel::shared::oneshot_channel();
         buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
             tx.send(result).unwrap();
         });
         self.device.poll(wgpu::Maintain::Wait);
-        rx.receive().await.unwrap().unwrap();
+        rx_output.receive().await.unwrap().unwrap();
 
         let data = buffer_slice.get_mapped_range();
         let pixels = bytemuck::cast_slice(&data).to_vec();

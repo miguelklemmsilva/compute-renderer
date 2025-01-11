@@ -1,5 +1,4 @@
 const TILE_SIZE: u32 = 8u;
-const MAX_TRIANGLES_PER_TILE: u32 = 1024u;
 
 struct Vertex {
     x: f32,
@@ -19,12 +18,18 @@ struct ProjectedVertexBuffer {
 };
 
 struct TileTriangles {
-    count: atomic<u32>, 
-    triangle_indices: array<u32, MAX_TRIANGLES_PER_TILE>,
+    count: atomic<u32>,
+    offset: u32,
+    write_index: atomic<u32>,
+    padding: u32,
 };
 
 struct TileBuffer {
     triangle_indices: array<TileTriangles>,
+}
+
+struct TriangleListBuffer {
+    indices: array<u32>,
 }
 
 struct UniformBinning {
@@ -34,6 +39,7 @@ struct UniformBinning {
 
 @group(0) @binding(0) var<storage, read> projected_buffer: ProjectedVertexBuffer;
 @group(0) @binding(1) var<storage, read_write> tile_buffer: TileBuffer;
+@group(0) @binding(2) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: UniformBinning;
 
@@ -57,10 +63,7 @@ fn triangle_overlaps_tile(min_max: vec4<f32>, tile_x: u32, tile_y: u32) -> bool 
     return !(min_max.z < tile_min_x || min_max.x > tile_max_x || min_max.w < tile_min_y || min_max.y > tile_max_y);
 }
 
-@compute @workgroup_size(16, 16)
-fn bin_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
-    let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
-    let triangle_index = idx * 3u;
+fn process_triangle(triangle_index: u32, count_only: bool) {
     let num_triangles = arrayLength(&projected_buffer.values);
     
     // Early exit if this thread is beyond the number of triangles
@@ -105,15 +108,59 @@ fn bin_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(n
 
             // If the triangle actually overlaps this tile
             if triangle_overlaps_tile(min_max, tile_x, tile_y) {
-                // Add the triangle to the tile's list
-                let new_count = atomicAdd(&tile_buffer.triangle_indices[tile_index].count, 1u);
-                // Only add if we haven't exceeded the maximum
-                if new_count < MAX_TRIANGLES_PER_TILE {
-                    tile_buffer.triangle_indices[tile_index].triangle_indices[new_count] = triangle_index;
+                if count_only {
+                    // First pass: just count triangles
+                    atomicAdd(&tile_buffer.triangle_indices[tile_index].count, 1u);
                 } else {
-                    atomicSub(&tile_buffer.triangle_indices[tile_index].count, 1u);
+                    // Second pass: store triangle indices
+                    let offset = tile_buffer.triangle_indices[tile_index].offset;
+                    let write_index = atomicAdd(&tile_buffer.triangle_indices[tile_index].write_index, 1u);
+                    // Add bounds check to prevent buffer overflow
+                    let max_triangles = arrayLength(&triangle_list_buffer.indices);
+                    if (offset + write_index) < max_triangles {
+                        triangle_list_buffer.indices[offset + write_index] = triangle_index;
+                    } else {
+                        atomicSub(&tile_buffer.triangle_indices[tile_index].count, 1u);
+                    }
                 }
             }
         }
     }
+}
+
+@compute @workgroup_size(16, 16)
+fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+    let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
+    process_triangle(idx * 3u, true);
+}
+
+// New function to calculate offsets based on counts
+@compute @workgroup_size(16, 16)
+fn calculate_offsets(@builtin(global_invocation_id) global_id: vec3<u32>) {
+    let tile_x = global_id.x;
+    let tile_y = global_id.y;
+    // Early exit if this tile is outside the screen
+    let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
+    let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
+
+    if tile_x >= num_tiles_x || tile_y >= num_tiles_y {
+        return;
+    }
+
+    let tile_idx = tile_x + tile_y * num_tiles_x;
+
+    // First, calculate prefix sum of counts up to this tile
+    var offset = 0u;
+    for (var i = 0u; i < tile_idx; i = i + 1u) {
+        offset = offset + tile_buffer.triangle_indices[i].count;
+    }
+    
+    // Store the calculated offset
+    tile_buffer.triangle_indices[tile_idx].offset = offset;
+}
+
+@compute @workgroup_size(16, 16)
+fn store_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+    let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
+    process_triangle(idx * 3u, false);
 }

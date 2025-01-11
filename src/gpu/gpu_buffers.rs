@@ -1,8 +1,13 @@
 use wgpu::util::DeviceExt;
 
-use crate::{camera, effect::EffectUniform, scene, util::{Fragment, TextureInfo, Uniform, Vertex}};
+use crate::{
+    camera,
+    effect::EffectUniform,
+    gpu::util::{Fragment, TextureInfo, Uniform, Vertex},
+    scene,
+};
 
-use super::{binning_pass::MAX_TRIANGLES_PER_TILE, raster_pass::TILE_SIZE};
+use super::raster_pass::TILE_SIZE;
 
 pub struct GpuBuffers {
     // Buffers
@@ -10,21 +15,14 @@ pub struct GpuBuffers {
     pub light_buffer: wgpu::Buffer,
     pub effect_buffer: wgpu::Buffer,
     pub screen_buffer: wgpu::Buffer,
-
     pub vertex_buffer: wgpu::Buffer,
     pub projected_buffer: wgpu::Buffer,
-
-    // For collecting all pixel coverage from raster stage
     pub fragment_buffer: wgpu::Buffer,
-
     pub output_buffer: wgpu::Buffer,
-
-    // Textures
     pub texture_buffer: wgpu::Buffer,
     pub texture_info_buffer: wgpu::Buffer,
-
-    // Tile buffer
     pub tile_buffer: wgpu::Buffer,
+    pub triangle_list_buffer: wgpu::Buffer,
 }
 
 impl GpuBuffers {
@@ -57,18 +55,18 @@ impl GpuBuffers {
             mapped_at_creation: false,
         });
 
-        // 4) fragment buffer (for worst-case, you decide the size)
-        let max_fragments = (width * height) as u64; // example
-                                                     // For the actual struct size, replicate your "Fragment" struct if needed
-                                                     // This is just a placeholder:
+        // 4) fragment buffer
+        let max_fragments = (width * height) as u64;
         let fragment_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fragment Buffer"),
             size: max_fragments * std::mem::size_of::<Fragment>() as u64,
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        // 6) camera buffer
+        // 5) camera buffer
         let active_camera = scene.get_active_camera().expect("No active camera");
         let mut camera_uniform = camera::CameraUniform::default();
         camera_uniform.update_view_proj(&active_camera);
@@ -78,7 +76,7 @@ impl GpuBuffers {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // 7) effect buffer
+        // 6) effect buffer
         let effect_data = EffectUniform::default();
         let effect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Effect Buffer"),
@@ -86,7 +84,7 @@ impl GpuBuffers {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // 8) light buffer
+        // 7) light buffer
         let lights = scene.get_lights();
         let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Buffer"),
@@ -94,17 +92,18 @@ impl GpuBuffers {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
-        // 9) output buffer
+        // 8) output buffer
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
             size: (width * height * std::mem::size_of::<u32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
-                | wgpu::BufferUsages::MAP_READ,
+                | wgpu::BufferUsages::MAP_READ
+                | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
 
-        // 10) texture buffers
+        // 9) texture buffers
         let mut flattened_texture_data = Vec::new();
         let mut texture_infos = Vec::new();
         for material in &scene.materials {
@@ -142,15 +141,50 @@ impl GpuBuffers {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
+        // 10) tile buffer - now just stores count and offset per tile
         let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
         let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
-
         let num_tiles = num_tiles_x * num_tiles_y;
 
+        // Calculate total triangles and space per tile
+        let total_triangles =
+            (vertex_buffer.size() / std::mem::size_of::<Vertex>() as u64) as u32 / 3;
+
+        // Calculate max triangles per tile based on screen coverage
+        let avg_triangle_area = (width * height) as f32 / total_triangles as f32;
+        let tile_area = (TILE_SIZE * TILE_SIZE) as f32;
+
+        // Base estimate: how many triangles could fit in a tile
+        let base_triangles_per_tile = (tile_area / avg_triangle_area * 2.0) as u32;
+
+        // Add safety margin for overlapping triangles and uneven distribution
+        let max_triangles_per_tile = std::cmp::max(
+            base_triangles_per_tile,
+            std::cmp::min(
+                total_triangles, // Don't exceed total triangles
+                64,              // Minimum allocation to handle dense areas
+            ),
+        );
+
+        // Create tile buffer with count and offset for each tile
         let tile_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Tile Buffer"),
-            size: (num_tiles * (std::mem::size_of::<u32>() * 2 + std::mem::size_of::<u32>() * MAX_TRIANGLES_PER_TILE as usize)) as u64,
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            size: (num_tiles * std::mem::size_of::<[u32; 4]>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        // Size triangle list buffer based on max triangles per tile
+        let triangle_list_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Triangle List Buffer"),
+            size: (num_tiles as u64)
+                * (max_triangles_per_tile as u64)
+                * (std::mem::size_of::<u32>() as u64),
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_DST
+                | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
 
@@ -166,6 +200,7 @@ impl GpuBuffers {
             texture_buffer,
             texture_info_buffer,
             tile_buffer,
+            triangle_list_buffer,
         }
     }
 }

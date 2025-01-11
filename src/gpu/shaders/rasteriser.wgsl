@@ -3,7 +3,6 @@
 // -----------------------------------------------------------------------------
 
 const TILE_SIZE: u32 = 8u;  // Size of a tile in pixels
-const MAX_TRIANGLES_PER_TILE: u32 = 1024u;
 
 struct Uniform {
     width: f32,
@@ -40,12 +39,18 @@ struct FragmentBuffer {
 };
 
 struct TileTriangles {
-    count: atomic<u32>, 
-    triangle_indices: array<u32, MAX_TRIANGLES_PER_TILE>,
+    count: atomic<u32>,
+    offset: u32,  // Offset into triangle list buffer
+    write_index: atomic<u32>,
+    padding: u32,
 };
 
 struct TileBuffer {
     triangle_indices: array<TileTriangles>,
+}
+
+struct TriangleListBuffer {
+    indices: array<u32>,
 }
 
 struct UniformRaster {
@@ -66,7 +71,8 @@ struct EffectUniform {
 // -- BINDINGS
 @group(0) @binding(0) var<storage, read> projected_buffer: ProjectedVertexBuffer;
 @group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
-@group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
+@group(0) @binding(2) var<storage, read> tile_buffer: TileBuffer;
+@group(0) @binding(3) var<storage, read> triangle_list_buffer: TriangleListBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: UniformRaster;
 
@@ -220,10 +226,11 @@ fn raster_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let tile_idx = tile_x + tile_y * num_tiles_x;
     let triangle_count = atomicLoad(&tile_buffer.triangle_indices[tile_idx].count);
+    let triangle_offset = tile_buffer.triangle_indices[tile_idx].offset;
 
-    // Process each triangle
-    for (var i = 0u; i < triangle_count; i += 1u) {
-        let triangle_idx = tile_buffer.triangle_indices[tile_idx].triangle_indices[i];
+    // Process each triangle in this tile
+    for (var i = 0u; i < triangle_count; i = i + 1u) {
+        let triangle_idx = triangle_list_buffer.indices[triangle_offset + i];
         let v1 = projected_buffer.values[triangle_idx];
         let v2 = projected_buffer.values[triangle_idx + 1u];
         let v3 = projected_buffer.values[triangle_idx + 2u];
