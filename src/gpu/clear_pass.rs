@@ -54,6 +54,16 @@ impl ClearPass {
                         },
                         count: None,
                     },
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 4,
+                        visibility: wgpu::ShaderStages::COMPUTE,
+                        ty: wgpu::BindingType::Buffer {
+                            ty: wgpu::BufferBindingType::Storage { read_only: false },
+                            has_dynamic_offset: false,
+                            min_binding_size: None,
+                        },
+                        count: None,
+                    },
                 ],
             });
 
@@ -109,6 +119,10 @@ impl ClearPass {
                     binding: 3,
                     resource: buffers.triangle_list_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: buffers.partial_sums_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -142,7 +156,12 @@ impl ClearPass {
         cpass.dispatch_workgroups(dispatch_size(total_threads), 1, 1);
     }
 
-    pub fn rebind(&mut self, device: &wgpu::Device, buffers: &GpuBuffers, triangle_list_buffer: BindingResource) {
+    pub fn rebind(
+        &mut self,
+        device: &wgpu::Device,
+        buffers: &GpuBuffers,
+        triangle_list_buffer: BindingResource,
+    ) {
         self.bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Clear: Frame Buffer Bind Group"),
             layout: &self.pipeline.get_bind_group_layout(0),
@@ -162,6 +181,10 @@ impl ClearPass {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: triangle_list_buffer,
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: buffers.partial_sums_buffer.as_entire_binding(),
                 },
             ],
         });

@@ -39,10 +39,15 @@ struct Uniform {
     height: f32,
 };
 
+struct PartialSums {
+    values: array<u32>,
+}
+
 @group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
 @group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
 @group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
 @group(0) @binding(3) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
+@group(0) @binding(4) var<storage, read_write> partial_sums: PartialSums;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 
@@ -57,6 +62,9 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let num_tiles_x = (u32(screen_dims.width) + 8u - 1u) / 8u;  // TILE_SIZE = 8
     let num_tiles_y = (u32(screen_dims.height) + 8u - 1u) / 8u;
     let total_tiles = num_tiles_x * num_tiles_y;
+    let num_workgroups_x = (num_tiles_x + 31u) / 32u;
+    let num_workgroups_y = (num_tiles_y + 31u) / 32u;
+    let total_workgroups = num_workgroups_x * num_workgroups_y;
     
     // Clear pixel-dependent buffers
     if idx < total_pixels {
@@ -71,14 +79,15 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         fragment_buffer.frags[idx].texture_index = 0u;
     }
 
-    // // Clear tile buffer and set up offsets
-    // if idx < total_tiles {
-    atomicStore(&tile_buffer.triangle_indices[idx].count, 0u);
-    tile_buffer.triangle_indices[idx].offset = 0u;
-    tile_buffer.triangle_indices[idx].write_index = 0u;
+    // Clear tile buffer and set up offsets
+    if idx < total_tiles {
+        atomicStore(&tile_buffer.triangle_indices[idx].count, 0u);
+        tile_buffer.triangle_indices[idx].offset = 0u;
+        tile_buffer.triangle_indices[idx].write_index = 0u;
+    }
 
-    //     // Set up offsets for binning - each tile gets a portion of the triangle list buffer
-    //     let max_triangles_per_tile = arrayLength(&triangle_list_buffer.indices) / total_tiles;
-    //     // tile_buffer.triangle_indices[idx].offset = idx * max_triangles_per_tile;
-    // }
+    // Clear partial sums buffer
+    if idx < total_workgroups {
+        partial_sums.values[idx] = 0u;
+    }
 } 
