@@ -23,6 +23,7 @@ pub struct GpuBuffers {
     pub texture_info_buffer: wgpu::Buffer,
     pub tile_buffer: wgpu::Buffer,
     pub triangle_list_buffer: wgpu::Buffer,
+    pub partial_sums_buffer: wgpu::Buffer,
 }
 
 impl GpuBuffers {
@@ -188,6 +189,21 @@ impl GpuBuffers {
             mapped_at_creation: false,
         });
 
+        // Calculate number of workgroups needed for parallel scan
+        let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
+        let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
+        let num_workgroups_x = (num_tiles_x + 31) / 32; // 32x32 workgroup size
+        let num_workgroups_y = (num_tiles_y + 31) / 32;
+        let total_workgroups = num_workgroups_x * num_workgroups_y;
+
+        // Create partial sums buffer for parallel scan
+        let partial_sums_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Partial Sums Buffer"),
+            size: (total_workgroups * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
             camera_buffer,
             light_buffer,
@@ -201,6 +217,7 @@ impl GpuBuffers {
             texture_info_buffer,
             tile_buffer,
             triangle_list_buffer,
+            partial_sums_buffer,
         }
     }
 }
