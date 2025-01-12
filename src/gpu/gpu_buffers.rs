@@ -27,7 +27,7 @@ pub struct GpuBuffers {
 }
 
 impl GpuBuffers {
-    pub fn new(device: &wgpu::Device, width: usize, height: usize, scene: &scene::Scene) -> Self {
+    pub fn new(device: &wgpu::Device, width: u32, height: u32, scene: &scene::Scene) -> Self {
         // 1) screen buffer
         let screen_uniform_data = Uniform::new(width as f32, height as f32);
         let screen_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -96,7 +96,7 @@ impl GpuBuffers {
         // 8) output buffer
         let output_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Output Buffer"),
-            size: (width * height * std::mem::size_of::<u32>()) as u64,
+            size: (width as usize * height as usize * std::mem::size_of::<u32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::MAP_READ
@@ -170,7 +170,7 @@ impl GpuBuffers {
         // Create tile buffer with count and offset for each tile
         let tile_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Tile Buffer"),
-            size: (num_tiles * std::mem::size_of::<[u32; 4]>()) as u64,
+            size: (num_tiles as usize * std::mem::size_of::<[u32; 4]>()) as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::MAP_READ,
@@ -182,7 +182,7 @@ impl GpuBuffers {
             label: Some("Triangle List Buffer"),
             size: (num_tiles as u64)
                 * (max_triangles_per_tile as u64)
-                * (std::mem::size_of::<u32>() as u64),
+                * (std::mem::size_of::<u64>() as u64),
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_DST
                 | wgpu::BufferUsages::COPY_SRC,
@@ -192,14 +192,12 @@ impl GpuBuffers {
         // Calculate number of workgroups needed for parallel scan
         let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
         let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
-        let num_workgroups_x = (num_tiles_x + 15) / 16;
-        let num_workgroups_y = (num_tiles_y + 15) / 16;
-        let total_workgroups = num_workgroups_x * num_workgroups_y;
+        let total_workgroups = num_tiles_x * num_tiles_y;
 
         // Create partial sums buffer for parallel scan
         let partial_sums_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Partial Sums Buffer"),
-            size: (total_workgroups * std::mem::size_of::<u32>()) as u64,
+            size: (total_workgroups as usize * std::mem::size_of::<u32>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

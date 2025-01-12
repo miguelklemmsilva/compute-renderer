@@ -62,9 +62,7 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let num_tiles_x = (u32(screen_dims.width) + 8u - 1u) / 8u;  // TILE_SIZE = 8
     let num_tiles_y = (u32(screen_dims.height) + 8u - 1u) / 8u;
     let total_tiles = num_tiles_x * num_tiles_y;
-    let num_workgroups_x = (num_tiles_x + 31u) / 32u;
-    let num_workgroups_y = (num_tiles_y + 31u) / 32u;
-    let total_workgroups = num_workgroups_x * num_workgroups_y;
+    let num_workgroups = (total_tiles + 255u) / 256u * 256u;  // Round up to next multiple of workgroup size
     
     // Clear pixel-dependent buffers
     if idx < total_pixels {
@@ -79,15 +77,17 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         fragment_buffer.frags[idx].texture_index = 0u;
     }
 
-    // Clear tile buffer and set up offsets
+    // Clear tile buffer and set up offsets - ensure we clear all tiles
     if idx < total_tiles {
+        // Ensure complete reset of tile data
         atomicStore(&tile_buffer.triangle_indices[idx].count, 0u);
         tile_buffer.triangle_indices[idx].offset = 0u;
         atomicStore(&tile_buffer.triangle_indices[idx].write_index, 0u);
+        tile_buffer.triangle_indices[idx].padding = 0u;  // Clear padding just to be safe
     }
 
-    // Clear partial sums buffer
-    if idx < total_workgroups {
+    // Clear partial sums buffer - ensure we clear enough entries for all workgroups
+    if idx < num_workgroups {
         partial_sums.values[idx] = 0u;
     }
 } 
