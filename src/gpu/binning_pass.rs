@@ -208,10 +208,10 @@ impl BinningPass {
 
         let num_tiles_x = (width + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
         let num_tiles_y = (height + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
-        let dispatch_x = (num_tiles_x + 31) / 32;
-        let dispatch_y = (num_tiles_y + 31) / 32;
+        let dispatch_x_tiles = (num_tiles_x + 15) / 16;
+        let dispatch_y_tiles = (num_tiles_y + 15) / 16;
 
-        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+        cpass.dispatch_workgroups(dispatch_x_tiles, dispatch_y_tiles, 1);
         drop(cpass);
 
         // Parallel scan second pass
@@ -224,7 +224,7 @@ impl BinningPass {
         cpass.set_bind_group(0, &self.bind_group_0, &[]);
         cpass.set_bind_group(1, &self.bind_group_1, &[]);
 
-        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+        cpass.dispatch_workgroups(dispatch_x_tiles, dispatch_y_tiles, 1);
         drop(cpass);
 
         // Second pass: Store triangle indices

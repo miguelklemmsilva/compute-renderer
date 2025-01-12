@@ -49,7 +49,7 @@ struct PartialSums {
 @group(1) @binding(0) var<uniform> screen_dims: UniformBinning;
 
 // Workgroup shared memory for parallel scan
-var<workgroup> shared_data: array<u32, 1024>;  // 32x32 workgroup size
+var<workgroup> shared_data: array<u32, 256>;  
 
 fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
     var min_max = vec4<f32>();
@@ -124,12 +124,7 @@ fn process_triangle(triangle_index: u32, count_only: bool) {
                     let offset = tile_buffer.triangle_indices[tile_index].offset;
                     let write_index = atomicAdd(&tile_buffer.triangle_indices[tile_index].write_index, 1u);
                     // Add bounds check to prevent buffer overflow
-                    let max_triangles = arrayLength(&triangle_list_buffer.indices);
-                    if (offset + write_index) < max_triangles {
-                        triangle_list_buffer.indices[offset + write_index] = triangle_index;
-                    } else {
-                        atomicSub(&tile_buffer.triangle_indices[tile_index].count, 1u);
-                    }
+                    triangle_list_buffer.indices[offset + write_index] = triangle_index;
                 }
             }
         }
@@ -143,8 +138,7 @@ fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin
 }
 
 // Parallel scan helper functions
-fn workgroup_scan_exclusive(local_id: vec3<u32>, workgroup_size: u32) -> u32 {
-    let tid = local_id.x + local_id.y * 32u;
+fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
     if tid >= workgroup_size {
         return 0u;
     }
@@ -191,74 +185,79 @@ fn workgroup_scan_exclusive(local_id: vec3<u32>, workgroup_size: u32) -> u32 {
 }
 
 // First pass: compute partial sums for each workgroup
-@compute @workgroup_size(32, 32)
-fn scan_first_pass(@builtin(global_invocation_id) global_id: vec3<u32>,
+@compute @workgroup_size(16, 16)
+fn scan_first_pass(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>,
-    @builtin(workgroup_id) workgroup_id: vec3<u32>) {
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(local_invocation_index) local_index: u32,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>
+) {
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
     let total_tiles = num_tiles_x * num_tiles_y;
-    let num_workgroups_x = (num_tiles_x + 31u) / 32u;
 
-    let tid = local_id.x + local_id.y * 32u;
-    let gid = global_id.x + global_id.y * num_tiles_x;
+    let tile_index = global_id.x + global_id.y * num_tiles_x;
+    if tile_index >= total_tiles {
+        return;
+    }
     
     // Load tile counts into shared memory
-    if gid < total_tiles {
-        shared_data[tid] = tile_buffer.triangle_indices[gid].count;
+    if tile_index < total_tiles {
+        shared_data[local_index] = tile_buffer.triangle_indices[tile_index].count;
     } else {
-        shared_data[tid] = 0u;
+        shared_data[local_index] = 0u;
     }
 
     workgroupBarrier();
     
     // Perform parallel scan within workgroup
-    let scan_result = workgroup_scan_exclusive(local_id, 1024u);
+    let scan_result = workgroup_scan_exclusive(local_index, 256u);
     
     // Last thread in workgroup writes total sum to partial_sums
-    if tid == 1023u {
-        let workgroup_sum = shared_data[tid] + tile_buffer.triangle_indices[gid].count;
-        let workgroup_idx = workgroup_id.x + workgroup_id.y * num_workgroups_x;
-        partial_sums.values[workgroup_idx] = workgroup_sum;
+    if local_index == 255u {
+        let workgroup_sum = shared_data[255u];
+        partial_sums.values[workgroup_id.x + workgroup_id.y * num_workgroups.x] = workgroup_sum;
     }
     
     // Write local scan results
-    if gid < total_tiles {
-        tile_buffer.triangle_indices[gid].offset = scan_result;
+    if tile_index < total_tiles {
+        tile_buffer.triangle_indices[tile_index].offset = scan_result;
     }
 }
 
 // Second pass: scan partial sums and update final offsets
-@compute @workgroup_size(32, 32)
-fn scan_second_pass(@builtin(global_invocation_id) global_id: vec3<u32>) {
+@compute @workgroup_size(16, 16)
+fn scan_second_pass(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(workgroup_id) workgroup_id: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>
+) {
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
     let total_tiles = num_tiles_x * num_tiles_y;
-    let num_workgroups_x = (num_tiles_x + 31u) / 32u;
 
-    let gid = global_id.x + global_id.y * num_tiles_x;
-    if gid >= total_tiles {
+    let tile_index = global_id.x + global_id.y * num_tiles_x;
+
+    if tile_index >= total_tiles {
         return;
     }
 
-    // Calculate current workgroup indices
-    let current_workgroup_x = global_id.x / 32u;
-    let current_workgroup_y = global_id.y / 32u;
     var workgroup_offset = 0u;
     
     // Sum up all previous workgroup sums in row-major order
-    for (var y = 0u; y < current_workgroup_y; y = y + 1u) {
-        for (var x = 0u; x < num_workgroups_x; x = x + 1u) {
-            workgroup_offset += partial_sums.values[x + y * num_workgroups_x];
+    for (var y = 0u; y < workgroup_id.y; y = y + 1u) {
+        for (var x = 0u; x < num_workgroups.x ; x = x + 1u) {
+            workgroup_offset += partial_sums.values[x + y * num_workgroups.x];
         }
     }
     // Add the workgroups in the current row
-    for (var x = 0u; x < current_workgroup_x; x = x + 1u) {
-        workgroup_offset += partial_sums.values[x + current_workgroup_y * num_workgroups_x];
+    for (var x = 0u; x < workgroup_id.x; x = x + 1u) {
+        workgroup_offset += partial_sums.values[x + workgroup_id.y * num_workgroups.x];
     }
     
     // Add workgroup offset to local offset
-    tile_buffer.triangle_indices[gid].offset += workgroup_offset;
+    tile_buffer.triangle_indices[tile_index].offset += workgroup_offset;
 }
 
 @compute @workgroup_size(16, 16)

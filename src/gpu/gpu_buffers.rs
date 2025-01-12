@@ -192,8 +192,8 @@ impl GpuBuffers {
         // Calculate number of workgroups needed for parallel scan
         let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
         let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
-        let num_workgroups_x = (num_tiles_x + 31) / 32; // 32x32 workgroup size
-        let num_workgroups_y = (num_tiles_y + 31) / 32;
+        let num_workgroups_x = (num_tiles_x + 15) / 16;
+        let num_workgroups_y = (num_tiles_y + 15) / 16;
         let total_workgroups = num_workgroups_x * num_workgroups_y;
 
         // Create partial sums buffer for parallel scan

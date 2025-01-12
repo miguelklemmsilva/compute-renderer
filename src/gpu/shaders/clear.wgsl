@@ -83,7 +83,7 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     if idx < total_tiles {
         atomicStore(&tile_buffer.triangle_indices[idx].count, 0u);
         tile_buffer.triangle_indices[idx].offset = 0u;
-        tile_buffer.triangle_indices[idx].write_index = 0u;
+        atomicStore(&tile_buffer.triangle_indices[idx].write_index, 0u);
     }
 
     // Clear partial sums buffer
