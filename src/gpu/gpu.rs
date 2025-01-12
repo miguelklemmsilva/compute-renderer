@@ -37,7 +37,7 @@ impl GPU {
             .await
             .expect("Failed to create device");
 
-        let buffers = GpuBuffers::new(&device, width, height, scene);
+        let buffers = GpuBuffers::new(&device, width as u32, height as u32, scene);
 
         let clear_pass = ClearPass::new(&device, &buffers);
         let vertex_pass = VertexPass::new(&device, &buffers);

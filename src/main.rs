@@ -31,7 +31,7 @@ fn main() {
         // Interactive Scene
         SceneConfig {
             name: "Interactive Scene".to_string(),
-            model_path: get_asset_path("erato.obj")
+            model_path: get_asset_path("san-miguel-low-poly.obj")
                 .to_string_lossy()
                 .to_string(),
             texture_path: None,
@@ -46,7 +46,7 @@ fn main() {
         },
         SceneConfig {
             name: "Suzanne - Wave Effect".to_string(),
-            model_path: get_asset_path("bmw.obj").to_string_lossy().to_string(),
+            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
@@ -156,11 +156,11 @@ fn main() {
         .build(&event_loop)
         .expect("Failed to create window");
 
-    let scene = &scenes[1];
+    let scene = &scenes[0];
 
     let collector: PerformanceCollector = PerformanceCollector::new(
         scene.name.clone(),
-        1,
+        0,
         Duration::from_secs(scene.benchmark_duration_secs),
     );
 
