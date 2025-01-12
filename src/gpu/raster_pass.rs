@@ -3,7 +3,7 @@ use wgpu::BindingResource;
 use super::GpuBuffers;
 use crate::scene;
 
-pub const TILE_SIZE: usize = 8;
+pub const TILE_SIZE: u32 = 8;
 
 pub struct RasterPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -171,12 +171,12 @@ impl RasterPass {
         cpass.set_bind_group(2, &self.bind_group_2, &[]);
 
         // Calculate number of tiles needed in each dimension
-        let num_tiles_x = (width + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
-        let num_tiles_y = (height + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
+        let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
+        let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
         let num_workgroups_x = (num_tiles_x + 15) / 16;
         let num_workgroups_y = (num_tiles_y + 15) / 16;
 
-        cpass.dispatch_workgroups(num_tiles_x, num_tiles_y, 1);
+        cpass.dispatch_workgroups(num_workgroups_x, num_workgroups_y, 1);
     }
 
     pub fn rebind(

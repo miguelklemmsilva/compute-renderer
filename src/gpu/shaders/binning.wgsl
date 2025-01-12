@@ -38,7 +38,7 @@ struct UniformBinning {
 }
 
 struct PartialSums {
-    values: array<u32>,
+    values: array<atomic<u32>>,
 }
 
 @group(0) @binding(0) var<storage, read> projected_buffer: ProjectedVertexBuffer;
@@ -97,7 +97,7 @@ fn process_triangle(triangle_index: u32, count_only: bool) {
     );
 
     // Skip triangles completely outside NDC space
-    if min_max.z < 0.0 || min_max.x > screen_dims.width || min_max.w < 0.0 || min_max.y > screen_dims.height {
+    if min_max.z < 0.0 || min_max.x >= screen_dims.width || min_max.w < 0.0 || min_max.y >= screen_dims.height {
         return;
     }
 
@@ -107,11 +107,12 @@ fn process_triangle(triangle_index: u32, count_only: bool) {
     let end_tile_x = min(u32(ceil(min_max.z / f32(TILE_SIZE))), (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE);
     let end_tile_y = min(u32(ceil(min_max.w / f32(TILE_SIZE))), (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE);
 
+    let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
+    
     // For each tile that this triangle might overlap
-    for (var tile_y = start_tile_y; tile_y <= end_tile_y; tile_y = tile_y + 1u) {
-        for (var tile_x = start_tile_x; tile_x <= end_tile_x; tile_x = tile_x + 1u) {
+    for (var tile_y = start_tile_y; tile_y < end_tile_y; tile_y = tile_y + 1u) {
+        for (var tile_x = start_tile_x; tile_x < end_tile_x; tile_x = tile_x + 1u) {
             // Calculate the tile index
-            let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
             let tile_index = tile_x + tile_y * num_tiles_x;
 
             // If the triangle actually overlaps this tile
@@ -121,10 +122,16 @@ fn process_triangle(triangle_index: u32, count_only: bool) {
                     atomicAdd(&tile_buffer.triangle_indices[tile_index].count, 1u);
                 } else {
                     // Second pass: store triangle indices
-                    let offset = tile_buffer.triangle_indices[tile_index].offset;
+                    let count = atomicLoad(&tile_buffer.triangle_indices[tile_index].count);
                     let write_index = atomicAdd(&tile_buffer.triangle_indices[tile_index].write_index, 1u);
-                    // Add bounds check to prevent buffer overflow
-                    triangle_list_buffer.indices[offset + write_index] = triangle_index;
+                    
+                    // Only write if we haven't exceeded the count from the first pass
+                    if write_index < count {
+                        let offset = tile_buffer.triangle_indices[tile_index].offset;
+                        triangle_list_buffer.indices[offset + write_index] = triangle_index;
+                    } else {
+                        atomicSub(&tile_buffer.triangle_indices[tile_index].count, 1u);
+                    }
                 }
             }
         }
@@ -143,7 +150,7 @@ fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
         return 0u;
     }
 
-    // Up-sweep (reduce) phase
+    // Up-sweep phase
     var offset = 1u;
     var d = workgroup_size >> 1u;
 
@@ -156,11 +163,6 @@ fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
         }
         offset *= 2u;
         d = d >> 1u;
-    }
-
-    // Clear the last element
-    if tid == 0u {
-        shared_data[workgroup_size - 1u] = 0u;
     }
 
     // Down-sweep phase
@@ -185,7 +187,7 @@ fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
 }
 
 // First pass: compute partial sums for each workgroup
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(256)
 fn scan_first_pass(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(local_invocation_id) local_id: vec3<u32>,
@@ -197,17 +199,13 @@ fn scan_first_pass(
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
     let total_tiles = num_tiles_x * num_tiles_y;
 
-    let tile_index = global_id.x + global_id.y * num_tiles_x;
-    if tile_index >= total_tiles {
-        return;
-    }
+    let tile_index = global_id.x;
     
-    // Load tile counts into shared memory
-    if tile_index < total_tiles {
+    // Initialize shared memory
+    shared_data[local_index] = 0u;
+    // if tile_index < total_tiles {
         shared_data[local_index] = tile_buffer.triangle_indices[tile_index].count;
-    } else {
-        shared_data[local_index] = 0u;
-    }
+    // }
 
     workgroupBarrier();
     
@@ -216,18 +214,25 @@ fn scan_first_pass(
     
     // Last thread in workgroup writes total sum to partial_sums
     if local_index == 255u {
-        let workgroup_sum = shared_data[255u];
-        partial_sums.values[workgroup_id.x + workgroup_id.y * num_workgroups.x] = workgroup_sum;
+        var last_value = 0u;
+        if tile_index < total_tiles {
+            last_value = tile_buffer.triangle_indices[tile_index].count;
+        }
+        let workgroup_sum = shared_data[255u] + last_value;
+        atomicStore(&partial_sums.values[workgroup_id.x], workgroup_sum);
+        // partial_sums.values[workgroup_id.x + workgroup_id.y * num_workgroups.x] = workgroup_sum;
     }
+
+    storageBarrier();
     
     // Write local scan results
-    if tile_index < total_tiles {
+    // if tile_index < total_tiles {
         tile_buffer.triangle_indices[tile_index].offset = scan_result;
-    }
+    // }
 }
 
 // Second pass: scan partial sums and update final offsets
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(256)
 fn scan_second_pass(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) workgroup_id: vec3<u32>,
@@ -237,23 +242,18 @@ fn scan_second_pass(
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
     let total_tiles = num_tiles_x * num_tiles_y;
 
-    let tile_index = global_id.x + global_id.y * num_tiles_x;
-
+    let tile_index = global_id.x;
     if tile_index >= total_tiles {
         return;
     }
 
     var workgroup_offset = 0u;
+    let current_workgroup = workgroup_id.x;
     
-    // Sum up all previous workgroup sums in row-major order
-    for (var y = 0u; y < workgroup_id.y; y = y + 1u) {
-        for (var x = 0u; x < num_workgroups.x ; x = x + 1u) {
-            workgroup_offset += partial_sums.values[x + y * num_workgroups.x];
-        }
-    }
-    // Add the workgroups in the current row
-    for (var x = 0u; x < workgroup_id.x; x = x + 1u) {
-        workgroup_offset += partial_sums.values[x + workgroup_id.y * num_workgroups.x];
+    // Sum up all previous workgroup sums more efficiently
+    for (var i = 0u; i < current_workgroup; i = i + 1u) {
+        let sum = atomicLoad(&partial_sums.values[i]);
+        workgroup_offset += sum;
     }
     
     // Add workgroup offset to local offset
