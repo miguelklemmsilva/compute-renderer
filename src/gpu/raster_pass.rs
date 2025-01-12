@@ -173,6 +173,8 @@ impl RasterPass {
         // Calculate number of tiles needed in each dimension
         let num_tiles_x = (width + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
         let num_tiles_y = (height + TILE_SIZE as u32 - 1) / TILE_SIZE as u32;
+        let num_workgroups_x = (num_tiles_x + 15) / 16;
+        let num_workgroups_y = (num_tiles_y + 15) / 16;
 
         cpass.dispatch_workgroups(num_tiles_x, num_tiles_y, 1);
     }
