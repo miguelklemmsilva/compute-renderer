@@ -43,8 +43,8 @@ pub struct Camera {
 }
 
 impl Camera {
-    const ZFAR: f32 = 10000.0;
-    const ZNEAR: f32 = 0.1;
+    const ZFAR: f32 = 1000.0;
+    const ZNEAR: f32 = 1.0;
     const FOVY: f32 = std::f32::consts::PI / 2.0;
     const UP: Vec3 = Vec3::Y;
 

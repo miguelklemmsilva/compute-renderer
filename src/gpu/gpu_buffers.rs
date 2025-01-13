@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     effect::EffectUniform,
-    gpu::util::{Fragment, TextureInfo, Uniform, Vertex},
+    gpu::util::{Fragment, Index, TextureInfo, Uniform, Vertex},
     scene,
 };
 
@@ -16,6 +16,7 @@ pub struct GpuBuffers {
     pub effect_buffer: wgpu::Buffer,
     pub screen_buffer: wgpu::Buffer,
     pub vertex_buffer: wgpu::Buffer,
+    pub index_buffer: wgpu::Buffer,
     pub projected_buffer: wgpu::Buffer,
     pub fragment_buffer: wgpu::Buffer,
     pub output_buffer: wgpu::Buffer,
@@ -36,15 +37,27 @@ impl GpuBuffers {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // 2) vertex buffer
-        let vertices: Vec<Vertex> = scene
-            .models
-            .iter()
-            .flat_map(|model| model.vertices.clone())
-            .collect();
+        // 2) vertex and index buffers
+        let mut vertices = Vec::new();
+        let mut indices = Vec::new();
+        let mut index_offset = 0u32;
+
+        for model in &scene.models {
+            vertices.extend_from_slice(&model.vertices);
+            // Adjust indices based on the current vertex offset
+            indices.extend_from_slice(&model.indices.iter().map(|i| i.0 + index_offset).collect::<Vec<u32>>());
+            index_offset += model.vertices.len() as u32;
+        }
+
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+        });
+
+        let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Index Buffer"),
+            contents: bytemuck::cast_slice(&indices),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -208,6 +221,7 @@ impl GpuBuffers {
             effect_buffer,
             screen_buffer,
             vertex_buffer,
+            index_buffer,
             projected_buffer,
             fragment_buffer,
             output_buffer,

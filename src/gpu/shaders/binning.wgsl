@@ -17,6 +17,10 @@ struct ProjectedVertexBuffer {
     values: array<Vertex>,
 };
 
+struct IndexBuffer {
+    values: array<u32>,
+};
+
 struct TileTriangles {
     count: atomic<u32>,
     offset: u32,
@@ -42,9 +46,10 @@ struct PartialSums {
 }
 
 @group(0) @binding(0) var<storage, read> projected_buffer: ProjectedVertexBuffer;
-@group(0) @binding(1) var<storage, read_write> tile_buffer: TileBuffer;
-@group(0) @binding(2) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
-@group(0) @binding(3) var<storage, read_write> partial_sums: PartialSums;
+@group(0) @binding(1) var<storage, read> index_buffer: IndexBuffer;
+@group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
+@group(0) @binding(3) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
+@group(0) @binding(4) var<storage, read_write> partial_sums: PartialSums;
 
 @group(1) @binding(0) var<uniform> screen_dims: UniformBinning;
 
@@ -72,17 +77,22 @@ fn triangle_overlaps_tile(min_max: vec4<f32>, tile_x: u32, tile_y: u32) -> bool 
 }
 
 fn process_triangle(triangle_index: u32, count_only: bool) {
-    let num_triangles = arrayLength(&projected_buffer.values);
+    let num_indices = arrayLength(&index_buffer.values);
     
     // Early exit if this thread is beyond the number of triangles
-    if triangle_index >= num_triangles {
+    if triangle_index >= num_indices / 3u {
         return;
     }
 
-    // Get the three vertices of this triangle
-    let v1 = projected_buffer.values[triangle_index];
-    let v2 = projected_buffer.values[triangle_index + 1u];
-    let v3 = projected_buffer.values[triangle_index + 2u];
+    // Get the three vertices of this triangle using indices
+    let base_idx = triangle_index * 3u;
+    let idx1 = index_buffer.values[base_idx];
+    let idx2 = index_buffer.values[base_idx + 1u];
+    let idx3 = index_buffer.values[base_idx + 2u];
+
+    let v1 = projected_buffer.values[idx1];
+    let v2 = projected_buffer.values[idx2];
+    let v3 = projected_buffer.values[idx3];
 
     // Skip triangles with any vertices behind the near plane
     if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
@@ -128,7 +138,7 @@ fn process_triangle(triangle_index: u32, count_only: bool) {
                     // Only write if we haven't exceeded the count from the first pass
                     if write_index < count {
                         let offset = tile_buffer.triangle_indices[tile_index].offset;
-                        triangle_list_buffer.indices[offset + write_index] = triangle_index;
+                        triangle_list_buffer.indices[offset + write_index] = base_idx;  // Store the base index
                     } else {
                         atomicSub(&tile_buffer.triangle_indices[tile_index].count, 1u);
                     }
@@ -141,7 +151,7 @@ fn process_triangle(triangle_index: u32, count_only: bool) {
 @compute @workgroup_size(16, 16)
 fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
     let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
-    process_triangle(idx * 3u, true);
+    process_triangle(idx, true);
 }
 
 // Parallel scan helper functions
@@ -204,7 +214,7 @@ fn scan_first_pass(
     // Initialize shared memory
     shared_data[local_index] = 0u;
     // if tile_index < total_tiles {
-        shared_data[local_index] = tile_buffer.triangle_indices[tile_index].count;
+    shared_data[local_index] = tile_buffer.triangle_indices[tile_index].count;
     // }
 
     workgroupBarrier();
@@ -227,7 +237,7 @@ fn scan_first_pass(
     
     // Write local scan results
     // if tile_index < total_tiles {
-        tile_buffer.triangle_indices[tile_index].offset = scan_result;
+    tile_buffer.triangle_indices[tile_index].offset = scan_result;
     // }
 }
 
@@ -263,5 +273,5 @@ fn scan_second_pass(
 @compute @workgroup_size(16, 16)
 fn store_triangles(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
     let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
-    process_triangle(idx * 3u, false);
+    process_triangle(idx, false);
 }

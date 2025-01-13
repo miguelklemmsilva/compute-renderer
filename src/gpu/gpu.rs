@@ -69,9 +69,13 @@ impl GPU {
                 label: Some("Command Encoder"),
             });
 
+        // Calculate total number of indices
+        let total_indices = scene.models.iter().map(|m| m.indices.len()).sum::<usize>() as u32;
+
         self.clear_pass.execute(&mut encoder, width, height);
-        self.vertex_pass.execute(&mut encoder, scene);
-        self.binning_pass.execute(&mut encoder, scene, width as u32, height as u32);
+        self.vertex_pass.execute(&mut encoder, total_indices);
+        self.binning_pass
+            .execute(&mut encoder, scene, width as u32, height as u32);
         self.raster_pass
             .execute(&mut encoder, width as u32, height as u32, scene);
         self.fragment_pass.execute(&mut encoder, width, height);

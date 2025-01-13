@@ -29,6 +29,16 @@ impl VertexPass {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: false },
                         has_dynamic_offset: false,
                         min_binding_size: None,
@@ -112,6 +122,10 @@ impl VertexPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: buffers.index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: buffers.projected_buffer.as_entire_binding(),
                 },
             ],
@@ -153,7 +167,7 @@ impl VertexPass {
         }
     }
 
-    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, scene: &scene::Scene) {
+    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, num_indices: u32) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Vertex Pass"),
             timestamp_writes: None,
@@ -165,14 +179,11 @@ impl VertexPass {
         cpass.set_bind_group(2, &self.bind_group_2, &[]);
         cpass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        let total_vertices = scene.models.iter().map(|m| m.vertices.len()).sum::<usize>() as u32;
-
+        // Calculate workgroups based on number of vertices
         let workgroup_size = 16u32;
+        let num_vertices = num_indices / 3; // Convert from indices to vertices
         let total_threads_needed =
-            ((total_vertices as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
-
-        // Decide how to split total_threads_needed between X and Y dimensions.
-        // For a near-square distribution:
+            ((num_vertices as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
         let dispatch_x = (total_threads_needed as f32).sqrt().ceil() as u32;
         let dispatch_y = ((total_threads_needed as f32) / (dispatch_x as f32)).ceil() as u32;
 
