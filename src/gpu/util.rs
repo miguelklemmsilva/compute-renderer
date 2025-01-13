@@ -1,7 +1,5 @@
 use bytemuck::{Pod, Zeroable};
 
-
-
 pub(crate) const WORKGROUP_SIZE: u32 = 256;
 pub(crate) const fn dispatch_size(len: u32) -> u32 {
     let subgroup_size = WORKGROUP_SIZE;
@@ -23,6 +21,10 @@ impl Uniform {
         }
     }
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, Pod, Zeroable)]
+pub struct Index(pub u32);
 
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
@@ -54,7 +56,7 @@ pub struct Fragment {
     pub _padding: [u32; 2],
 }
 
-pub fn process_obj_model(file: &str) -> Vec<Vertex> {
+pub fn process_obj_model(file: &str) -> (Vec<Vertex>, Vec<Index>) {
     let (models, _) = tobj::load_obj(
         file,
         &tobj::LoadOptions {
@@ -65,42 +67,57 @@ pub fn process_obj_model(file: &str) -> Vec<Vertex> {
     )
     .expect("Failed to load OBJ file");
 
-    let mut vertices = Vec::with_capacity(models.iter().map(|m| m.mesh.indices.len()).sum());
-    for model in models.iter() {
-        let mesh = &model.mesh;
+    let mut final_vertices = Vec::new();
+    let mut final_indices = Vec::new();
+    let mut global_vertex_offset = 0;
 
-        let has_texcoords = !mesh.texcoords.is_empty();
-        let has_normals = !mesh.normals.is_empty();
-
-        for &index in &mesh.indices {
-            let idx = index as usize;
-
-            vertices.push(Vertex {
-                position: [
-                    mesh.positions[3 * idx],
-                    mesh.positions[3 * idx + 1],
-                    mesh.positions[3 * idx + 2],
-                ],
-                tex_coords: if has_texcoords {
-                    [mesh.texcoords[2 * idx], mesh.texcoords[2 * idx + 1]]
+    let meshes = models
+        .into_iter()
+        .map(|m| {
+            let vertices = (0..m.mesh.positions.len() / 3)
+            .map(|i| {
+                if m.mesh.normals.is_empty() {
+                    Vertex {
+                        position: [
+                            m.mesh.positions[3 * i],
+                            m.mesh.positions[3 * i + 1],
+                            m.mesh.positions[3 * i + 2],
+                        ],
+                        tex_coords: [0.0, 0.0],
+                        normal: [0.0, 1.0, 0.0],
+                        texture_index: u32::MAX,
+                        w_clip: 0.0,
+                    }
                 } else {
-                    [0.0, 0.0]
-                },
-                normal: if has_normals {
-                    [
-                        mesh.normals[3 * idx],
-                        mesh.normals[3 * idx + 1],
-                        mesh.normals[3 * idx + 2],
-                    ]
-                } else {
-                    [0.0, 1.0, 0.0]
-                },
-                texture_index: u32::MAX,
-                w_clip: 0.0,
-            });
-        }
+                    Vertex {
+                        position: [
+                            m.mesh.positions[3 * i],
+                            m.mesh.positions[3 * i + 1],
+                            m.mesh.positions[3 * i + 2],
+                        ],
+                        tex_coords: [
+                            m.mesh.texcoords[2 * i],
+                            m.mesh.texcoords[2 * i + 1],
+                        ],
+                        normal: [
+                            m.mesh.normals[3 * i],
+                            m.mesh.normals[3 * i + 1],
+                            m.mesh.normals[3 * i + 2],
+                        ],
+                        texture_index: u32::MAX,
+                        w_clip: 0.0,
+                    }
+                }
+            })
+            .collect::<Vec<_>>();
+
+        final_vertices = vertices;
+        final_indices = m.mesh.indices.iter().map(|i| Index(i + global_vertex_offset)).collect::<Vec<_>>();
+        
+        })
+        .collect::<Vec<_>>();
+
+
+        (final_vertices, final_indices)
     }
 
-    println!("Amount of vertices: {}", vertices.len());
-    vertices
-}

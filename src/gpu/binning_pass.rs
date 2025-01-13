@@ -16,9 +16,8 @@ impl BinningPass {
     pub fn new(device: &wgpu::Device, buffers: &GpuBuffers) -> Self {
         // 1) Create bind group layouts
         let group0_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("BinningPass::Group0"),
+            label: Some("Binning Pass: Group0 Layout"),
             entries: &[
-                // [0] projected_buffer
                 wgpu::BindGroupLayoutEntry {
                     binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -29,18 +28,16 @@ impl BinningPass {
                     },
                     count: None,
                 },
-                // [1] tile_buffer
                 wgpu::BindGroupLayoutEntry {
                     binding: 1,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
                         has_dynamic_offset: false,
                         min_binding_size: None,
                     },
                     count: None,
                 },
-                // [2] triangle_list_buffer
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
                     visibility: wgpu::ShaderStages::COMPUTE,
@@ -51,9 +48,18 @@ impl BinningPass {
                     },
                     count: None,
                 },
-                // [3] partial_sums
                 wgpu::BindGroupLayoutEntry {
                     binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 4,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Storage { read_only: false },
@@ -137,7 +143,7 @@ impl BinningPass {
 
         // 4) Create bind groups
         let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("BinningPass::BG0"),
+            label: Some("Binning Pass: Group0"),
             layout: &group0_layout,
             entries: &[
                 wgpu::BindGroupEntry {
@@ -146,14 +152,18 @@ impl BinningPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: buffers.tile_buffer.as_entire_binding(),
+                    resource: buffers.index_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: buffers.triangle_list_buffer.as_entire_binding(),
+                    resource: buffers.tile_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 3,
+                    resource: buffers.triangle_list_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
                     resource: buffers.partial_sums_buffer.as_entire_binding(),
                 },
             ],
@@ -185,11 +195,11 @@ impl BinningPass {
         width: u32,
         height: u32,
     ) {
-        // total number of triangles = sum of (vertices.len()/3) in the scene
+        // Calculate total number of triangles from indices
         let total_tris = scene
             .models
             .iter()
-            .map(|m| m.vertices.len() / 3)
+            .map(|m| m.indices.len() / 3)
             .sum::<usize>() as u32;
 
         // Each thread handles 1 triangle, but each WG has 16*16=256 threads

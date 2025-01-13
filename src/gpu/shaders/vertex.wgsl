@@ -29,6 +29,10 @@ struct VertexBuffer {
     values: array<Vertex>,
 };
 
+struct IndexBuffer {
+    values: array<u32>,
+};
+
 struct ProjectedVertexBuffer {
     values: array<Vertex>,
 };
@@ -66,7 +70,8 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
 // BINDINGS
 // -----------------------------------------------------------------------------
 @group(0) @binding(0) var<storage, read> vertex_buffer: VertexBuffer;
-@group(0) @binding(1) var<storage, read_write> projected_buffer: ProjectedVertexBuffer;
+@group(0) @binding(1) var<storage, read> index_buffer: IndexBuffer;
+@group(0) @binding(2) var<storage, read_write> projected_buffer: ProjectedVertexBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
@@ -97,7 +102,7 @@ fn project_vertex(v: Vertex) -> Vertex {
             v.u, v.v,
             world_pos.x, world_pos.y, world_pos.z,
             v.texture_index,
-            -1.0  // Special marker for invalid vertices
+            -1.0, // Special marker for invalid vertices
         );
     }
 
@@ -121,7 +126,7 @@ fn project_vertex(v: Vertex) -> Vertex {
         world_pos.y,
         world_pos.z,
         v.texture_index,
-        clip_pos.w
+        clip_pos.w,
     );
 }
 
@@ -133,10 +138,9 @@ fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num
     let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
     if idx >= arrayLength(&vertex_buffer.values) {
         return;
-    }    if idx >= arrayLength(&vertex_buffer.values) {
-        return;
     }
 
+    // Process each vertex directly
     let v = vertex_buffer.values[idx];
     let projected = project_vertex(v);
 

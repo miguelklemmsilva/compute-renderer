@@ -26,6 +26,10 @@ struct ProjectedVertexBuffer {
     values: array<Vertex>,
 };
 
+struct IndexBuffer {
+    values: array<u32>,
+};
+
 struct Fragment {
     depth: atomic<u32>,
     uv: vec2<f32>,
@@ -73,6 +77,7 @@ struct EffectUniform {
 @group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
 @group(0) @binding(2) var<storage, read> tile_buffer: TileBuffer;
 @group(0) @binding(3) var<storage, read> triangle_list_buffer: TriangleListBuffer;
+@group(0) @binding(4) var<storage, read> index_buffer: IndexBuffer;
 
 @group(1) @binding(0) var<uniform> screen_dims: UniformRaster;
 
@@ -81,6 +86,15 @@ struct EffectUniform {
 // -----------------------------------------------------------------------------
 // HELPERS
 // -----------------------------------------------------------------------------
+
+fn pack_float_to_u32(value: f32) -> u32 {
+    let bits = bitcast<u32>(value);
+    return bits;
+}
+
+fn unpack_u32_to_float(bits: u32) -> f32 {
+    return bitcast<f32>(bits);
+}
 
 fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
     var min_max = vec4<f32>();
@@ -100,10 +114,6 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
         return vec3<f32>(-1.0, 1.0, 1.0);
     }
     return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
-}
-
-fn float_to_depth_int(depth: f32) -> u32 {
-    return u32(depth * 4294967295.0);
 }
 
 // Rasterizes a triangle within a specific tile
@@ -181,11 +191,10 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             // Convert to [0,1] range for depth buffer
             let depth = (interpolated_z + 1.0) * 0.5;
             let pixel_id = x + y * u32(screen_dims.width);
-            let new_depth_int = float_to_depth_int(depth);
 
             // Early depth test before doing expensive interpolations
-            let old_depth = atomicLoad(&fragment_buffer.frags[pixel_id].depth);
-            if new_depth_int >= old_depth {
+            let stored_depth = unpack_u32_to_float(atomicLoad(&fragment_buffer.frags[pixel_id].depth));
+            if depth > stored_depth {
                 continue;
             }
 
@@ -198,7 +207,8 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             // Calculate normal in world space
             let normal = normalize(interpolated_world_pos);
 
-            atomicStore(&fragment_buffer.frags[pixel_id].depth, new_depth_int);
+            let packed_depth = pack_float_to_u32(depth);
+            atomicStore(&fragment_buffer.frags[pixel_id].depth, packed_depth);
             fragment_buffer.frags[pixel_id].uv = interpolated_uv;
             fragment_buffer.frags[pixel_id].normal = normal;
             fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
@@ -230,13 +240,17 @@ fn raster_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     // Process each triangle in this tile
     for (var i = 0u; i < triangle_count; i = i + 1u) {
-        let triangle_idx = triangle_list_buffer.indices[triangle_offset + i];
-        let v1 = projected_buffer.values[triangle_idx];
-        let v2 = projected_buffer.values[triangle_idx + 1u];
-        let v3 = projected_buffer.values[triangle_idx + 2u];
+        let base_idx = triangle_list_buffer.indices[triangle_offset + i];
+        let idx1 = index_buffer.values[base_idx];
+        let idx2 = index_buffer.values[base_idx + 1u];
+        let idx3 = index_buffer.values[base_idx + 2u];
 
-        // Skip triangles with any vertices behind the near plane
-        if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
+        let v1 = projected_buffer.values[idx1];
+        let v2 = projected_buffer.values[idx2];
+        let v3 = projected_buffer.values[idx3];
+
+        // Only skip if all vertices are behind the near plane:
+        if v1.w_clip < 0.0 && v2.w_clip < 0.0 && v3.w_clip < 0.0 {
             continue;
         }
 

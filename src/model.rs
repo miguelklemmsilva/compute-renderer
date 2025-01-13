@@ -1,20 +1,13 @@
-use crate::gpu;
+use crate::gpu::util::{Index, Vertex};
 
 pub struct Model {
-    pub vertices: Vec<gpu::util::Vertex>,
+    pub vertices: Vec<Vertex>,
+    pub indices: Vec<Index>,
 }
 
 impl Model {
-    pub fn apply_texture(&mut self, texture_index: u32) {
-        for vertex in &mut self.vertices {
-            vertex.texture_index = texture_index;
-        }
-    }
-
-    pub fn without_texture(&mut self) {
-        for vertex in &mut self.vertices {
-            vertex.texture_index = u32::MAX;
-        }
+    pub fn new(vertices: Vec<Vertex>, indices: Vec<Index>) -> Self {
+        Self { vertices, indices }
     }
 }
 
