@@ -52,9 +52,8 @@ impl Scene {
 
     /// Adds a model and returns a handle (index or reference) for easier access later
     pub fn add_model(&mut self, model_file: &str) -> usize {
-        let vertices = process_obj_model(model_file);
-        let mut model = Model { vertices };
-        model.without_texture();
+        let (vertices, indices) = process_obj_model(model_file);
+        let model = Model { vertices, indices };
         self.models.push(model);
         self.models.len() - 1 // Returns the model index for easy access
     }
@@ -71,7 +70,7 @@ impl Scene {
 
         // Apply texture to the model (assuming one texture per model in this example)
         if let Some(model) = self.models.get_mut(model_index) {
-            model.apply_texture(texture_index);
+            // model.apply_texture(texture_index);
         }
     }
 
@@ -209,6 +208,7 @@ impl Scene {
 
             let new_model = Model {
                 vertices: new_vertices,
+                indices: vec![],
             };
             self.models.push(new_model);
             new_indices.push(self.models.len() - 1);
