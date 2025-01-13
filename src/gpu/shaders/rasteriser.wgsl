@@ -250,7 +250,7 @@ fn raster_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         let v3 = projected_buffer.values[idx3];
 
         // Only skip if all vertices are behind the near plane:
-        if v1.w_clip < 0.0 && v2.w_clip < 0.0 && v3.w_clip < 0.0 {
+        if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
             continue;
         }
 

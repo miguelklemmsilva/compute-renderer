@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     effect::EffectUniform,
-    gpu::util::{Fragment, Index, TextureInfo, Uniform, Vertex},
+    gpu::util::{Fragment, TextureInfo, Uniform, Vertex},
     scene,
 };
 
@@ -48,6 +48,12 @@ impl GpuBuffers {
             indices.extend_from_slice(&model.indices.iter().map(|i| i.0 + index_offset).collect::<Vec<u32>>());
             index_offset += model.vertices.len() as u32;
         }
+
+        let vertex_length = vertices.len();
+        let index_length = indices.len();
+
+        println!("Vertex length: {}", vertex_length);
+        println!("Index length: {}", index_length);
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
