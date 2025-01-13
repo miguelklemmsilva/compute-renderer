@@ -181,9 +181,8 @@ impl VertexPass {
 
         // Calculate workgroups based on number of vertices
         let workgroup_size = 16u32;
-        let num_vertices = num_indices / 3; // Convert from indices to vertices
         let total_threads_needed =
-            ((num_vertices as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
+            ((num_indices as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
         let dispatch_x = (total_threads_needed as f32).sqrt().ceil() as u32;
         let dispatch_y = ((total_threads_needed as f32) / (dispatch_x as f32)).ceil() as u32;
 

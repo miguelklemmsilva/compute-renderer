@@ -136,14 +136,13 @@ fn project_vertex(v: Vertex) -> Vertex {
 @compute @workgroup_size(16, 16)
 fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
     let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
-    if idx >= arrayLength(&vertex_buffer.values) {
+    if idx >= arrayLength(&index_buffer.values) {
         return;
     }
 
-    // Process each vertex directly
-    let v = vertex_buffer.values[idx];
+    // Get vertex through index buffer
+    let vertex_idx = index_buffer.values[idx];
+    let v = vertex_buffer.values[vertex_idx];
     let projected = project_vertex(v);
-
-    // Write to a second buffer so the next pass can read
-    projected_buffer.values[idx] = projected;
+    projected_buffer.values[vertex_idx] = projected;
 }
