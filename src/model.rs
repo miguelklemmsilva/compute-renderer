@@ -3,6 +3,8 @@ use std::{
     io::{BufReader, Cursor},
 };
 
+use glam::Vec3;
+
 use crate::{
     gpu::util::{Index, Vertex},
     util::get_asset_path,
@@ -72,6 +74,27 @@ impl Model {
                 let vertices = (0..m.mesh.positions.len() / 3)
                     .map(|i| {
                         if m.mesh.normals.is_empty() {
+                            // Calculate a simple face normal if no normals are provided
+                            let v1 = Vec3::new(
+                                m.mesh.positions[i * 3],
+                                m.mesh.positions[i * 3 + 1],
+                                m.mesh.positions[i * 3 + 2],
+                            );
+                            let v2 = Vec3::new(
+                                m.mesh.positions[(i + 1) * 3],
+                                m.mesh.positions[(i + 1) * 3 + 1],
+                                m.mesh.positions[(i + 1) * 3 + 2],
+                            );
+                            let v3 = Vec3::new(
+                                m.mesh.positions[(i + 2) * 3],
+                                m.mesh.positions[(i + 2) * 3 + 1],
+                                m.mesh.positions[(i + 2) * 3 + 2],
+                            );
+
+                            let edge1 = v2 - v1;
+                            let edge2 = v3 - v1;
+                            let normal = edge1.cross(edge2).normalize();
+
                             Vertex {
                                 position: [
                                     m.mesh.positions[i * 3],
@@ -83,7 +106,7 @@ impl Model {
                                 } else {
                                     [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
                                 },
-                                normal: [0.0, 0.0, 0.0],
+                                normal: [normal.x, normal.y, normal.z],
                                 material_id: m.mesh.material_id.unwrap_or(0) as u32,
                                 w_clip: 0.0,
                             }

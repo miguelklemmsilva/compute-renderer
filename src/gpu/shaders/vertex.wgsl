@@ -100,7 +100,7 @@ fn project_vertex(v: Vertex) -> Vertex {
         return Vertex(
             0.0, 0.0, 0.0,  // Invalid screen position
             v.u, v.v,
-            world_pos.x, world_pos.y, world_pos.z,
+            v.nx, v.ny, v.nz,  // Keep original normals
             v.texture_index,
             -1.0, // Special marker for invalid vertices
         );
@@ -115,16 +115,16 @@ fn project_vertex(v: Vertex) -> Vertex {
         ndc_pos.z
     );
 
-    // Reuse normal fields to store the original world pos
+    // Keep the original normals and store world position separately
     return Vertex(
         screen_pos.x,
         screen_pos.y,
         screen_pos.z,
         v.u,
         v.v,
-        world_pos.x,
-        world_pos.y,
-        world_pos.z,
+        v.nx,
+        v.ny,
+        v.nz,
         v.texture_index,
         clip_pos.w,
     );
