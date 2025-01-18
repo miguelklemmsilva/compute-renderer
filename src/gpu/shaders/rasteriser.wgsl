@@ -110,8 +110,8 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
         vec3<f32>(v3.x - v1.x, v2.x - v1.x, v1.x - p.x),
         vec3<f32>(v3.y - v1.y, v2.y - v1.y, v1.y - p.y)
     );
-    if abs(u.z) < 1.0 {
-        return vec3<f32>(-1.0, 1.0, 1.0);
+    if abs(u.z) < 1e-7 {
+        return vec3<f32>(-1.0, -1.0, -1.0);
     }
     return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
 }
@@ -194,12 +194,12 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             }
 
             // Convert to [0,1] range for depth buffer
-            let depth = (interpolated_z + 1.0) * 0.5;
+            let depth = interpolated_z;
             let pixel_id = x + y * u32(screen_dims.width);
 
             // Early depth test before doing expensive interpolations
             let stored_depth = unpack_u32_to_float(atomicLoad(&fragment_buffer.frags[pixel_id].depth));
-            if depth > stored_depth {
+            if depth < stored_depth {
                 continue;
             }
 
