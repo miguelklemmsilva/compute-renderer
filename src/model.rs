@@ -1,19 +1,18 @@
-use std::{
-    collections::HashMap,
-    fs::File,
-    io::{BufReader, Cursor},
-};
-
-use glam::Vec3;
+use std::{collections::HashMap, fs::File, io::BufReader};
 
 use crate::{
-    gpu::util::{Index, Vertex},
+    gpu::util::{Index, MaterialInfo, TextureInfo, Vertex},
     util::get_asset_path,
 };
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
     pub materials: Vec<Material>,
+    // Pre-processed data ready for GPU upload
+    pub processed_vertices: Vec<Vertex>,
+    pub processed_indices: Vec<Index>,
+    pub processed_materials: Vec<MaterialInfo>,
+    pub processed_textures: Vec<u32>,
 }
 
 pub struct Material {
@@ -43,19 +42,30 @@ impl Model {
                 ..Default::default()
             },
             |p| {
-                // only run material loading if the file is an mtl file
                 let mat_text = File::open(directory.join(p.to_path_buf())).unwrap();
                 tobj::load_mtl_buf(&mut BufReader::new(mat_text))
             },
         )
         .expect("Failed to load model");
 
-        // 3) Build our Material array
+        // Pre-allocate vectors for processed data
+        let mut processed_vertices = Vec::new();
+        let mut processed_indices = Vec::new();
+        let mut processed_materials = Vec::new();
+        let mut processed_textures = Vec::new();
+        let mut meshes = Vec::new();
         let mut materials = Vec::new();
-        println!("{:?}", m_materials);
 
+        // Track unique textures to avoid duplication
+        let mut texture_map: HashMap<String, (u32, u32, u32)> = HashMap::new(); // path -> (offset, width, height)
+
+        // Keep track of vertex count for index offsetting
+        let mut current_vertex_count = 0;
+
+        // Process materials first
         for m in m_materials.unwrap() {
-            materials.push(Material {
+            // Create the material
+            let material = Material {
                 name: m.name.clone(),
                 diffuse_color: m.diffuse.unwrap_or([0.0, 0.0, 0.0]),
                 diffuse_texture: m
@@ -67,85 +77,120 @@ impl Model {
                 shininess: m.shininess.unwrap_or(0.0),
                 dissolve: m.dissolve.unwrap_or(0.0),
                 optical_density: m.optical_density.unwrap_or(0.0),
-            });
+            };
+
+            // Process material for GPU
+            const NO_TEXTURE_INDEX: u32 = 0xFFFFFFFF;
+            let texture_info = if let Some(tex) = &material.diffuse_texture {
+                let texture_path = m.diffuse_texture.as_ref().unwrap().to_string();
+
+                // Check if we've already processed this texture
+                let (offset, width, height) = if let Some(&cached) = texture_map.get(&texture_path)
+                {
+                    cached
+                } else {
+                    // If not, add it to our processed textures and cache the info
+                    let offset = processed_textures.len() as u32;
+                    processed_textures.extend_from_slice(&tex.data);
+                    let info = (offset, tex.width, tex.height);
+                    texture_map.insert(texture_path, info);
+                    info
+                };
+
+                TextureInfo {
+                    offset,
+                    width,
+                    height,
+                    _padding: 0,
+                }
+            } else {
+                TextureInfo {
+                    offset: NO_TEXTURE_INDEX,
+                    width: 0,
+                    height: 0,
+                    _padding: 0,
+                }
+            };
+
+            let material_info = MaterialInfo {
+                texture_info,
+                ambient: material.ambient,
+                _padding1: 0.0,
+                specular: material.specular,
+                _padding2: 0.0,
+                diffuse: material.diffuse_color,
+                shininess: material.shininess,
+                dissolve: material.dissolve,
+                optical_density: material.optical_density,
+                _padding3: [0.0, 0.0],
+            };
+
+            processed_materials.push(material_info);
+            materials.push(material);
         }
 
-        let meshes = m
-            .into_iter()
-            .map(|m| {
-                let vertices = (0..m.mesh.positions.len() / 3)
-                    .map(|i| {
-                        if m.mesh.normals.is_empty() {
-                            // Calculate a simple face normal if no normals are provided
-                            let v1 = Vec3::new(
-                                m.mesh.positions[i * 3],
-                                m.mesh.positions[i * 3 + 1],
-                                m.mesh.positions[i * 3 + 2],
-                            );
-                            let v2 = Vec3::new(
-                                m.mesh.positions[(i + 1) * 3],
-                                m.mesh.positions[(i + 1) * 3 + 1],
-                                m.mesh.positions[(i + 1) * 3 + 2],
-                            );
-                            let v3 = Vec3::new(
-                                m.mesh.positions[(i + 2) * 3],
-                                m.mesh.positions[(i + 2) * 3 + 1],
-                                m.mesh.positions[(i + 2) * 3 + 2],
-                            );
+        // Process meshes and their vertices/indices
+        for m in m {
+            let vertices = (0..m.mesh.positions.len() / 3)
+                .map(|i| Vertex {
+                    position: [
+                        m.mesh.positions[i * 3],
+                        m.mesh.positions[i * 3 + 1],
+                        m.mesh.positions[i * 3 + 2],
+                    ],
+                    tex_coords: if m.mesh.texcoords.is_empty() {
+                        [0.0, 0.0]
+                    } else {
+                        [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
+                    },
+                    normal: if m.mesh.normals.is_empty() {
+                        [0.0, 0.0, 0.0]
+                    } else {
+                        [
+                            m.mesh.normals[i * 3],
+                            m.mesh.normals[i * 3 + 1],
+                            m.mesh.normals[i * 3 + 2],
+                        ]
+                    },
+                    material_id: m.mesh.material_id.unwrap_or(0) as u32,
+                    w_clip: 0.0,
+                })
+                .collect::<Vec<_>>();
 
-                            let edge1 = v2 - v1;
-                            let edge2 = v3 - v1;
-                            let normal = edge1.cross(edge2).normalize();
+            // Process indices with correct offset
+            let indices: Vec<Index> = m
+                .mesh
+                .indices
+                .iter()
+                .map(|&i| Index(i + current_vertex_count))
+                .collect();
 
-                            Vertex {
-                                position: [
-                                    m.mesh.positions[i * 3],
-                                    m.mesh.positions[i * 3 + 1],
-                                    m.mesh.positions[i * 3 + 2],
-                                ],
-                                tex_coords: if m.mesh.texcoords.is_empty() {
-                                    [0.0, 0.0]
-                                } else {
-                                    [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
-                                },
-                                normal: [normal.x, normal.y, normal.z],
-                                material_id: m.mesh.material_id.unwrap_or(0) as u32,
-                                w_clip: 0.0,
-                            }
-                        } else {
-                            Vertex {
-                                position: [
-                                    m.mesh.positions[i * 3],
-                                    m.mesh.positions[i * 3 + 1],
-                                    m.mesh.positions[i * 3 + 2],
-                                ],
-                                tex_coords: if m.mesh.texcoords.is_empty() {
-                                    [0.0, 0.0]
-                                } else {
-                                    [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
-                                },
-                                normal: [
-                                    m.mesh.normals[i * 3],
-                                    m.mesh.normals[i * 3 + 1],
-                                    m.mesh.normals[i * 3 + 2],
-                                ],
-                                material_id: m.mesh.material_id.unwrap_or(0) as u32,
-                                w_clip: 0.0,
-                            }
-                        }
-                    })
-                    .collect::<Vec<_>>();
+            // Store the mesh
+            meshes.push(Mesh {
+                name: file_name.to_string(),
+                vertices: vertices.clone(),
+                indices: indices.clone(),
+            });
 
-                // material_id is how we know which Material to use
-                Mesh {
-                    name: file_name.to_string(),
-                    vertices,
-                    indices: m.mesh.indices.into_iter().map(|i| Index(i)).collect(),
-                }
-            })
-            .collect::<Vec<_>>();
+            // Update processed data
+            processed_vertices.extend(vertices);
+            processed_indices.extend(indices);
+            current_vertex_count = processed_vertices.len() as u32;
+        }
 
-        Model { meshes, materials }
+        // If no textures exist, use a small fallback
+        if processed_textures.is_empty() {
+            processed_textures.push(0);
+        }
+
+        Model {
+            meshes,
+            materials,
+            processed_vertices,
+            processed_indices,
+            processed_materials,
+            processed_textures,
+        }
     }
 }
 
@@ -157,7 +202,11 @@ pub struct Texture {
 
 impl Texture {
     pub fn load(filename: &str) -> Texture {
-        let img = image::open(filename).unwrap().to_rgba8();
+        // instead of crashing if the texture is not found return empty texture
+        let img = match image::open(filename) {
+            Ok(img) => img.to_rgba8(),
+            Err(_) => return Texture::default(),
+        };
         let (width, height) = img.dimensions();
         let raw_data = img.into_raw();
 

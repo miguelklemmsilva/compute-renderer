@@ -194,5 +194,5 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let A = u32(final_color.a * 255.0);
 
     let output_color = rgba(R, G, B, A);
-    atomicStore(&output_buffer.data[idx], output_color);
+    output_buffer.data[idx] = output_color;
 }
