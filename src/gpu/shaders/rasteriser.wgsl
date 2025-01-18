@@ -133,9 +133,14 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let one_over_w3 = 1.0 / w3;
 
     // Pre-divide attributes by w
-    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz);  // Don't divide world pos by w
+    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz);  // Store world position
     let world_pos2 = vec3<f32>(v2.nx, v2.ny, v2.nz);
     let world_pos3 = vec3<f32>(v3.nx, v3.ny, v3.nz);
+
+    // Store actual normals
+    let normal1 = vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
+    let normal2 = vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
+    let normal3 = vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
 
     let uv1 = vec2<f32>(v1.u, v1.v) * one_over_w1;
     let uv2 = vec2<f32>(v2.u, v2.v) * one_over_w2;
@@ -204,13 +209,13 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             // Interpolate world position (using barycentric directly since these are in world space)
             let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
 
-            // Calculate normal in world space
-            let normal = normalize(interpolated_world_pos);
+            // Interpolate normal (perspective-correct)
+            let interpolated_normal = normalize((bc.x * normal1 + bc.y * normal2 + bc.z * normal3) * w);
 
             let packed_depth = pack_float_to_u32(depth);
             atomicStore(&fragment_buffer.frags[pixel_id].depth, packed_depth);
             fragment_buffer.frags[pixel_id].uv = interpolated_uv;
-            fragment_buffer.frags[pixel_id].normal = normal;
+            fragment_buffer.frags[pixel_id].normal = interpolated_normal;
             fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
             fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
         }
