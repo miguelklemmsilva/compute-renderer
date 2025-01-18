@@ -32,8 +32,23 @@ pub struct Vertex {
     pub position: [f32; 3],
     pub tex_coords: [f32; 2],
     pub normal: [f32; 3],
-    pub texture_index: u32,
+    pub material_id: u32,
     pub w_clip: f32,
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct MaterialInfo {
+    pub texture_info: TextureInfo,
+    pub ambient: [f32; 3],
+    pub _padding1: f32,
+    pub specular: [f32; 3],
+    pub _padding2: f32,
+    pub diffuse: [f32; 3],
+    pub shininess: f32,
+    pub dissolve: f32,
+    pub optical_density: f32,
+    pub _padding3: [f32; 2],
 }
 
 #[repr(C)]
@@ -54,78 +69,4 @@ pub struct Fragment {
     pub world_pos: [f32; 3],
     pub texture_index: u32,
     pub _padding: [u32; 2],
-}
-
-pub fn process_obj_model(file: &str) -> (Vec<Vertex>, Vec<Index>) {
-    let (models, _) = tobj::load_obj(
-        file,
-        &tobj::LoadOptions {
-            triangulate: true,
-            single_index: true,
-            ..Default::default()
-        },
-    )
-    .expect("Failed to load OBJ file");
-
-    let mut final_vertices = Vec::new();
-    let mut final_indices = Vec::new();
-    let mut global_vertex_offset = 0;
-
-    let meshes = models
-        .into_iter()
-        .map(|m| {
-            let vertices = (0..m.mesh.positions.len() / 3)
-                .map(|i| {
-                    if m.mesh.normals.is_empty() {
-                        Vertex {
-                            position: [
-                                m.mesh.positions[3 * i],
-                                m.mesh.positions[3 * i + 1],
-                                m.mesh.positions[3 * i + 2],
-                            ],
-                            tex_coords: if !m.mesh.texcoords.is_empty() {
-                                [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
-                            } else {
-                                [0.0, 0.0] // Default tex_coords if missing
-                            },
-                            normal: [0.0, 1.0, 0.0],
-                            texture_index: u32::MAX,
-                            w_clip: 0.0,
-                        }
-                    } else {
-                        Vertex {
-                            position: [
-                                m.mesh.positions[3 * i],
-                                m.mesh.positions[3 * i + 1],
-                                m.mesh.positions[3 * i + 2],
-                            ],
-                            tex_coords: if !m.mesh.texcoords.is_empty() {
-                                [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
-                            } else {
-                                [0.0, 0.0] // Default tex_coords if missing
-                            },
-                            normal: [
-                                m.mesh.normals[3 * i],
-                                m.mesh.normals[3 * i + 1],
-                                m.mesh.normals[3 * i + 2],
-                            ],
-                            texture_index: u32::MAX,
-                            w_clip: 0.0,
-                        }
-                    }
-                })
-                .collect::<Vec<_>>();
-
-            final_vertices.extend(vertices);
-            final_indices.extend(
-                m.mesh
-                    .indices
-                    .iter()
-                    .map(|i| Index(i + global_vertex_offset)),
-            );
-            global_vertex_offset += m.mesh.positions.len() as u32 / 3;
-        })
-        .collect::<Vec<_>>();
-
-    (final_vertices, final_indices)
 }
