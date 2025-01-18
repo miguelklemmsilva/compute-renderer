@@ -23,7 +23,7 @@ struct TriangleListBuffer {
 }
 
 struct Fragment {
-    depth: atomic<u32>,
+    depth: u32,
     uv: vec2<f32>,
     normal: vec3<f32>,
     world_pos: vec3<f32>,
@@ -67,22 +67,23 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Clear pixel-dependent buffers
     if idx < total_pixels {
         // Clear color buffer to black (0x000000)
-        atomicStore(&output_buffer.data[idx], 0u);
+        output_buffer.data[idx] = 0u;
 
         // Clear fragment buffer
-        atomicStore(&fragment_buffer.frags[idx].depth, 0xFFFFFFFFu);
         fragment_buffer.frags[idx].uv = vec2<f32>(0.0, 0.0);
         fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
         fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
         fragment_buffer.frags[idx].texture_index = 0u;
+        fragment_buffer.frags[idx].depth = 0xFFFFFFFFu;
     }
 
     // Clear tile buffer and set up offsets - ensure we clear all tiles
     if idx < total_tiles {
         // Ensure complete reset of tile data
-        atomicStore(&tile_buffer.triangle_indices[idx].count, 0u);
+
+        tile_buffer.triangle_indices[idx].count = 0u;
         tile_buffer.triangle_indices[idx].offset = 0u;
-        atomicStore(&tile_buffer.triangle_indices[idx].write_index, 0u);
+        tile_buffer.triangle_indices[idx].write_index = 0u;
         tile_buffer.triangle_indices[idx].padding = 0u;  // Clear padding just to be safe
     }
 
