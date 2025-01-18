@@ -70,7 +70,16 @@ impl GPU {
             });
 
         // Calculate total number of indices
-        let total_indices = scene.models.iter().map(|m| m.indices.len()).sum::<usize>() as u32;
+        let total_indices = scene
+            .models
+            .iter()
+            .map(|m| {
+                m.meshes
+                    .iter()
+                    .map(|mesh| mesh.indices.len())
+                    .sum::<usize>()
+            })
+            .sum::<usize>() as u32;
 
         self.clear_pass.execute(&mut encoder, width, height);
         self.vertex_pass.execute(&mut encoder, total_indices);

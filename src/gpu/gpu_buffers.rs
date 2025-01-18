@@ -3,11 +3,11 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     effect::EffectUniform,
-    gpu::util::{Fragment, TextureInfo, Uniform, Vertex},
+    gpu::util::{Fragment, Index, TextureInfo, Uniform, Vertex},
     scene,
 };
 
-use super::raster_pass::TILE_SIZE;
+use super::{raster_pass::TILE_SIZE, util::MaterialInfo};
 
 pub struct GpuBuffers {
     // Buffers
@@ -40,20 +40,82 @@ impl GpuBuffers {
         // 2) vertex and index buffers
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let mut index_offset = 0u32;
+        let mut all_texture_data = Vec::new();
+        let mut material_infos = Vec::new();
 
+        // Keep track of how many vertices we have so far
+        // so that indices for subsequent meshes can be offset correctly.
+        let mut current_vertex_count = 0;
+
+        println!("now building buffers");
+
+        // Loop **once** over every model in the scene
         for model in &scene.models {
-            vertices.extend_from_slice(&model.vertices);
-            // Adjust indices based on the current vertex offset
-            indices.extend_from_slice(&model.indices.iter().map(|i| i.0 + index_offset).collect::<Vec<u32>>());
-            index_offset += model.vertices.len() as u32;
+            // 1) For each mesh in the model, gather vertices/indices
+            for mesh in &model.meshes {
+                // Append them to the big CPU-side list
+                vertices.extend(mesh.vertices.clone());
+
+                // Adjust the mesh’s indices so that they point to the correct vertex offset
+                let converted_indices =
+                    mesh.indices.iter().map(|Index(i)| i + current_vertex_count);
+                indices.extend(converted_indices);
+
+                // Now that we’ve appended these mesh vertices, increment the global offset
+                current_vertex_count = vertices.len() as u32;
+            }
+
+            // 2) For each material, gather texture data and build your MaterialInfo
+            for material in &model.materials {
+                const NO_TEXTURE_INDEX: u32 = 0xFFFFFFFF;
+                let texture_info = if let Some(tex) = &material.diffuse_texture {
+                    let offset = all_texture_data.len() as u32;
+                    all_texture_data.extend_from_slice(&tex.data);
+
+                    TextureInfo {
+                        offset,
+                        width: tex.width,
+                        height: tex.height,
+                        _padding: 0,
+                    }
+                } else {
+                    println!("no texture");
+                    // “No texture” sentinel
+                    TextureInfo {
+                        offset: NO_TEXTURE_INDEX,
+                        width: 0,
+                        height: 0,
+                        _padding: 0,
+                    }
+                };
+
+                // Build a MaterialInfo for the material
+                let material_info = MaterialInfo {
+                    texture_info,
+                    ambient: material.ambient,
+                    _padding1: 0.0,
+                    specular: material.specular,
+                    _padding2: 0.0,
+                    diffuse: material.diffuse_color,
+                    shininess: material.shininess,
+                    dissolve: material.dissolve,
+                    optical_density: material.optical_density,
+                    _padding3: [0.0, 0.0],
+                };
+
+                material_infos.push(material_info);
+            }
         }
 
-        let vertex_length = vertices.len();
-        let index_length = indices.len();
+        // If no textures exist, use a small fallback so you don’t create an empty buffer
+        let fallback_data = vec![0];
+        let texture_data = if all_texture_data.is_empty() {
+            fallback_data
+        } else {
+            all_texture_data
+        };
 
-        println!("Vertex length: {}", vertex_length);
-        println!("Index length: {}", index_length);
+        let index_length = indices.len();
 
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
@@ -123,41 +185,16 @@ impl GpuBuffers {
             mapped_at_creation: false,
         });
 
-        // 9) texture buffers
-        let mut flattened_texture_data = Vec::new();
-        let mut texture_infos = Vec::new();
-        for material in &scene.materials {
-            let offset = flattened_texture_data.len() as u32;
-            flattened_texture_data.extend_from_slice(&material.texture.data);
-            texture_infos.push(TextureInfo {
-                offset,
-                width: material.texture.width,
-                height: material.texture.height,
-                _padding: 0,
-            });
-        }
-        let fallback_data = vec![0xffffffffu32];
-        let texture_data = if flattened_texture_data.is_empty() {
-            &fallback_data
-        } else {
-            &flattened_texture_data
-        };
         let texture_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Texture Buffer"),
-            contents: bytemuck::cast_slice(texture_data),
+            contents: bytemuck::cast_slice(&texture_data),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
-        if texture_infos.is_empty() {
-            texture_infos.push(TextureInfo {
-                offset: 0,
-                width: 1,
-                height: 1,
-                _padding: 0,
-            });
-        }
-        let texture_info_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Texture Info Buffer"),
-            contents: bytemuck::cast_slice(texture_infos.as_slice()),
+
+        // 3) Create the texture info buffer
+        let material_info_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("Material Buffer"),
+            contents: bytemuck::cast_slice(&material_infos),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -166,9 +203,7 @@ impl GpuBuffers {
         let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
         let num_tiles = num_tiles_x * num_tiles_y;
 
-        // Calculate total triangles and space per tile
-        let total_triangles =
-            (vertex_buffer.size() / std::mem::size_of::<Vertex>() as u64) as u32 / 3;
+        let total_triangles = (index_length / 3) as u32;
 
         // Calculate max triangles per tile based on screen coverage
         let avg_triangle_area = (width * height) as f32 / total_triangles as f32;
@@ -232,7 +267,7 @@ impl GpuBuffers {
             fragment_buffer,
             output_buffer,
             texture_buffer,
-            texture_info_buffer,
+            texture_info_buffer: material_info_buffer,
             tile_buffer,
             triangle_list_buffer,
             partial_sums_buffer,

@@ -66,7 +66,7 @@ impl Camera {
         let x = distance * theta.cos() * pitch_cos;
         let y = distance * phi.sin();
         let z = distance * theta.sin() * pitch_cos;
-        camera.eye = Vec3::new(x, y, z) + target;
+        camera.eye = Vec3::new(x, y, z);
 
         camera
     }
@@ -99,10 +99,11 @@ impl Camera {
         right: bool,
         up: bool,
         down: bool,
+        shift: bool,
         delta_time: f32,
     ) {
         if let CameraMode::FirstPerson = self.mode {
-            let velocity = self.movement_speed * delta_time;
+            let velocity = self.movement_speed * delta_time * if shift { 10.0 } else { 1.0 };
             let front = (self.target - self.eye).normalize();
             let right_vec = front.cross(self.up).normalize();
 

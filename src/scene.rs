@@ -1,4 +1,3 @@
-use crate::gpu::util::process_obj_model;
 use crate::model::{Material, Model, Texture};
 use crate::{camera, effect::Effect, gpu};
 use std::time::Duration;
@@ -31,7 +30,6 @@ pub struct Scene {
     pub models: Vec<Model>,
     cameras: Vec<camera::Camera>,
     active_camera: Option<usize>,
-    pub materials: Vec<Material>,
     pub lights: Vec<Light>,
     pub effects: Vec<Effect>,
     pub time: f32,
@@ -43,36 +41,35 @@ impl Scene {
             models: vec![],
             cameras: vec![],
             active_camera: None,
-            materials: vec![],
             lights: vec![],
             effects: vec![],
             time: 0.0,
         }
     }
 
-    /// Adds a model and returns a handle (index or reference) for easier access later
-    pub fn add_model(&mut self, model_file: &str) -> usize {
-        let (vertices, indices) = process_obj_model(model_file);
-        let model = Model { vertices, indices };
+    /// Adds an OBJ model *with MTL material(s)*, loads all textures,
+    /// and sets up each sub-mesh’s `texture_index` to point to the correct Material in `self.materials`.
+    pub async fn add_obj_with_mtl(&mut self, obj_path: &str) -> usize {
+        // (A) Load geometry + textures from the .obj + .mtl
+        let model = Model::new(obj_path).await;
         self.models.push(model);
-        self.models.len() - 1 // Returns the model index for easy access
+        self.models.len() - 1
     }
 
     /// Adds a texture to the scene and applies it to the specified model
-    pub fn add_texture_to_model(&mut self, model_index: usize, texture_file: &str) {
-        let texture = Texture::load(texture_file);
-        let texture_index = self.materials.len() as u32;
+    // pub fn add_texture_to_model(&mut self, model_index: usize, texture_file: &str) {
+    //     let texture = Texture::load(texture_file);
 
-        self.materials.push(Material {
-            texture,
-            texture_index,
-        });
+    //     self.materials.push(Material {
+    //         texture,
+    //         texture_index,
+    //     });
 
-        // Apply texture to the model (assuming one texture per model in this example)
-        if let Some(model) = self.models.get_mut(model_index) {
-            // model.apply_texture(texture_index);
-        }
-    }
+    //     // Apply texture to the model (assuming one texture per model in this example)
+    //     if let Some(model) = self.models.get_mut(model_index) {
+    //         // model.apply_texture(texture_index);
+    //     }
+    // }
 
     pub fn add_camera(&mut self, camera: camera::Camera) {
         self.cameras.push(camera);
@@ -178,86 +175,86 @@ impl Scene {
         count: usize,
         grid_spacing: f32,
     ) -> Vec<usize> {
-        let mut new_indices = Vec::with_capacity(count);
+        // let mut new_indices = Vec::with_capacity(count);
 
-        // Clone the original model's vertices first to avoid multiple borrows
-        let vertices = if let Some(original_model) = self.models.get(model_index) {
-            original_model.vertices.clone()
-        } else {
-            return new_indices;
-        };
+        // // Clone the original model's vertices first to avoid multiple borrows
+        // let vertices = if let Some(original_model) = self.models.get(model_index) {
+        //     original_model.vertices.clone()
+        // } else {
+        //     return new_indices;
+        // };
 
-        // Calculate grid dimensions for a square-ish layout
-        let grid_size = (count as f32).sqrt().ceil() as usize;
+        // // Calculate grid dimensions for a square-ish layout
+        // let grid_size = (count as f32).sqrt().ceil() as usize;
 
-        // Now create new models with the cloned vertices
-        for i in 0..count {
-            let row = i / grid_size;
-            let col = i % grid_size;
+        // // Now create new models with the cloned vertices
+        // for i in 0..count {
+        //     let row = i / grid_size;
+        //     let col = i % grid_size;
 
-            // Calculate offset from center
-            let x_offset = (col as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
-            let z_offset = (row as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
+        //     // Calculate offset from center
+        //     let x_offset = (col as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
+        //     let z_offset = (row as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
 
-            // Create new vertices with offset
-            let mut new_vertices = vertices.clone();
-            for vertex in &mut new_vertices {
-                vertex.position[0] += x_offset;
-                vertex.position[2] += z_offset;
-            }
+        //     // Create new vertices with offset
+        //     let mut new_vertices = vertices.clone();
+        //     for vertex in &mut new_vertices {
+        //         vertex.position[0] += x_offset;
+        //         vertex.position[2] += z_offset;
+        //     }
 
-            let new_model = Model {
-                vertices: new_vertices,
-                indices: vec![],
-            };
-            self.models.push(new_model);
-            new_indices.push(self.models.len() - 1);
-        }
+        //     let new_model = Model {
+        //         vertices: new_vertices,
+        //         indices: vec![],
+        //     };
+        //     self.models.push(new_model);
+        //     new_indices.push(self.models.len() - 1);
+        // }
 
-        // Clear existing lights as we'll set up new ones for the stress test
-        self.lights.clear();
+        // // Clear existing lights as we'll set up new ones for the stress test
+        // self.lights.clear();
 
-        // Calculate the total size of the grid
-        let total_width = grid_size as f32 * grid_spacing;
-        let grid_height = 8.0; // Height of lights above the grid
+        // // Calculate the total size of the grid
+        // let total_width = grid_size as f32 * grid_spacing;
+        // let grid_height = 8.0; // Height of lights above the grid
 
-        // Add a brighter central light above the scene
-        self.add_light([0.0, grid_height, 0.0], [1.0, 1.0, 1.0], 2.0);
+        // // Add a brighter central light above the scene
+        // self.add_light([0.0, grid_height, 0.0], [1.0, 1.0, 1.0], 2.0);
 
-        // Add corner lights to ensure good coverage
-        let corner_intensity = 1.5;
-        let half_width = total_width / 2.0;
+        // // Add corner lights to ensure good coverage
+        // let corner_intensity = 1.5;
+        // let half_width = total_width / 2.0;
 
-        // Add lights at each corner of the grid
-        self.add_light(
-            [half_width, grid_height, half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
-        self.add_light(
-            [-half_width, grid_height, half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
-        self.add_light(
-            [half_width, grid_height, -half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
-        self.add_light(
-            [-half_width, grid_height, -half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
+        // // Add lights at each corner of the grid
+        // self.add_light(
+        //     [half_width, grid_height, half_width],
+        //     [1.0, 0.9, 0.8],
+        //     corner_intensity,
+        // );
+        // self.add_light(
+        //     [-half_width, grid_height, half_width],
+        //     [1.0, 0.9, 0.8],
+        //     corner_intensity,
+        // );
+        // self.add_light(
+        //     [half_width, grid_height, -half_width],
+        //     [1.0, 0.9, 0.8],
+        //     corner_intensity,
+        // );
+        // self.add_light(
+        //     [-half_width, grid_height, -half_width],
+        //     [1.0, 0.9, 0.8],
+        //     corner_intensity,
+        // );
 
-        new_indices
+        // new_indices
+        vec![0]
     }
 }
 
 pub struct SceneConfig {
     pub name: String,
     pub model_path: String,
-    pub texture_path: Option<String>,
     pub lights: Vec<(
         /* position */ [f32; 3],
         /* color */ [f32; 3],
@@ -304,7 +301,6 @@ impl Default for SceneConfig {
         Self {
             name: String::new(),
             model_path: String::new(),
-            texture_path: None,
             lights: Vec::new(),
             effects: None,
             stress_test: None,

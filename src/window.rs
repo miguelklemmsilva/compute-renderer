@@ -64,6 +64,7 @@ impl Window {
                 self.keys_down.contains(&KeyCode::KeyA),
                 self.keys_down.contains(&KeyCode::KeyD),
                 self.keys_down.contains(&KeyCode::Space),
+                self.keys_down.contains(&KeyCode::KeyC),
                 self.keys_down.contains(&KeyCode::ShiftLeft),
                 movement_speed,
             );

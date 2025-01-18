@@ -4,7 +4,6 @@ use camera::CameraMode;
 use effect::Effect;
 use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig, StressTestConfig};
-use util::get_asset_path;
 use window::Window;
 
 mod camera;
@@ -20,34 +19,30 @@ fn main() {
     let height = 900;
     let width = 1600;
 
-    let lights = vec![
-        ([0.0, 10.0, 5.0], [1.0, 1.0, 1.0], 1.0),
-        ([-10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 1.0),
-        ([10.0, 0.0, 5.0], [1.0, 1.0, 1.0], 1.0),
-    ];
+    let lights = vec![([0.0, 0.0, 200.0], [1.0, 1.0, 1.0], 10000.0)];
 
     // List of scenes to benchmark
     let scenes = vec![
         // Interactive Scene
         SceneConfig {
             name: "Interactive Scene".to_string(),
-            model_path: get_asset_path("bmw.obj")
-                .to_string_lossy()
-                .to_string(),
-            texture_path: None,
+            model_path: String::from("bmw/bmw.obj"),
             lights: lights.clone(),
             effects: None,
             stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::FirstPerson,
-                ..Default::default()
+                position: [0.0, 0.0, 0.0],
+                distance: 0.0,
+                theta: 0.0,
+                phi: 0.0,
+                target: [0.0, 0.0, 0.0],
             },
             benchmark_duration_secs: u64::MAX, // Run indefinitely until ESC
         },
         SceneConfig {
             name: "Suzanne - Wave Effect".to_string(),
-            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
-            texture_path: None,
+            model_path: String::from("suzanne.obj"),
             lights: lights.clone(),
             effects: None,
             stress_test: None,
@@ -59,14 +54,7 @@ fn main() {
         },
         SceneConfig {
             name: "Suzanne - Edge Melt Effect".to_string(),
-            model_path: get_asset_path("african_head.obj")
-                .to_string_lossy()
-                .to_string(),
-            texture_path: Some(
-                get_asset_path("african_head_diffuse.tga")
-                    .to_string_lossy()
-                    .to_string(),
-            ),
+            model_path: String::from("african_head.obj"),
             lights: lights.clone(),
             effects: Some(vec![Effect::edge_melt(0.33, 1.0)]),
             stress_test: None,
@@ -79,68 +67,13 @@ fn main() {
         },
         SceneConfig {
             name: "Suzanne - Voxelize".to_string(),
-            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
-            texture_path: None,
+            model_path: String::from("suzanne.obj"),
             lights: lights.clone(),
             effects: Some(vec![Effect::voxelize(0.5, 5.0)]),
             stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 2.0,
-                ..Default::default()
-            },
-            benchmark_duration_secs: 10,
-        },
-        // Stress test scenes with increasing model counts
-        SceneConfig {
-            name: "Stress Test - 10 Models".to_string(),
-            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
-            texture_path: None,
-            lights: lights.clone(),
-            effects: None,
-            stress_test: Some(StressTestConfig {
-                model_count: 10,
-                grid_spacing: 3.0,
-            }),
-            camera_config: CameraConfig {
-                mode: CameraMode::Orbit,
-                distance: 3.0 * (10_f32).sqrt(),
-                ..Default::default()
-            },
-            benchmark_duration_secs: 10,
-        },
-        SceneConfig {
-            name: "Stress Test - 100 Models".to_string(),
-            model_path: get_asset_path("suzanne.obj").to_string_lossy().to_string(),
-            texture_path: None,
-            lights: lights.clone(),
-            effects: None,
-            stress_test: Some(StressTestConfig {
-                model_count: 100,
-                grid_spacing: 3.0,
-            }),
-            camera_config: CameraConfig {
-                mode: CameraMode::Orbit,
-                distance: 3.0 * (100_f32).sqrt(),
-                ..Default::default()
-            },
-            benchmark_duration_secs: 10,
-        },
-        SceneConfig {
-            name: "Stress Test - 1000 Models".to_string(),
-            model_path: get_asset_path("african_head.obj")
-                .to_string_lossy()
-                .to_string(),
-            texture_path: None,
-            lights: lights.clone(),
-            effects: None,
-            stress_test: Some(StressTestConfig {
-                model_count: 1000,
-                grid_spacing: 3.0,
-            }),
-            camera_config: CameraConfig {
-                mode: CameraMode::Orbit,
-                distance: 3.0 * (1000_f32).sqrt(),
                 ..Default::default()
             },
             benchmark_duration_secs: 10,
@@ -165,7 +98,7 @@ fn main() {
     );
 
     // Create the first scene
-    let window = match create_scene_window(scene, width, height, &window, collector) {
+    let window = match pollster::block_on(create_scene_window(scene, width, height, &window, collector)) {
         Ok(window) => window,
         Err(e) => {
             eprintln!("Failed to create scene {}: {}", scene.name, e);
@@ -176,7 +109,7 @@ fn main() {
     window.run_with_event_loop(event_loop);
 }
 
-fn create_scene_window(
+async fn create_scene_window(
     scene_config: &SceneConfig,
     width: usize,
     height: usize,
@@ -186,23 +119,23 @@ fn create_scene_window(
     let mut scene = scene::Scene::new();
 
     // Setup scene
-    let base_model = scene.add_model(&scene_config.model_path);
+    let base_model = scene.add_obj_with_mtl(&scene_config.model_path).await;
 
     // Handle stress test if configured
-    if let Some(stress_config) = &scene_config.stress_test {
-        if stress_config.model_count > 1 {
-            scene.duplicate_model_for_stress_test(
-                base_model,
-                stress_config.model_count - 1,
-                stress_config.grid_spacing,
-            );
-        }
-    }
+    // if let Some(stress_config) = &scene_config.stress_test {
+    //     if stress_config.model_count > 1 {
+    //         scene.duplicate_model_for_stress_test(
+    //             base_model,
+    //             stress_config.model_count - 1,
+    //             stress_config.grid_spacing,
+    //         );
+    //     }
+    // }
 
     // Add texture if specified
-    if let Some(texture_path) = &scene_config.texture_path {
-        scene.add_texture_to_model(base_model, texture_path);
-    }
+    // if let Some(texture_path) = &scene_config.texture_path {
+    //     scene.add_texture_to_model(base_model, texture_path);
+    // }
 
     // Add lights from config
     for (position, color, intensity) in &scene_config.lights {
