@@ -37,80 +37,26 @@ impl GpuBuffers {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // 2) vertex and index buffers
+        // 2) Get pre-processed data from all models
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
         let mut all_texture_data = Vec::new();
         let mut material_infos = Vec::new();
-
-        // Keep track of how many vertices we have so far
-        // so that indices for subsequent meshes can be offset correctly.
         let mut current_vertex_count = 0;
 
-        println!("now building buffers");
-
-        // Loop **once** over every model in the scene
         for model in &scene.models {
-            // 1) For each mesh in the model, gather vertices/indices
-            for mesh in &model.meshes {
-                // Append them to the big CPU-side list
-                vertices.extend(mesh.vertices.clone());
+            // Add pre-processed vertices and indices
+            vertices.extend_from_slice(&model.processed_vertices);
+            indices.extend_from_slice(&model.processed_indices);
+            material_infos.extend_from_slice(&model.processed_materials);
+            all_texture_data.extend_from_slice(&model.processed_textures);
 
-                // Adjust the mesh’s indices so that they point to the correct vertex offset
-                let converted_indices =
-                    mesh.indices.iter().map(|Index(i)| i + current_vertex_count);
-                indices.extend(converted_indices);
-
-                // Now that we’ve appended these mesh vertices, increment the global offset
-                current_vertex_count = vertices.len() as u32;
-            }
-
-            // 2) For each material, gather texture data and build your MaterialInfo
-            for material in &model.materials {
-                const NO_TEXTURE_INDEX: u32 = 0xFFFFFFFF;
-                let texture_info = if let Some(tex) = &material.diffuse_texture {
-                    let offset = all_texture_data.len() as u32;
-                    all_texture_data.extend_from_slice(&tex.data);
-
-                    TextureInfo {
-                        offset,
-                        width: tex.width,
-                        height: tex.height,
-                        _padding: 0,
-                    }
-                } else {
-                    println!("no texture");
-                    // “No texture” sentinel
-                    TextureInfo {
-                        offset: NO_TEXTURE_INDEX,
-                        width: 0,
-                        height: 0,
-                        _padding: 0,
-                    }
-                };
-
-                // Build a MaterialInfo for the material
-                let material_info = MaterialInfo {
-                    texture_info,
-                    ambient: material.ambient,
-                    _padding1: 0.0,
-                    specular: material.specular,
-                    _padding2: 0.0,
-                    diffuse: material.diffuse_color,
-                    shininess: material.shininess,
-                    dissolve: material.dissolve,
-                    optical_density: material.optical_density,
-                    _padding3: [0.0, 0.0],
-                };
-
-                material_infos.push(material_info);
-            }
+            current_vertex_count = vertices.len() as u32;
         }
 
-        // If no textures exist, use a small fallback so you don’t create an empty buffer
-        let fallback_data = vec![0];
+        // If no textures exist, use a small fallback
         let texture_data = if all_texture_data.is_empty() {
-            fallback_data
+            vec![0]
         } else {
             all_texture_data
         };
