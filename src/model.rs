@@ -1,4 +1,5 @@
 use std::{
+    collections::HashMap,
     fs::File,
     io::{BufReader, Cursor},
 };
@@ -42,6 +43,7 @@ impl Model {
                 ..Default::default()
             },
             |p| {
+                // only run material loading if the file is an mtl file
                 let mat_text = File::open(directory.join(p.to_path_buf())).unwrap();
                 tobj::load_mtl_buf(&mut BufReader::new(mat_text))
             },
