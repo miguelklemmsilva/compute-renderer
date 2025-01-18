@@ -199,7 +199,12 @@ impl BinningPass {
         let total_tris = scene
             .models
             .iter()
-            .map(|m| m.indices.len() / 3)
+            .map(|m| {
+                m.meshes
+                    .iter()
+                    .map(|mesh| mesh.indices.len() / 3)
+                    .sum::<usize>()
+            })
             .sum::<usize>() as u32;
 
         // Each thread handles 1 triangle, but each WG has 16*16=256 threads
@@ -235,9 +240,6 @@ impl BinningPass {
         let tile_h = (height + TILE_SIZE - 1) / TILE_SIZE;
 
         let dispatch = tile_w * tile_h;
-
-        let wg_x = (tile_w + 15) / 16;
-        let wg_y = (tile_h + 15) / 16;
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
