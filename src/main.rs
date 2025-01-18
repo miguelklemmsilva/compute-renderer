@@ -2,6 +2,7 @@ use std::time::Duration;
 
 use camera::CameraMode;
 use effect::Effect;
+use egui_winit::winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
 use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig, StressTestConfig};
 use window::Window;
@@ -19,7 +20,7 @@ fn main() {
     let height = 900;
     let width = 1600;
 
-    let lights = vec![([0.0, 0.0, 200.0], [1.0, 1.0, 1.0], 10000.0)];
+    let lights = vec![([0.0, -100.0, 0.0], [1.0, 1.0, 1.0], 10000.0)];
 
     // List of scenes to benchmark
     let scenes = vec![
@@ -80,91 +81,66 @@ fn main() {
         },
     ];
 
-    // Create a single event loop and window for all scenes
-    let event_loop = winit::event_loop::EventLoop::new().expect("Failed to create event loop");
-    let window = winit::window::WindowBuilder::new()
-        .with_title("Minimal Renderer - ESC to exit")
-        .with_inner_size(winit::dpi::LogicalSize::new(width as f64, height as f64))
-        .with_resizable(true)
-        .build(&event_loop)
-        .expect("Failed to create window");
+    // Create a single event loop for all scenes
+    let event_loop = EventLoop::new().expect("Failed to create event loop");
+    event_loop.set_control_flow(ControlFlow::Poll);
 
-    let scene = &scenes[0];
+    let scene_config = &scenes[0];
 
     let collector: PerformanceCollector = PerformanceCollector::new(
-        scene.name.clone(),
+        scene_config.name.clone(),
         0,
-        Duration::from_secs(scene.benchmark_duration_secs),
+        Duration::from_secs(scene_config.benchmark_duration_secs),
     );
 
+    // Create the scene from config
+    let mut scene = scene::Scene::new();
+
+    // Setup scene
+    pollster::block_on(async {
+        let base_model = scene.add_obj_with_mtl(&scene_config.model_path).await;
+
+        // Add lights from config
+        for (position, color, intensity) in &scene_config.lights {
+            scene.add_light(*position, *color, *intensity);
+        }
+
+        // Add effects if specified
+        if let Some(effects) = &scene_config.effects {
+            for effect in effects {
+                scene.add_effect(effect.clone());
+            }
+        }
+
+        // Add camera and set active
+        let camera = match scene_config.camera_config.mode {
+            camera::CameraMode::FirstPerson => camera::Camera::new_first_person(
+                glam::Vec3::from(scene_config.camera_config.position),
+                (width as f32) / (height as f32),
+            ),
+            camera::CameraMode::Orbit => camera::Camera::new(
+                scene_config.camera_config.distance,
+                scene_config.camera_config.theta,
+                scene_config.camera_config.phi,
+                glam::Vec3::from(scene_config.camera_config.target),
+                (width as f32) / (height as f32),
+            ),
+        };
+        scene.add_camera(camera);
+        scene.set_active_camera(0);
+    });
+
     // Create the first scene
-    let window = match pollster::block_on(create_scene_window(scene, width, height, &window, collector)) {
+    let mut window = match Window::new_with_window(width, height, scene, collector) {
         Ok(window) => window,
         Err(e) => {
-            eprintln!("Failed to create scene {}: {}", scene.name, e);
+            eprintln!("Failed to create scene {}: {}", scene_config.name, e);
             return;
         }
     };
 
-    window.run_with_event_loop(event_loop);
-}
-
-async fn create_scene_window(
-    scene_config: &SceneConfig,
-    width: usize,
-    height: usize,
-    winit_window: &winit::window::Window,
-    collector: PerformanceCollector,
-) -> Result<Window, Box<dyn std::error::Error>> {
-    let mut scene = scene::Scene::new();
-
-    // Setup scene
-    let base_model = scene.add_obj_with_mtl(&scene_config.model_path).await;
-
-    // Handle stress test if configured
-    // if let Some(stress_config) = &scene_config.stress_test {
-    //     if stress_config.model_count > 1 {
-    //         scene.duplicate_model_for_stress_test(
-    //             base_model,
-    //             stress_config.model_count - 1,
-    //             stress_config.grid_spacing,
-    //         );
-    //     }
-    // }
-
-    // Add texture if specified
-    // if let Some(texture_path) = &scene_config.texture_path {
-    //     scene.add_texture_to_model(base_model, texture_path);
-    // }
-
-    // Add lights from config
-    for (position, color, intensity) in &scene_config.lights {
-        scene.add_light(*position, *color, *intensity);
-    }
-
-    // Add effects if specified
-    if let Some(effects) = &scene_config.effects {
-        for effect in effects {
-            scene.add_effect(effect.clone());
-        }
-    }
-
-    // Add camera and set active
-    let camera = match scene_config.camera_config.mode {
-        camera::CameraMode::FirstPerson => camera::Camera::new_first_person(
-            glam::Vec3::from(scene_config.camera_config.position),
-            (width as f32) / (height as f32),
-        ),
-        camera::CameraMode::Orbit => camera::Camera::new(
-            scene_config.camera_config.distance,
-            scene_config.camera_config.theta,
-            scene_config.camera_config.phi,
-            glam::Vec3::from(scene_config.camera_config.target),
-            (width as f32) / (height as f32),
-        ),
-    };
-    scene.add_camera(camera);
-    scene.set_active_camera(0);
-
-    Window::new_with_window(width, height, scene, winit_window, collector)
+    // Run the event loop with our application handler
+    event_loop
+        .run_app(&mut window)
+        .expect("Failed to run application");
 }
