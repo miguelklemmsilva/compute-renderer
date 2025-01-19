@@ -3,11 +3,11 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     effect::EffectUniform,
-    gpu::util::{Fragment, Index, TextureInfo, Uniform, Vertex},
+    gpu::util::{Fragment, Uniform, Vertex},
     scene,
 };
 
-use super::{raster_pass::TILE_SIZE, util::MaterialInfo};
+use super::raster_pass::TILE_SIZE;
 
 pub struct GpuBuffers {
     // Buffers
@@ -42,7 +42,6 @@ impl GpuBuffers {
         let mut indices = Vec::new();
         let mut all_texture_data = Vec::new();
         let mut material_infos = Vec::new();
-        let mut current_vertex_count = 0;
 
         for model in &scene.models {
             // Add pre-processed vertices and indices
@@ -50,8 +49,6 @@ impl GpuBuffers {
             indices.extend_from_slice(&model.processed_indices);
             material_infos.extend_from_slice(&model.processed_materials);
             all_texture_data.extend_from_slice(&model.processed_textures);
-
-            current_vertex_count = vertices.len() as u32;
         }
 
         // If no textures exist, use a small fallback
