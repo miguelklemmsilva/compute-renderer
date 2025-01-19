@@ -1,4 +1,4 @@
-use wgpu::{BindingResource, PipelineCompilationOptions};
+use wgpu::PipelineCompilationOptions;
 
 use super::{raster_pass::TILE_SIZE, util::dispatch_size, GpuBuffers};
 use crate::scene;
