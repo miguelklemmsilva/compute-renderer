@@ -2,10 +2,10 @@ use std::time::Duration;
 
 use camera::CameraMode;
 use effect::Effect;
-use winit::event_loop::{ControlFlow, EventLoop};
 use performance::PerformanceCollector;
-use scene::{CameraConfig, SceneConfig, StressTestConfig};
+use scene::{CameraConfig, SceneConfig};
 use window::Window;
+use winit::event_loop::{ControlFlow, EventLoop};
 
 mod camera;
 mod effect;
@@ -28,9 +28,9 @@ fn main() {
         SceneConfig {
             name: "Interactive Scene".to_string(),
             model_path: String::from("bmw/bmw.obj"),
+            texture_path: None,
             lights: lights.clone(),
             effects: None,
-            stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::FirstPerson,
                 position: [0.0, 0.0, 0.0],
@@ -45,12 +45,9 @@ fn main() {
         SceneConfig {
             name: "Stress Test - 100 Models".to_string(),
             model_path: String::from("suzanne.obj"),
-            lights: vec![], // Lights will be set up by stress test
+            texture_path: None,
+            lights: lights.clone(),
             effects: None,
-            stress_test: Some(StressTestConfig {
-                model_count: 100,
-                grid_spacing: 2.0,
-            }),
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 30.0, // Increased distance to view the entire grid
@@ -64,9 +61,9 @@ fn main() {
         SceneConfig {
             name: "Suzanne - Wave Effect".to_string(),
             model_path: String::from("suzanne.obj"),
+            texture_path: None,
             lights: lights.clone(),
             effects: None,
-            stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 ..Default::default()
@@ -76,9 +73,9 @@ fn main() {
         SceneConfig {
             name: "Suzanne - Edge Melt Effect".to_string(),
             model_path: String::from("african_head.obj"),
+            texture_path: Some(String::from("african_head.tga")),
             lights: lights.clone(),
             effects: Some(vec![Effect::edge_melt(0.33, 1.0)]),
-            stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 2.0,
@@ -89,9 +86,9 @@ fn main() {
         SceneConfig {
             name: "Suzanne - Voxelize".to_string(),
             model_path: String::from("suzanne.obj"),
+            texture_path: None,
             lights: lights.clone(),
             effects: Some(vec![Effect::voxelize(0.5, 5.0)]),
-            stress_test: None,
             camera_config: CameraConfig {
                 mode: CameraMode::Orbit,
                 distance: 2.0,

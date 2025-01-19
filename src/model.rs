@@ -7,8 +7,6 @@ use crate::{
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
-    pub materials: Vec<Material>,
-    // Pre-processed data ready for GPU upload
     pub processed_vertices: Vec<Vertex>,
     pub processed_indices: Vec<Index>,
     pub processed_materials: Vec<MaterialInfo>,
@@ -16,7 +14,6 @@ pub struct Model {
 }
 
 pub struct Material {
-    pub name: String,
     pub diffuse_color: [f32; 3],
     pub diffuse_texture: Option<Texture>,
     pub ambient: [f32; 3],
@@ -66,7 +63,6 @@ impl Model {
         for m in m_materials.unwrap() {
             // Create the material
             let material = Material {
-                name: m.name.clone(),
                 diffuse_color: m.diffuse.unwrap_or([0.0, 0.0, 0.0]),
                 diffuse_texture: m
                     .diffuse_texture
@@ -167,8 +163,6 @@ impl Model {
 
             // Store the mesh
             meshes.push(Mesh {
-                name: file_name.to_string(),
-                vertices: vertices.clone(),
                 indices: indices.clone(),
             });
 
@@ -185,7 +179,6 @@ impl Model {
 
         Model {
             meshes,
-            materials,
             processed_vertices,
             processed_indices,
             processed_materials,
@@ -238,7 +231,5 @@ impl Texture {
 }
 
 pub struct Mesh {
-    pub name: String,
-    pub vertices: Vec<Vertex>,
     pub indices: Vec<Index>,
 }
