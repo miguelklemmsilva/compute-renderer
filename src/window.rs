@@ -1,19 +1,17 @@
-use egui::Context as EguiContext;
-use egui_winit::winit::application::ApplicationHandler;
-use egui_winit::winit::dpi::{LogicalSize, Size};
-use egui_winit::winit::event::{DeviceEvent, ElementState, Event, MouseButton, WindowEvent};
-use egui_winit::winit::event_loop::{ActiveEventLoop, ControlFlow, EventLoop};
-use egui_winit::winit::keyboard::{KeyCode, PhysicalKey};
-use egui_winit::winit::window::{Window as EguiWinitWindow, WindowAttributes, WindowId};
-use egui_winit::State as EguiWinitState;
 use pixels::{Pixels, SurfaceTexture};
 use std::{collections::HashSet, time::Duration};
+use winit::application::ApplicationHandler;
+use winit::dpi::LogicalSize;
+use winit::event::{DeviceEvent, ElementState, MouseButton, WindowEvent};
+use winit::event_loop::ActiveEventLoop;
+use winit::keyboard::{KeyCode, PhysicalKey};
+use winit::window::{Window as WinitWindow, WindowAttributes, WindowId};
 
 use crate::{gpu, performance::PerformanceCollector, scene};
 
 pub struct Window {
     // Store the winit window so we can pass it to egui
-    winit_window: Option<EguiWinitWindow>,
+    winit_window: Option<WinitWindow>,
 
     pixels: Option<Pixels<'static>>,
     pub gpu: gpu::gpu::GPU,
@@ -24,10 +22,12 @@ pub struct Window {
     pub mouse_pressed: bool,
     pub collector: PerformanceCollector,
 
-    egui_state: Option<EguiWinitState>,
-
     last_frame_time: std::time::Instant,
     frame_times: Vec<f64>,
+
+    // Scene cycling
+    scene_configs: Vec<scene::SceneConfig>,
+    current_scene_index: usize,
 }
 
 impl ApplicationHandler for Window {
@@ -49,97 +49,57 @@ impl ApplicationHandler for Window {
             )
         };
 
-        // Create egui context
-        let egui_ctx = EguiContext::default();
-        let viewport_id = egui_ctx.viewport_id();
-
-        // Create egui winit state
-        let egui_state = EguiWinitState::new(egui_ctx, viewport_id, event_loop, None, None, None);
-
         self.winit_window = Some(winit_window);
         self.pixels = Some(pixels);
-        self.egui_state = Some(egui_state);
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
-        if let Some(winit_window) = &self.winit_window {
-            if let Some(egui_state) = &mut self.egui_state {
-                // First let egui handle the event
-                let response = egui_state.on_window_event(winit_window, &event);
-                let consumed = response.consumed;
-
-                if !consumed {
-                    // If egui didn't consume it, handle it ourselves
-                    match event {
-                        WindowEvent::CloseRequested => {
-                            self.collector.finalise();
-                            event_loop.exit();
-                        }
-                        WindowEvent::KeyboardInput { event, .. } => {
-                            if let PhysicalKey::Code(keycode) = event.physical_key {
-                                match event.state {
-                                    ElementState::Pressed => {
-                                        self.keys_down.insert(keycode);
-                                        if keycode == KeyCode::Escape {
-                                            event_loop.exit();
-                                        }
-                                    }
-                                    ElementState::Released => {
-                                        self.keys_down.remove(&keycode);
-                                    }
-                                }
+        match event {
+            WindowEvent::CloseRequested => {
+                self.collector.finalise();
+                event_loop.exit();
+            }
+            WindowEvent::KeyboardInput { event, .. } => {
+                if let PhysicalKey::Code(keycode) = event.physical_key {
+                    match event.state {
+                        ElementState::Pressed => {
+                            self.keys_down.insert(keycode);
+                            if keycode == KeyCode::Escape {
+                                // Instead of exiting, try to load next scene
+                                self.collector.finalise();
+                                pollster::block_on(self.load_next_scene(event_loop));
                             }
                         }
-                        WindowEvent::MouseInput {
-                            state,
-                            button: MouseButton::Left,
-                            ..
-                        } => {
-                            self.mouse_pressed = state == ElementState::Pressed;
+                        ElementState::Released => {
+                            self.keys_down.remove(&keycode);
                         }
-                        WindowEvent::CursorMoved { position, .. } => {
-                            if self.mouse_pressed {
-                                static mut LAST_X: f32 = 0.0;
-                                static mut LAST_Y: f32 = 0.0;
-
-                                unsafe {
-                                    let x = position.x as f32;
-                                    let y = position.y as f32;
-
-                                    if LAST_X != 0.0 || LAST_Y != 0.0 {
-                                        let x_offset = x - LAST_X;
-                                        let y_offset = LAST_Y - y; // Reversed since y-coordinates go from bottom to top
-
-                                        if let Some(camera) = self.scene.get_active_camera_mut() {
-                                            camera.process_mouse(x_offset, y_offset);
-                                        }
-                                    }
-
-                                    LAST_X = x;
-                                    LAST_Y = y;
-                                }
-                            }
-                        }
-                        WindowEvent::Resized(size) => {
-                            self.width = size.width as usize;
-                            self.height = size.height as usize;
-                            if let Some(pixels) = &mut self.pixels {
-                                if pixels.resize_surface(size.width, size.height).is_err() {
-                                    event_loop.exit();
-                                }
-                            }
-                        }
-                        _ => (),
                     }
                 }
             }
+            WindowEvent::MouseInput {
+                state,
+                button: MouseButton::Left,
+                ..
+            } => {
+                self.mouse_pressed = state == ElementState::Pressed;
+            },
+            WindowEvent::Resized(size) => {
+                self.width = size.width as usize;
+                self.height = size.height as usize;
+                if let Some(pixels) = &mut self.pixels {
+                    if pixels.resize_surface(size.width, size.height).is_err() {
+                        event_loop.exit();
+                    }
+                }
+            }
+            _ => (),
         }
     }
 
     fn device_event(
         &mut self,
         _event_loop: &ActiveEventLoop,
-        _device_id: egui_winit::winit::event::DeviceId,
+        _device_id: winit::event::DeviceId,
         event: DeviceEvent,
     ) {
         match event {
@@ -163,8 +123,12 @@ impl ApplicationHandler for Window {
         // Async block to call `self.update(delta_time).await`
         if pollster::block_on(async {
             if !self.update(delta_time).await {
-                event_loop.exit();
-                return Err(());
+                // Scene is done, try to load next scene
+                self.collector.finalise();
+                if !self.load_next_scene(event_loop).await {
+                    event_loop.exit();
+                    return Err(());
+                }
             }
             Ok::<(), ()>(())
         })
@@ -180,7 +144,6 @@ impl ApplicationHandler for Window {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        // Finalize performance stats if needed
         self.collector.finalise();
     }
 }
@@ -206,10 +169,49 @@ impl Window {
             keys_down: HashSet::new(),
             mouse_pressed: false,
             collector,
-            egui_state: None,
             last_frame_time: std::time::Instant::now(),
             frame_times: Vec::with_capacity(100),
+            scene_configs: Vec::new(),
+            current_scene_index: 0,
         })
+    }
+
+    pub fn set_scene_configs(&mut self, configs: Vec<scene::SceneConfig>) {
+        self.scene_configs = configs;
+    }
+
+    async fn load_next_scene(&mut self, event_loop: &ActiveEventLoop) -> bool {
+        // Increment scene index
+        self.current_scene_index += 1;
+
+        // Check if we've gone through all scenes
+        if self.current_scene_index >= self.scene_configs.len() {
+            event_loop.exit();
+            return false;
+        }
+
+        // Get the next scene config
+        let scene_config = &self.scene_configs[self.current_scene_index];
+
+        // Create new performance collector
+        self.collector = PerformanceCollector::new(
+            scene_config.name.clone(),
+            self.current_scene_index,
+            Duration::from_secs(scene_config.benchmark_duration_secs),
+        );
+
+        // Create new scene
+        self.scene = crate::scene::Scene::from_config(
+            scene_config,
+            self.width as usize,
+            self.height as usize,
+        )
+        .await;
+
+        // Recreate GPU with new scene
+        self.gpu = gpu::gpu::GPU::new(self.width, self.height, &self.scene).await;
+
+        true
     }
 
     /// Update the application each frame
@@ -255,38 +257,6 @@ impl Window {
             frame.copy_from_slice(unsafe {
                 std::slice::from_raw_parts(buffer.as_ptr() as *const u8, buffer.len() * 4)
             });
-
-            if let Some(winit_window) = &self.winit_window {
-                if let Some(egui_state) = &mut self.egui_state {
-                    // --- EGUI PASS (logic only, no actual drawing to the pixel buffer) ---
-
-                    // Gather egui input
-                    let raw_input = egui_state.take_egui_input(winit_window);
-
-                    // Run egui
-                    let full_output = egui_state.egui_ctx().run(raw_input, |ctx| {
-                        // Build your UI here
-                        egui::Window::new("Performance")
-                            .default_pos([10.0, 10.0])
-                            .show(ctx, |ui| {
-                                if !self.frame_times.is_empty() {
-                                    let avg_frame_time = self.frame_times.iter().sum::<f64>()
-                                        / self.frame_times.len() as f64;
-                                    let fps = 1.0 / avg_frame_time;
-                                    ui.label(format!("FPS: {:.1}", fps));
-                                }
-                                ui.label("Put your sliders/buttons here");
-                            });
-                    });
-
-                    // Handle platform output (e.g. copy/paste)
-                    egui_state.handle_platform_output(winit_window, full_output.platform_output);
-
-                    // We *could* tessellate shapes here:
-                    let shapes = full_output.shapes;
-                    let _paint_jobs = egui_state.egui_ctx().tessellate(shapes, 1.0);
-                }
-            }
 
             // Present our CPU buffer to the window
             if pixels.render().is_err() {
