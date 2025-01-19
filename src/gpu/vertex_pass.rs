@@ -1,5 +1,3 @@
-use crate::scene;
-
 use super::gpu_buffers::GpuBuffers;
 
 pub struct VertexPass {
