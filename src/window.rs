@@ -82,7 +82,7 @@ impl ApplicationHandler for Window {
                 ..
             } => {
                 self.mouse_pressed = state == ElementState::Pressed;
-            },
+            }
             WindowEvent::Resized(size) => {
                 self.width = size.width as usize;
                 self.height = size.height as usize;
@@ -210,6 +210,17 @@ impl Window {
 
         // Recreate GPU with new scene
         self.gpu = gpu::gpu::GPU::new(self.width, self.height, &self.scene).await;
+
+        if let Some(winit_window) = &self.winit_window {
+            let surface_texture =
+                SurfaceTexture::new(self.width as u32, self.height as u32, winit_window);
+            self.pixels = Some(unsafe {
+                // SAFETY: We know the window will outlive the pixels
+                std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
+                    Pixels::new(self.width as u32, self.height as u32, surface_texture).unwrap(),
+                )
+            });
+        }
 
         true
     }
