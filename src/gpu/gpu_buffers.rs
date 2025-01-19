@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     effect::EffectUniform,
-    gpu::util::{Fragment, Uniform, Vertex},
+    gpu::util::{Fragment, MaterialInfo, Uniform, Vertex},
     scene,
 };
 
@@ -56,6 +56,12 @@ impl GpuBuffers {
             vec![0]
         } else {
             all_texture_data
+        };
+
+        let material_data = if material_infos.is_empty() {
+            vec![MaterialInfo::default()]
+        } else {
+            material_infos
         };
 
         let index_length = indices.len();
@@ -137,7 +143,7 @@ impl GpuBuffers {
         // 3) Create the texture info buffer
         let material_info_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Material Buffer"),
-            contents: bytemuck::cast_slice(&material_infos),
+            contents: bytemuck::cast_slice(&material_data),
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 

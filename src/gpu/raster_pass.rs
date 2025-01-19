@@ -1,5 +1,3 @@
-use wgpu::BindingResource;
-
 use super::GpuBuffers;
 use crate::scene;
 
@@ -191,35 +189,5 @@ impl RasterPass {
         let num_workgroups_y = (num_tiles_y + 15) / 16;
 
         cpass.dispatch_workgroups(num_workgroups_x, num_workgroups_y, 1);
-    }
-
-    pub fn rebind(
-        &mut self,
-        device: &wgpu::Device,
-        buffers: &GpuBuffers,
-        triangle_list_buffer: BindingResource,
-    ) {
-        self.bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Raster Pass: Group0"),
-            layout: &self.pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.projected_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: buffers.fragment_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: buffers.tile_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: triangle_list_buffer,
-                },
-            ],
-        });
     }
 }

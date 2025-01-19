@@ -1,5 +1,5 @@
 use crate::gpu::util::{MaterialInfo, TextureInfo};
-use crate::model::{Material, Model, Texture};
+use crate::model::{Model, Texture};
 use crate::{camera, effect::Effect, gpu};
 use std::time::Duration;
 
@@ -52,20 +52,16 @@ impl Scene {
     pub async fn from_config(scene_config: &SceneConfig, width: usize, height: usize) -> Scene {
         let mut scene = Scene::new();
 
-        let base_model = scene.add_obj_with_mtl(&scene_config.model_path).await;
+        scene.add_obj_with_mtl(&scene_config.model_path).await;
 
-        // If stress test is enabled, duplicate the model
-        if let Some(stress_config) = &scene_config.stress_test {
-            scene.duplicate_model_for_stress_test(
-                base_model,
-                stress_config.model_count,
-                stress_config.grid_spacing,
-            );
-        } else {
-            // Add lights from config if not a stress test
-            for (position, color, intensity) in &scene_config.lights {
-                scene.add_light(*position, *color, *intensity);
-            }
+        // if model has texture, load it
+        if let Some(texture_path) = &scene_config.texture_path {
+            scene.add_texture_to_model(0, texture_path);
+        }
+
+        // Add lights from config if not a stress test
+        for (position, color, intensity) in &scene_config.lights {
+            scene.add_light(*position, *color, *intensity);
         }
 
         // Add effects if specified
@@ -200,121 +196,27 @@ impl Scene {
         self.effects.len() - 1
     }
 
-    /// Duplicates a model multiple times for stress testing purposes
-    /// Returns a vector of the new model indices
-    pub fn duplicate_model_for_stress_test(
-        &mut self,
-        model_index: usize,
-        count: usize,
-        grid_spacing: f32,
-    ) -> Vec<usize> {
-        let mut new_indices = Vec::with_capacity(count);
-
-        // Clone the original model's data first to avoid multiple borrows
-        let processed_vertices = if let Some(original_model) = self.models.get(model_index) {
-            original_model.processed_vertices.clone()
-        } else {
-            return new_indices;
-        };
-
-        // Get other necessary data from original model
-        let original_model = &self.models[model_index];
-        let processed_indices = original_model.processed_indices.clone();
-        let processed_materials = original_model.processed_materials.clone();
-        let processed_textures = original_model.processed_textures.clone();
-
-        // Calculate grid dimensions for a square-ish layout
-        let grid_size = (count as f32).sqrt().ceil() as usize;
-
-        // Now create new models with the cloned data
-        for i in 0..count {
-            let row = i / grid_size;
-            let col = i % grid_size;
-
-            // Calculate offset from center
-            let x_offset = (col as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
-            let z_offset = (row as f32 - (grid_size as f32 / 2.0)) * grid_spacing;
-
-            // Create new vertices with offset
-            let mut new_vertices = processed_vertices.clone();
-            for vertex in &mut new_vertices {
-                vertex.position[0] += x_offset;
-                vertex.position[2] += z_offset;
-            }
-
-            // Create new model with the offset vertices
-            let new_model = Model {
-                meshes: Vec::new(), // Empty as we're using processed data
-                materials: Vec::new(),
-                processed_vertices: new_vertices,
-                processed_indices: processed_indices.clone(),
-                processed_materials: processed_materials.clone(),
-                processed_textures: processed_textures.clone(),
-            };
-
-            self.models.push(new_model);
-            new_indices.push(self.models.len() - 1);
-        }
-
-        // Clear existing lights as we'll set up new ones for the stress test
-        self.lights.clear();
-
-        // Calculate the total size of the grid
-        let total_width = grid_size as f32 * grid_spacing;
-        let grid_height = 8.0; // Height of lights above the grid
-
-        // Add a brighter central light above the scene
-        self.add_light([0.0, grid_height, 0.0], [1.0, 1.0, 1.0], 2.0);
-
-        // Add corner lights to ensure good coverage
-        let corner_intensity = 1.5;
-        let half_width = total_width / 2.0;
-
-        // Add lights at each corner of the grid
-        self.add_light(
-            [half_width, grid_height, half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
-        self.add_light(
-            [-half_width, grid_height, half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
-        self.add_light(
-            [half_width, grid_height, -half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
-        self.add_light(
-            [-half_width, grid_height, -half_width],
-            [1.0, 0.9, 0.8],
-            corner_intensity,
-        );
-
-        new_indices
-    }
-
     /// Adds a texture to a model at the specified index
     pub fn add_texture_to_model(
         &mut self,
         model_index: usize,
-        texture_data: Vec<u32>,
-        width: u32,
-        height: u32,
+        texture_path: &str,
     ) -> usize {
         if let Some(model) = self.models.get_mut(model_index) {
             // Create a new material info for the texture
             let texture_offset = model.processed_textures.len() as u32;
 
+            // Load texture
+            let texture_data = Texture::load(texture_path);
+
             // Add texture data
-            model.processed_textures.extend_from_slice(&texture_data);
+            model.processed_textures.extend_from_slice(&texture_data.data);
 
             // Create and add material info
             let texture_info = TextureInfo {
                 offset: texture_offset,
-                width,
-                height,
+                width: texture_data.width,
+                height: texture_data.height,
                 _padding: 0,
             };
 
@@ -344,23 +246,17 @@ impl Scene {
 pub struct SceneConfig {
     pub name: String,
     pub model_path: String,
+    pub texture_path: Option<String>,
     pub lights: Vec<(
         /* position */ [f32; 3],
         /* color */ [f32; 3],
         /* intensity */ f32,
     )>,
     pub effects: Option<Vec<Effect>>,
-    // New stress test configuration
-    pub stress_test: Option<StressTestConfig>,
     // Camera configuration
     pub camera_config: CameraConfig,
     // Benchmark duration in seconds
     pub benchmark_duration_secs: u64,
-}
-
-pub struct StressTestConfig {
-    pub model_count: usize,
-    pub grid_spacing: f32,
 }
 
 pub struct CameraConfig {
@@ -390,9 +286,9 @@ impl Default for SceneConfig {
         Self {
             name: String::new(),
             model_path: String::new(),
+            texture_path: None,
             lights: Vec::new(),
             effects: None,
-            stress_test: None,
             camera_config: CameraConfig::default(),
             benchmark_duration_secs: 10,
         }

@@ -51,6 +51,23 @@ pub struct MaterialInfo {
     pub _padding3: [f32; 2],
 }
 
+impl Default for MaterialInfo {
+    fn default() -> Self {
+        Self {
+            texture_info: TextureInfo::default(),
+            ambient: [1.0, 1.0, 1.0],
+            _padding1: 0.0,
+            specular: [0.0; 3],
+            _padding2: 0.0,
+            diffuse: [0.5, 0.5, 0.5],
+            shininess: 0.0,
+            dissolve: 1.0,
+            optical_density: 0.0,
+            _padding3: [0.0; 2],
+        }
+    }
+}
+
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct TextureInfo {
@@ -58,6 +75,17 @@ pub struct TextureInfo {
     pub width: u32,
     pub height: u32,
     pub _padding: u32,
+}
+
+impl Default for TextureInfo {
+    fn default() -> Self {
+        Self {
+            offset: u32::MAX,
+            width: 0,
+            height: 0,
+            _padding: 0,
+        }
+    }
 }
 
 #[repr(C)]

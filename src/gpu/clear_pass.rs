@@ -1,5 +1,3 @@
-use wgpu::BindingResource;
-
 use super::{util::dispatch_size, GpuBuffers};
 
 pub struct ClearPass {
@@ -154,39 +152,5 @@ impl ClearPass {
 
         let total_threads = (width * height) as u32;
         cpass.dispatch_workgroups(dispatch_size(total_threads), 1, 1);
-    }
-
-    pub fn rebind(
-        &mut self,
-        device: &wgpu::Device,
-        buffers: &GpuBuffers,
-        triangle_list_buffer: BindingResource,
-    ) {
-        self.bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Clear: Frame Buffer Bind Group"),
-            layout: &self.pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: buffers.fragment_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
-                    resource: buffers.tile_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: triangle_list_buffer,
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: buffers.partial_sums_buffer.as_entire_binding(),
-                },
-            ],
-        });
     }
 }
