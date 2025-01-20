@@ -84,13 +84,30 @@ impl ApplicationHandler for Window {
                 self.mouse_pressed = state == ElementState::Pressed;
             }
             WindowEvent::Resized(size) => {
+                // Update window dimensions
                 self.width = size.width as usize;
                 self.height = size.height as usize;
+
+                // First resize the surface since this affects the pixel buffer size
                 if let Some(pixels) = &mut self.pixels {
                     if pixels.resize_surface(size.width, size.height).is_err() {
                         event_loop.exit();
+                        return;
+                    }
+                    // Resize the pixel buffer
+                    if pixels.resize_buffer(size.width, size.height).is_err() {
+                        event_loop.exit();
+                        return;
                     }
                 }
+
+                // Update camera aspect ratio
+                if let Some(camera) = self.scene.get_active_camera_mut() {
+                    camera.set_aspect_ratio(size.width as f32 / size.height as f32);
+                }
+
+                // Recreate GPU buffers with new dimensions
+                self.gpu.resize(size.width, size.height, &self.scene);
             }
             _ => (),
         }
@@ -265,12 +282,22 @@ impl Window {
         // Copy the result into the pixel buffer
         if let Some(pixels) = &mut self.pixels {
             let frame = pixels.frame_mut();
-            frame.copy_from_slice(unsafe {
-                std::slice::from_raw_parts(buffer.as_ptr() as *const u8, buffer.len() * 4)
-            });
+            let buffer_size = buffer.len() * 4;
+            if frame.len() == buffer_size {
+                frame.copy_from_slice(unsafe {
+                    std::slice::from_raw_parts(buffer.as_ptr() as *const u8, buffer_size)
+                });
 
-            // Present our CPU buffer to the window
-            if pixels.render().is_err() {
+                // Present our CPU buffer to the window
+                if pixels.render().is_err() {
+                    return false;
+                }
+            } else {
+                eprintln!(
+                    "Buffer size mismatch: frame buffer size = {}, gpu buffer size = {}",
+                    frame.len(),
+                    buffer_size
+                );
                 return false;
             }
         }

@@ -107,4 +107,16 @@ impl GPU {
 
         pixels
     }
+
+    pub fn resize(&mut self, width: u32, height: u32, scene: &scene::Scene) {
+        // Recreate buffers that depend on screen dimensions
+        self.buffers = GpuBuffers::new(&self.device, width, height, scene);
+
+        // Recreate passes with new buffers
+        self.clear_pass = ClearPass::new(&self.device, &self.buffers);
+        self.vertex_pass = VertexPass::new(&self.device, &self.buffers);
+        self.binning_pass = BinningPass::new(&self.device, &self.buffers);
+        self.raster_pass = RasterPass::new(&self.device, &self.buffers);
+        self.fragment_pass = FragmentPass::new(&self.device, &self.buffers);
+    }
 }
