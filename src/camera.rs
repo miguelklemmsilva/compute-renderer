@@ -159,7 +159,7 @@ impl Camera {
     }
 
     pub fn build_view_matrix(&self) -> Mat4 {
-        Mat4::look_at_rh(self.eye, self.target, self.up)
+        Mat4::look_at_rh(self.eye, self.target, Self::UP)
     }
 
     pub fn update_over_time(&mut self, delta_time: f32) {
@@ -175,5 +175,9 @@ impl Camera {
 
             self.eye = Vec3::new(x, y, z) + self.target;
         }
+    }
+
+    pub fn set_aspect_ratio(&mut self, aspect: f32) {
+        self.aspect = aspect;
     }
 }
