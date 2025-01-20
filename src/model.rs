@@ -51,7 +51,6 @@ impl Model {
         let mut processed_materials = Vec::new();
         let mut processed_textures = Vec::new();
         let mut meshes = Vec::new();
-        let mut materials = Vec::new();
 
         // Track unique textures to avoid duplication
         let mut texture_map: HashMap<String, (u32, u32, u32)> = HashMap::new(); // path -> (offset, width, height)
@@ -122,7 +121,6 @@ impl Model {
             };
 
             processed_materials.push(material_info);
-            materials.push(material);
         }
 
         // Process meshes and their vertices/indices

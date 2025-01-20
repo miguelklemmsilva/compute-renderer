@@ -20,14 +20,27 @@ fn main() {
     let height = 900;
     let width = 1600;
 
-    let lights = vec![([0.0, -100.0, 0.0], [1.0, 1.0, 1.0], 10000.0)];
+    let lights = vec![([0.0, -100.0, 0.0], [1.0, 1.0, 1.0], 100.0)];
 
     // List of scenes to benchmark
     let scenes = vec![
+        SceneConfig {
+            name: "Suzanne - Edge Melt Effect".to_string(),
+            model_path: String::from("african_head.obj"),
+            texture_path: Some(String::from("african_head_diffuse.tga")),
+            lights: lights.clone(),
+            effects: Some(vec![Effect::edge_melt(0.33, 1.0)]),
+            camera_config: CameraConfig {
+                mode: CameraMode::Orbit,
+                distance: 2.0,
+                ..Default::default()
+            },
+            benchmark_duration_secs: 100,
+        },
         // Interactive Scene
         SceneConfig {
             name: "Interactive Scene".to_string(),
-            model_path: String::from("bmw/bmw.obj"),
+            model_path: String::from("erato/erato.obj"),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
@@ -69,19 +82,6 @@ fn main() {
                 ..Default::default()
             },
             benchmark_duration_secs: 10,
-        },
-        SceneConfig {
-            name: "Suzanne - Edge Melt Effect".to_string(),
-            model_path: String::from("african_head.obj"),
-            texture_path: Some(String::from("african_head.tga")),
-            lights: lights.clone(),
-            effects: Some(vec![Effect::edge_melt(0.33, 1.0)]),
-            camera_config: CameraConfig {
-                mode: CameraMode::Orbit,
-                distance: 2.0,
-                ..Default::default()
-            },
-            benchmark_duration_secs: 100,
         },
         SceneConfig {
             name: "Suzanne - Voxelize".to_string(),

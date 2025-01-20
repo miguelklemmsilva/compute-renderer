@@ -1,5 +1,6 @@
 use crate::gpu::util::{MaterialInfo, TextureInfo};
 use crate::model::{Model, Texture};
+use crate::util::get_asset_path;
 use crate::{camera, effect::Effect, gpu};
 use std::time::Duration;
 
@@ -56,6 +57,7 @@ impl Scene {
 
         // if model has texture, load it
         if let Some(texture_path) = &scene_config.texture_path {
+            println!("Loading texture: {}", texture_path);
             scene.add_texture_to_model(0, texture_path);
         }
 
@@ -197,20 +199,18 @@ impl Scene {
     }
 
     /// Adds a texture to a model at the specified index
-    pub fn add_texture_to_model(
-        &mut self,
-        model_index: usize,
-        texture_path: &str,
-    ) -> usize {
+    pub fn add_texture_to_model(&mut self, model_index: usize, texture_path: &str) -> usize {
         if let Some(model) = self.models.get_mut(model_index) {
             // Create a new material info for the texture
             let texture_offset = model.processed_textures.len() as u32;
 
             // Load texture
-            let texture_data = Texture::load(texture_path);
+            let texture_data = Texture::load(get_asset_path(texture_path).to_str().unwrap());
 
             // Add texture data
-            model.processed_textures.extend_from_slice(&texture_data.data);
+            model
+                .processed_textures
+                .extend_from_slice(&texture_data.data);
 
             // Create and add material info
             let texture_info = TextureInfo {
@@ -222,15 +222,7 @@ impl Scene {
 
             let material_info = MaterialInfo {
                 texture_info,
-                ambient: [0.1, 0.1, 0.1],
-                _padding1: 0.0,
-                specular: [0.5, 0.5, 0.5],
-                _padding2: 0.0,
-                diffuse: [1.0, 1.0, 1.0],
-                shininess: 32.0,
-                dissolve: 1.0,
-                optical_density: 1.0,
-                _padding3: [0.0, 0.0],
+                ..Default::default()
             };
 
             model.processed_materials.push(material_info);

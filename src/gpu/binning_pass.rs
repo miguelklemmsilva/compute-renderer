@@ -98,7 +98,7 @@ impl BinningPass {
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Binning WGSL"),
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
-                include_str!("shaders/binning.wgsl"), // adapt your path
+                include_str!("shaders/binning.wgsl"),
             )),
         });
 
