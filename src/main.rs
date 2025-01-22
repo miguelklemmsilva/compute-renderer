@@ -54,48 +54,6 @@ fn main() {
             },
             benchmark_duration_secs: u64::MAX, // Run indefinitely until ESC
         },
-        // Stress Test Scene - Multiple Models
-        SceneConfig {
-            name: "Stress Test - 100 Models".to_string(),
-            model_path: String::from("suzanne.obj"),
-            texture_path: None,
-            lights: lights.clone(),
-            effects: None,
-            camera_config: CameraConfig {
-                mode: CameraMode::Orbit,
-                distance: 30.0, // Increased distance to view the entire grid
-                theta: std::f32::consts::PI / 4.0, // 45 degrees
-                phi: std::f32::consts::PI / 4.0, // 45 degrees
-                target: [0.0, 0.0, 0.0],
-                ..Default::default()
-            },
-            benchmark_duration_secs: 30, // 30 seconds benchmark
-        },
-        SceneConfig {
-            name: "Suzanne - Wave Effect".to_string(),
-            model_path: String::from("suzanne.obj"),
-            texture_path: None,
-            lights: lights.clone(),
-            effects: None,
-            camera_config: CameraConfig {
-                mode: CameraMode::Orbit,
-                ..Default::default()
-            },
-            benchmark_duration_secs: 10,
-        },
-        SceneConfig {
-            name: "Suzanne - Voxelize".to_string(),
-            model_path: String::from("suzanne.obj"),
-            texture_path: None,
-            lights: lights.clone(),
-            effects: Some(vec![Effect::voxelize(0.5, 5.0)]),
-            camera_config: CameraConfig {
-                mode: CameraMode::Orbit,
-                distance: 2.0,
-                ..Default::default()
-            },
-            benchmark_duration_secs: 10,
-        },
     ];
 
     // Create a single event loop for all scenes
