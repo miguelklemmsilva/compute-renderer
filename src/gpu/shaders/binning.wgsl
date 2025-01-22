@@ -211,11 +211,10 @@ fn scan_first_pass(
 
     let tile_index = global_id.x;
     
-    // Initialize shared memory
     shared_data[local_index] = 0u;
-    // if tile_index < total_tiles {
+    if tile_index < total_tiles {
     shared_data[local_index] = tile_buffer.triangle_indices[tile_index].count;
-    // }
+    }
 
     workgroupBarrier();
     
@@ -236,9 +235,9 @@ fn scan_first_pass(
     storageBarrier();
     
     // Write local scan results
-    // if tile_index < total_tiles {
+    if tile_index < total_tiles {
     tile_buffer.triangle_indices[tile_index].offset = scan_result;
-    // }
+    }
 }
 
 // Second pass: scan partial sums and update final offsets
