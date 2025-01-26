@@ -39,8 +39,12 @@ impl Model {
                 ..Default::default()
             },
             |p| {
-                let mat_text = File::open(directory.join(p.to_path_buf())).unwrap();
-                tobj::load_mtl_buf(&mut BufReader::new(mat_text))
+                let mat_text = File::open(directory.join(p.to_path_buf()));
+                if let Ok(mat_text) = mat_text {
+                    tobj::load_mtl_buf(&mut BufReader::new(mat_text))
+                } else {
+                    Err(tobj::LoadError::OpenFileFailed)
+                }
             },
         )
         .expect("Failed to load model");
@@ -58,69 +62,74 @@ impl Model {
         // Keep track of vertex count for index offsetting
         let mut current_vertex_count = 0;
 
-        // Process materials first
-        for m in m_materials.unwrap() {
-            // Create the material
-            let material = Material {
-                diffuse_color: m.diffuse.unwrap_or([0.0, 0.0, 0.0]),
-                diffuse_texture: m
-                    .diffuse_texture
-                    .as_ref()
-                    .map(|texture| Texture::load(&directory.join(texture).to_str().unwrap())),
-                ambient: m.ambient.unwrap_or([0.0, 0.0, 0.0]),
-                specular: m.specular.unwrap_or([0.0, 0.0, 0.0]),
-                shininess: m.shininess.unwrap_or(0.0),
-                dissolve: m.dissolve.unwrap_or(0.0),
-                optical_density: m.optical_density.unwrap_or(0.0),
-            };
-
-            // Process material for GPU
-            const NO_TEXTURE_INDEX: u32 = 0xFFFFFFFF;
-            let texture_info = if let Some(tex) = &material.diffuse_texture {
-                let texture_path = m.diffuse_texture.as_ref().unwrap().to_string();
-
-                // Check if we've already processed this texture
-                let (offset, width, height) = if let Some(&cached) = texture_map.get(&texture_path)
-                {
-                    cached
-                } else {
-                    // If not, add it to our processed textures and cache the info
-                    let offset = processed_textures.len() as u32;
-                    processed_textures.extend_from_slice(&tex.data);
-                    let info = (offset, tex.width, tex.height);
-                    texture_map.insert(texture_path, info);
-                    info
+        if let Ok(m_materials) = m_materials {
+            // Process materials first
+            for m in m_materials {
+                // Create the material
+                let material = Material {
+                    diffuse_color: m.diffuse.unwrap_or([0.0, 0.0, 0.0]),
+                    diffuse_texture: m
+                        .diffuse_texture
+                        .as_ref()
+                        .map(|texture| Texture::load(&directory.join(texture).to_str().unwrap())),
+                    ambient: m.ambient.unwrap_or([0.0, 0.0, 0.0]),
+                    specular: m.specular.unwrap_or([0.0, 0.0, 0.0]),
+                    shininess: m.shininess.unwrap_or(0.0),
+                    dissolve: m.dissolve.unwrap_or(0.0),
+                    optical_density: m.optical_density.unwrap_or(0.0),
                 };
 
-                TextureInfo {
-                    offset,
-                    width,
-                    height,
-                    _padding: 0,
-                }
-            } else {
-                TextureInfo {
-                    offset: NO_TEXTURE_INDEX,
-                    width: 0,
-                    height: 0,
-                    _padding: 0,
-                }
-            };
+                // Process material for GPU
+                const NO_TEXTURE_INDEX: u32 = 0xFFFFFFFF;
+                let texture_info = if let Some(tex) = &material.diffuse_texture {
+                    let texture_path = m.diffuse_texture.as_ref().unwrap().to_string();
 
-            let material_info = MaterialInfo {
-                texture_info,
-                ambient: material.ambient,
-                _padding1: 0.0,
-                specular: material.specular,
-                _padding2: 0.0,
-                diffuse: material.diffuse_color,
-                shininess: material.shininess,
-                dissolve: material.dissolve,
-                optical_density: material.optical_density,
-                _padding3: [0.0, 0.0],
-            };
+                    // Check if we've already processed this texture
+                    let (offset, width, height) =
+                        if let Some(&cached) = texture_map.get(&texture_path) {
+                            cached
+                        } else {
+                            // If not, add it to our processed textures and cache the info
+                            let offset = processed_textures.len() as u32;
+                            processed_textures.extend_from_slice(&tex.data);
+                            let info = (offset, tex.width, tex.height);
+                            texture_map.insert(texture_path, info);
+                            info
+                        };
 
-            processed_materials.push(material_info);
+                    TextureInfo {
+                        offset,
+                        width,
+                        height,
+                        _padding: 0,
+                    }
+                } else {
+                    TextureInfo {
+                        offset: NO_TEXTURE_INDEX,
+                        width: 0,
+                        height: 0,
+                        _padding: 0,
+                    }
+                };
+
+                let material_info = MaterialInfo {
+                    texture_info,
+                    ambient: material.ambient,
+                    _padding1: 0.0,
+                    specular: material.specular,
+                    _padding2: 0.0,
+                    diffuse: material.diffuse_color,
+                    shininess: material.shininess,
+                    dissolve: material.dissolve,
+                    optical_density: material.optical_density,
+                    _padding3: [0.0, 0.0],
+                };
+
+                processed_materials.push(material_info);
+            }
+        } else {
+            processed_textures.push(0);
+            processed_materials.push(MaterialInfo::default());
         }
 
         // Process meshes and their vertices/indices
