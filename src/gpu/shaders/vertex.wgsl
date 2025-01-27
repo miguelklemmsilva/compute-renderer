@@ -108,7 +108,7 @@ fn project_vertex(v: Vertex) -> Vertex {
     let screen_pos = vec3<f32>(
         ((ndc_pos.x + 1.0) * 0.5) * screen_dims.width,
         ((1.0 - ndc_pos.y) * 0.5) * screen_dims.height,
-        1.0 - ndc_pos.z
+        clip_pos.z
     );
 
     // Keep the original normals and store world position separately
