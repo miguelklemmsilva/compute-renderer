@@ -229,7 +229,6 @@ fn scan_first_pass(
         }
         let workgroup_sum = shared_data[255u] + last_value;
         atomicStore(&partial_sums.values[workgroup_id.x], workgroup_sum);
-        // partial_sums.values[workgroup_id.x + workgroup_id.y * num_workgroups.x] = workgroup_sum;
     }
 
     storageBarrier();
