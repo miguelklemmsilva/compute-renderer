@@ -166,7 +166,7 @@ impl GpuBuffers {
             base_triangles_per_tile,
             std::cmp::min(
                 total_triangles, // Don't exceed total triangles
-                64,              // Minimum allocation to handle dense areas
+                128,              // Minimum allocation to handle dense areas
             ),
         );
 
