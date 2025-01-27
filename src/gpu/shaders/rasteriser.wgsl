@@ -110,8 +110,8 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
         vec3<f32>(v3.x - v1.x, v2.x - v1.x, v1.x - p.x),
         vec3<f32>(v3.y - v1.y, v2.y - v1.y, v1.y - p.y)
     );
-    if abs(u.z) < 1e-7 {
-        return vec3<f32>(-1.0, -1.0, -1.0);
+    if abs(u.z) < 1.0 {
+        return vec3<f32>(-1.0, -1.0, 1.0);
     }
     return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
 }
@@ -133,11 +133,10 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let one_over_w3 = 1.0 / w3;
 
     // Pre-divide attributes by w
-    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz);  // Store world position
-    let world_pos2 = vec3<f32>(v2.nx, v2.ny, v2.nz);
-    let world_pos3 = vec3<f32>(v3.nx, v3.ny, v3.nz);
+    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
+    let world_pos2 = vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
+    let world_pos3 = vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
 
-    // Store actual normals
     let normal1 = vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
     let normal2 = vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
     let normal3 = vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
@@ -181,12 +180,8 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 }
             }
 
-            // Perspective-correct interpolation
-            let interpolated_one_over_w = bc.x * one_over_w1 + bc.y * one_over_w2 + bc.z * one_over_w3;
-            let w = 1.0 / interpolated_one_over_w;
-
             // Interpolate z (already divided by w)
-            let interpolated_z = (bc.x * z1 + bc.y * z2 + bc.z * z3) * w;
+            let interpolated_z = bc.x * z1 + bc.y * z2 + bc.z * z3;
 
             // Skip if depth is outside valid range (relaxed bounds)
             if interpolated_z < -1.0 || interpolated_z > 1.0 {
@@ -199,18 +194,18 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
 
             // Early depth test before doing expensive interpolations
             let stored_depth = unpack_u32_to_float(atomicLoad(&fragment_buffer.frags[pixel_id].depth));
-            if depth < stored_depth {
+            if depth >= stored_depth {
                 continue;
             }
 
             // Interpolate UV coordinates (already divided by w)
-            let interpolated_uv = (bc.x * uv1 + bc.y * uv2 + bc.z * uv3) * w;
+            let interpolated_uv = bc.x * uv1 + bc.y * uv2 + bc.z * uv3;
 
             // Interpolate world position (using barycentric directly since these are in world space)
             let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
 
             // Interpolate normal (perspective-correct)
-            let interpolated_normal = normalize((bc.x * normal1 + bc.y * normal2 + bc.z * normal3) * w);
+            let interpolated_normal = normalize(bc.x * normal1 + bc.y * normal2 + bc.z * normal3);
 
             let packed_depth = pack_float_to_u32(depth);
             atomicStore(&fragment_buffer.frags[pixel_id].depth, packed_depth);
