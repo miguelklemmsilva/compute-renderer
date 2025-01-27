@@ -127,7 +127,9 @@ impl Model {
 
                 processed_materials.push(material_info);
             }
-        } else {
+        }
+
+        if processed_textures.is_empty() && processed_materials.is_empty() {
             processed_textures.push(0);
             processed_materials.push(MaterialInfo::default());
         }

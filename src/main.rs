@@ -26,7 +26,7 @@ fn main() {
     let scenes = vec![
         SceneConfig {
             name: "test".to_string(),
-            model_path: String::from("test.obj"),
+            model_path: String::from("sportsCar/sportsCar.obj"),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
