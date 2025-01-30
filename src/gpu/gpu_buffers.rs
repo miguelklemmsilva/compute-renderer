@@ -45,7 +45,7 @@ impl GpuBuffers {
 
         for model in &scene.models {
             // Add pre-processed vertices and indices
-            vertices.extend_from_slice(&model.processed_vertices);
+            vertices.extend_from_slice(&model.processed_vertices_gpu);
             indices.extend_from_slice(&model.processed_indices);
             material_infos.extend_from_slice(&model.processed_materials);
             all_texture_data.extend_from_slice(&model.processed_textures);

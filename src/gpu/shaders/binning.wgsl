@@ -4,11 +4,11 @@ struct Vertex {
     x: f32,
     y: f32,
     z: f32,
-    u: f32,
-    v: f32,
     nx: f32,
     ny: f32,
     nz: f32,
+    u: f32,
+    v: f32,
     texture_index: u32,
     w_clip: f32,
 };
