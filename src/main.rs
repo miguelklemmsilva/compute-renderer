@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use camera::CameraMode;
-use effect::Effect;
+use effect::{EdgeMeltEffect, Effect};
 use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig};
 use window::Window;
@@ -26,7 +26,7 @@ fn main() {
     let scenes = vec![
         SceneConfig {
             name: "test".to_string(),
-            model_path: String::from("sportsCar/sportsCar.obj"),
+            model_path: String::from("african_head.obj"),
             texture_path: None,
             lights: lights.clone(),
             effects: None,
