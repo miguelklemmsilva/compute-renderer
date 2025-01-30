@@ -1,6 +1,7 @@
 use crate::gpu::util::{MaterialInfo, TextureInfo};
 use crate::model::{Model, Texture};
 use crate::util::get_asset_path;
+use crate::window::BackendType;
 use crate::{camera, effect::Effect, gpu};
 use std::time::Duration;
 
@@ -53,7 +54,9 @@ impl Scene {
     pub async fn from_config(scene_config: &SceneConfig, width: usize, height: usize) -> Scene {
         let mut scene = Scene::new();
 
-        scene.add_obj_with_mtl(&scene_config.model_path).await;
+        scene
+            .add_obj_with_mtl(&scene_config.model_path, scene_config.backend_type)
+            .await;
 
         // if model has texture, load it
         if let Some(texture_path) = &scene_config.texture_path {
@@ -95,9 +98,9 @@ impl Scene {
 
     /// Adds an OBJ model *with MTL material(s)*, loads all textures,
     /// and sets up each sub-mesh's `texture_index` to point to the correct Material in `self.materials`.
-    pub async fn add_obj_with_mtl(&mut self, obj_path: &str) -> usize {
+    pub async fn add_obj_with_mtl(&mut self, obj_path: &str, backend_type: BackendType) -> usize {
         // (A) Load geometry + textures from the .obj + .mtl
-        let model = Model::new(obj_path).await;
+        let model = Model::new(obj_path, backend_type).await;
         self.models.push(model);
         self.models.len() - 1
     }
@@ -249,6 +252,7 @@ pub struct SceneConfig {
     pub camera_config: CameraConfig,
     // Benchmark duration in seconds
     pub benchmark_duration_secs: u64,
+    pub backend_type: BackendType,
 }
 
 pub struct CameraConfig {
@@ -283,6 +287,7 @@ impl Default for SceneConfig {
             effects: None,
             camera_config: CameraConfig::default(),
             benchmark_duration_secs: 10,
+            backend_type: BackendType::WgpuPipeline,
         }
     }
 }
