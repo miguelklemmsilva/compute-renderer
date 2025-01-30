@@ -8,8 +8,8 @@ use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
 
 mod camera;
+mod custom_pipeline;
 mod effect;
-mod gpu;
 mod model;
 mod performance;
 mod scene;
@@ -38,12 +38,26 @@ fn main() {
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {
-            mode: CameraMode::FirstPerson,
+            mode: CameraMode::Orbit,
             position: [0.0, 0.0, 2.0], // Move camera closer to see the model
             ..Default::default()
         },
-        benchmark_duration_secs: u64::MAX,
-        backend_type: BackendType::Gpu, // Choose which backend to use
+        benchmark_duration_secs: 10,
+        backend_type: BackendType::CustomPipeline, // Choose which backend to use
+    },
+    SceneConfig {
+        name: "test".to_string(),
+        model_path: String::from("african_head.obj"),
+        texture_path: Some(String::from("african_head_diffuse.tga")),
+        lights: lights.clone(),
+        effects: None,
+        camera_config: CameraConfig {
+            mode: CameraMode::Orbit,
+            position: [0.0, 0.0, 2.0], // Move camera closer to see the model
+            ..Default::default()
+        },
+        benchmark_duration_secs: 10,
+        backend_type: BackendType::WgpuPipeline,
     }];
 
     // Create a single event loop for all scenes
