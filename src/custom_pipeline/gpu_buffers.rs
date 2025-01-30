@@ -3,7 +3,7 @@ use wgpu::util::DeviceExt;
 use crate::{
     camera,
     effect::EffectUniform,
-    gpu::util::{Fragment, MaterialInfo, Uniform, Vertex},
+    custom_pipeline::util::{Fragment, MaterialInfo, Uniform, Vertex},
     scene,
 };
 
