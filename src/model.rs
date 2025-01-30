@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs::File, io::BufReader};
 
 use crate::{
-    gpu::util::{Index, MaterialInfo, TextureInfo},
+    custom_pipeline::util::{Index, MaterialInfo, TextureInfo},
     util::get_asset_path,
     vertex::{GpuVertex, WgpuVertex},
     window::BackendType,
@@ -141,7 +141,7 @@ impl Model {
         // Process meshes and their vertices/indices
         for m in m {
             match backend_type {
-                BackendType::Gpu => {
+                BackendType::CustomPipeline => {
                     let vertices = (0..m.mesh.positions.len() / 3)
                         .map(|i| GpuVertex {
                             position: [
@@ -213,7 +213,7 @@ impl Model {
             // Update processed data
             processed_indices.extend(indices);
             current_vertex_count = match backend_type {
-                BackendType::Gpu => processed_vertices_gpu.len() as u32,
+                BackendType::CustomPipeline => processed_vertices_gpu.len() as u32,
                 BackendType::WgpuPipeline => processed_vertices_wgpu.len() as u32,
             };
         }
