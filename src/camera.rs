@@ -40,6 +40,8 @@ pub struct Camera {
     pub pitch: f32,
     pub movement_speed: f32,
     pub mouse_sensitivity: f32,
+    pub orbit_speed: f32,
+    pub orbit_distance: f32,
 }
 
 impl Camera {
@@ -59,15 +61,11 @@ impl Camera {
             pitch: phi,
             movement_speed: 5.0,
             mouse_sensitivity: 0.1,
+            orbit_speed: 0.5,
+            orbit_distance: distance,
         };
 
-        // Calculate initial eye position
-        let pitch_cos = phi.cos();
-        let x = distance * theta.cos() * pitch_cos;
-        let y = distance * phi.sin();
-        let z = distance * theta.sin() * pitch_cos;
-        camera.eye = Vec3::new(x, y, z);
-
+        camera.update_orbit_position();
         camera
     }
 
@@ -82,6 +80,8 @@ impl Camera {
             pitch: 0.0,
             movement_speed: 5.0,
             mouse_sensitivity: 0.1,
+            orbit_speed: 0.5,
+            orbit_distance: 10.0,
         }
     }
 
@@ -164,20 +164,38 @@ impl Camera {
 
     pub fn update_over_time(&mut self, delta_time: f32) {
         if let CameraMode::Orbit = self.mode {
-            self.yaw += delta_time * 0.5; // Rotate around target
+            self.yaw += delta_time * self.orbit_speed * 57.2958;
 
-            // Calculate new eye position
-            let pitch_cos = self.pitch.cos();
-            let distance = (self.eye - self.target).length();
-            let x = distance * self.yaw.cos() * pitch_cos;
-            let y = distance * self.pitch.sin();
-            let z = distance * self.yaw.sin() * pitch_cos;
+            if self.yaw >= 360.0 {
+                self.yaw -= 360.0;
+            }
 
-            self.eye = Vec3::new(x, y, z) + self.target;
+            self.update_orbit_position();
         }
     }
 
     pub fn set_aspect_ratio(&mut self, aspect: f32) {
         self.aspect = aspect;
+    }
+
+    fn update_orbit_position(&mut self) {
+        let pitch_cos = self.pitch.to_radians().cos();
+        let x = self.orbit_distance * self.yaw.to_radians().cos() * pitch_cos;
+        let y = self.orbit_distance * self.pitch.to_radians().sin();
+        let z = self.orbit_distance * self.yaw.to_radians().sin() * pitch_cos;
+        self.eye = Vec3::new(x, y, z) + self.target;
+    }
+
+    pub fn adjust_orbit_distance(&mut self, delta: f32) {
+        if let CameraMode::Orbit = self.mode {
+            self.orbit_distance = (self.orbit_distance + delta).max(1.0);
+            self.update_orbit_position();
+        }
+    }
+
+    pub fn adjust_orbit_speed(&mut self, delta: f32) {
+        if let CameraMode::Orbit = self.mode {
+            self.orbit_speed = (self.orbit_speed + delta).max(0.0).min(2.0);
+        }
     }
 }

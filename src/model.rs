@@ -1,13 +1,16 @@
 use std::{collections::HashMap, fs::File, io::BufReader};
 
 use crate::{
-    gpu::util::{Index, MaterialInfo, TextureInfo, Vertex},
+    gpu::util::{Index, MaterialInfo, TextureInfo},
     util::get_asset_path,
+    vertex::{GpuVertex, WgpuVertex},
+    window::BackendType,
 };
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
-    pub processed_vertices: Vec<Vertex>,
+    pub processed_vertices_gpu: Vec<GpuVertex>,
+    pub processed_vertices_wgpu: Vec<WgpuVertex>,
     pub processed_indices: Vec<Index>,
     pub processed_materials: Vec<MaterialInfo>,
     pub processed_textures: Vec<u32>,
@@ -24,7 +27,7 @@ pub struct Material {
 }
 
 impl Model {
-    pub async fn new(file_name: &str) -> Model {
+    pub async fn new(file_name: &str, backend_type: BackendType) -> Model {
         // 1) Load OBJ text
         let obj_text = get_asset_path(file_name);
         let directory = obj_text.parent().unwrap();
@@ -50,7 +53,8 @@ impl Model {
         .expect("Failed to load model");
 
         // Pre-allocate vectors for processed data
-        let mut processed_vertices = Vec::new();
+        let mut processed_vertices_gpu = Vec::new();
+        let mut processed_vertices_wgpu = Vec::new();
         let mut processed_indices = Vec::new();
         let mut processed_materials = Vec::new();
         let mut processed_textures = Vec::new();
@@ -136,31 +140,62 @@ impl Model {
 
         // Process meshes and their vertices/indices
         for m in m {
-            let vertices = (0..m.mesh.positions.len() / 3)
-                .map(|i| Vertex {
-                    position: [
-                        m.mesh.positions[i * 3],
-                        m.mesh.positions[i * 3 + 1],
-                        m.mesh.positions[i * 3 + 2],
-                    ],
-                    tex_coords: if m.mesh.texcoords.is_empty() {
-                        [0.0, 0.0]
-                    } else {
-                        [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
-                    },
-                    normal: if m.mesh.normals.is_empty() {
-                        [0.0, 0.0, 0.0]
-                    } else {
-                        [
-                            m.mesh.normals[i * 3],
-                            m.mesh.normals[i * 3 + 1],
-                            m.mesh.normals[i * 3 + 2],
-                        ]
-                    },
-                    material_id: m.mesh.material_id.unwrap_or(0) as u32,
-                    w_clip: 0.0,
-                })
-                .collect::<Vec<_>>();
+            match backend_type {
+                BackendType::Gpu => {
+                    let vertices = (0..m.mesh.positions.len() / 3)
+                        .map(|i| GpuVertex {
+                            position: [
+                                m.mesh.positions[i * 3],
+                                m.mesh.positions[i * 3 + 1],
+                                m.mesh.positions[i * 3 + 2],
+                            ],
+                            tex_coords: if m.mesh.texcoords.is_empty() {
+                                [0.0, 0.0]
+                            } else {
+                                [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
+                            },
+                            normal: if m.mesh.normals.is_empty() {
+                                [0.0, 0.0, 0.0]
+                            } else {
+                                [
+                                    m.mesh.normals[i * 3],
+                                    m.mesh.normals[i * 3 + 1],
+                                    m.mesh.normals[i * 3 + 2],
+                                ]
+                            },
+                            material_id: m.mesh.material_id.unwrap_or(0) as u32,
+                            w_clip: 0.0,
+                        })
+                        .collect::<Vec<_>>();
+                    processed_vertices_gpu.extend(vertices);
+                }
+                BackendType::WgpuPipeline => {
+                    let vertices = (0..m.mesh.positions.len() / 3)
+                        .map(|i| WgpuVertex {
+                            position: [
+                                m.mesh.positions[i * 3],
+                                m.mesh.positions[i * 3 + 1],
+                                m.mesh.positions[i * 3 + 2],
+                            ],
+                            tex_coords: if m.mesh.texcoords.is_empty() {
+                                [0.0, 0.0]
+                            } else {
+                                [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
+                            },
+                            normal: if m.mesh.normals.is_empty() {
+                                [0.0, 0.0, 0.0]
+                            } else {
+                                [
+                                    m.mesh.normals[i * 3],
+                                    m.mesh.normals[i * 3 + 1],
+                                    m.mesh.normals[i * 3 + 2],
+                                ]
+                            },
+                        })
+                        .collect::<Vec<_>>();
+                    processed_vertices_wgpu.extend(vertices);
+                }
+            }
 
             // Process indices with correct offset
             let indices: Vec<Index> = m
@@ -176,9 +211,11 @@ impl Model {
             });
 
             // Update processed data
-            processed_vertices.extend(vertices);
             processed_indices.extend(indices);
-            current_vertex_count = processed_vertices.len() as u32;
+            current_vertex_count = match backend_type {
+                BackendType::Gpu => processed_vertices_gpu.len() as u32,
+                BackendType::WgpuPipeline => processed_vertices_wgpu.len() as u32,
+            };
         }
 
         // If no textures exist, use a small fallback
@@ -188,7 +225,8 @@ impl Model {
 
         Model {
             meshes,
-            processed_vertices,
+            processed_vertices_gpu,
+            processed_vertices_wgpu,
             processed_indices,
             processed_materials,
             processed_textures,

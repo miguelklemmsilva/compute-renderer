@@ -7,14 +7,22 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window as WinitWindow, WindowAttributes, WindowId};
 
-use crate::{gpu, performance::PerformanceCollector, scene};
+use crate::{gpu, performance::PerformanceCollector, scene, wgpu_pipeline::renderer::WgpuRenderer};
+
+pub enum RenderBackend {
+    WgpuPipeline {
+        surface: wgpu::Surface<'static>,
+        renderer: WgpuRenderer,
+    },
+    Gpu {
+        pixels: Pixels<'static>,
+        gpu: gpu::gpu::GPU,
+    },
+}
 
 pub struct Window {
-    // Store the winit window so we can pass it to egui
     winit_window: Option<WinitWindow>,
-
-    pixels: Option<Pixels<'static>>,
-    pub gpu: gpu::gpu::GPU,
+    backend: Option<RenderBackend>,
     pub height: usize,
     pub width: usize,
     pub scene: scene::Scene,
@@ -28,29 +36,59 @@ pub struct Window {
     // Scene cycling
     scene_configs: Vec<scene::SceneConfig>,
     current_scene_index: usize,
+
+    backend_type: BackendType,
 }
 
 impl ApplicationHandler for Window {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        let winit_window = event_loop
-            .create_window(
-                WindowAttributes::default()
-                    .with_inner_size(LogicalSize::new(self.width as f64, self.height as f64)),
-            )
-            .unwrap();
+        self.winit_window = Some(
+            event_loop
+                .create_window(
+                    WindowAttributes::default()
+                        .with_inner_size(LogicalSize::new(self.width as f64, self.height as f64)),
+                )
+                .unwrap(),
+        );
 
-        // Create the pixels surface
-        let surface_texture =
-            SurfaceTexture::new(self.width as u32, self.height as u32, &winit_window);
-        let pixels = unsafe {
-            // SAFETY: We know the window will outlive the pixels
-            std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
-                Pixels::new(self.width as u32, self.height as u32, surface_texture).unwrap(),
-            )
-        };
+        let window = self.winit_window.as_ref().unwrap();
 
-        self.winit_window = Some(winit_window);
-        self.pixels = Some(pixels);
+        // Initialize the appropriate backend based on configuration
+        match self.backend_type {
+            BackendType::WgpuPipeline => {
+                let instance = wgpu::Instance::default();
+                // SAFETY: The window is stored in self.winit_window and will live as long as the surface
+                let surface = unsafe {
+                    let surface = instance.create_surface(window).unwrap();
+                    std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface)
+                };
+
+                let renderer = pollster::block_on(WgpuRenderer::new(
+                    &instance,
+                    &surface,
+                    self.width as u32,
+                    self.height as u32,
+                    &self.scene,
+                ));
+
+                self.backend = Some(RenderBackend::WgpuPipeline { surface, renderer });
+            }
+            BackendType::Gpu => {
+                let surface_texture =
+                    SurfaceTexture::new(self.width as u32, self.height as u32, window);
+                let pixels = unsafe {
+                    // SAFETY: We know the window will outlive the pixels
+                    std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
+                        Pixels::new(self.width as u32, self.height as u32, surface_texture)
+                            .unwrap(),
+                    )
+                };
+                let gpu =
+                    pollster::block_on(gpu::gpu::GPU::new(self.width, self.height, &self.scene));
+
+                self.backend = Some(RenderBackend::Gpu { pixels, gpu });
+            }
+        }
     }
 
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
@@ -65,7 +103,6 @@ impl ApplicationHandler for Window {
                         ElementState::Pressed => {
                             self.keys_down.insert(keycode);
                             if keycode == KeyCode::Escape {
-                                // Instead of exiting, try to load next scene
                                 self.collector.finalise();
                                 pollster::block_on(self.load_next_scene(event_loop));
                             }
@@ -84,30 +121,35 @@ impl ApplicationHandler for Window {
                 self.mouse_pressed = state == ElementState::Pressed;
             }
             WindowEvent::Resized(size) => {
-                // Update window dimensions
                 self.width = size.width as usize;
                 self.height = size.height as usize;
 
-                // First resize the surface since this affects the pixel buffer size
-                if let Some(pixels) = &mut self.pixels {
-                    if pixels.resize_surface(size.width, size.height).is_err() {
-                        event_loop.exit();
-                        return;
-                    }
-                    // Resize the pixel buffer
-                    if pixels.resize_buffer(size.width, size.height).is_err() {
-                        event_loop.exit();
-                        return;
-                    }
-                }
-
-                // Update camera aspect ratio
                 if let Some(camera) = self.scene.get_active_camera_mut() {
                     camera.set_aspect_ratio(size.width as f32 / size.height as f32);
                 }
 
-                // Recreate GPU buffers with new dimensions
-                self.gpu.resize(size.width, size.height, &self.scene);
+                if let Some(backend) = &mut self.backend {
+                    match backend {
+                        RenderBackend::WgpuPipeline { surface, renderer } => {
+                            let mut config = renderer.config.clone();
+                            config.width = size.width;
+                            config.height = size.height;
+                            surface.configure(&renderer.device, &config);
+                            renderer.resize(&config);
+                        }
+                        RenderBackend::Gpu { pixels, gpu } => {
+                            if pixels.resize_surface(size.width, size.height).is_err() {
+                                event_loop.exit();
+                                return;
+                            }
+                            if pixels.resize_buffer(size.width, size.height).is_err() {
+                                event_loop.exit();
+                                return;
+                            }
+                            gpu.resize(size.width, size.height, &self.scene);
+                        }
+                    }
+                }
             }
             _ => (),
         }
@@ -165,6 +207,12 @@ impl ApplicationHandler for Window {
     }
 }
 
+#[derive(Clone, Copy)]
+pub enum BackendType {
+    WgpuPipeline,
+    Gpu,
+}
+
 impl Window {
     /// Create the Window object
     pub fn new_with_window(
@@ -172,14 +220,12 @@ impl Window {
         height: usize,
         scene: scene::Scene,
         collector: PerformanceCollector,
+        backend_type: BackendType,
     ) -> Result<Window, Box<dyn std::error::Error>> {
-        // Create GPU
-        let gpu = pollster::block_on(gpu::gpu::GPU::new(width, height, &scene));
-
         Ok(Window {
             winit_window: None,
-            pixels: None,
-            gpu,
+            backend: None,
+            backend_type,
             height,
             width,
             scene,
@@ -198,53 +244,46 @@ impl Window {
     }
 
     async fn load_next_scene(&mut self, event_loop: &ActiveEventLoop) -> bool {
-        // Increment scene index
-        self.current_scene_index += 1;
+        // // Increment scene index
+        // self.current_scene_index += 1;
 
-        // Check if we've gone through all scenes
-        if self.current_scene_index >= self.scene_configs.len() {
-            event_loop.exit();
-            return false;
-        }
+        // // Check if we've gone through all scenes
+        // if self.current_scene_index >= self.scene_configs.len() {
+        //     event_loop.exit();
+        //     return false;
+        // }
 
-        // Get the next scene config
-        let scene_config = &self.scene_configs[self.current_scene_index];
+        // // Get the next scene config
+        // let scene_config = &self.scene_configs[self.current_scene_index];
 
-        // Create new performance collector
-        self.collector = PerformanceCollector::new(
-            scene_config.name.clone(),
-            self.current_scene_index,
-            Duration::from_secs(scene_config.benchmark_duration_secs),
-        );
+        // // Create new performance collector
+        // self.collector = PerformanceCollector::new(
+        //     scene_config.name.clone(),
+        //     self.current_scene_index,
+        //     Duration::from_secs(scene_config.benchmark_duration_secs),
+        // );
 
-        // Create new scene
-        self.scene = crate::scene::Scene::from_config(
-            scene_config,
-            self.width as usize,
-            self.height as usize,
-        )
-        .await;
+        // // Create new scene
+        // self.scene = crate::scene::Scene::from_config(
+        //     scene_config,
+        //     self.width as usize,
+        //     self.height as usize,
+        // )
+        // .await;
 
-        // Recreate GPU with new scene
-        self.gpu = gpu::gpu::GPU::new(self.width, self.height, &self.scene).await;
-
-        if let Some(winit_window) = &self.winit_window {
-            let surface_texture =
-                SurfaceTexture::new(self.width as u32, self.height as u32, winit_window);
-            self.pixels = Some(unsafe {
-                // SAFETY: We know the window will outlive the pixels
-                std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
-                    Pixels::new(self.width as u32, self.height as u32, surface_texture).unwrap(),
-                )
-            });
-        }
+        // // Create new renderer with the scene if we have a surface
+        // if let Some(surface) = &self.surface {
+        //     self.renderer = Some(
+        //         WgpuRenderer::new(surface, self.width as u32, self.height as u32, &self.scene)
+        //             .await,
+        //     );
+        // }
 
         true
     }
 
     /// Update the application each frame
     pub async fn update(&mut self, delta_time: Duration) -> bool {
-        // Calculate FPS
         let frame_time = self.last_frame_time.elapsed().as_secs_f64();
         self.last_frame_time = std::time::Instant::now();
 
@@ -253,9 +292,6 @@ impl Window {
             self.frame_times.remove(0);
         }
 
-        // Handle camera movement
-        const BASE_MOVEMENT_SPEED: f32 = 2.0;
-        let movement_speed = BASE_MOVEMENT_SPEED * delta_time.as_secs_f32();
         if let Some(camera) = self.scene.get_active_camera_mut() {
             camera.update_over_time(delta_time.as_secs_f32());
             camera.process_keyboard(
@@ -266,43 +302,56 @@ impl Window {
                 self.keys_down.contains(&KeyCode::Space),
                 self.keys_down.contains(&KeyCode::KeyC),
                 self.keys_down.contains(&KeyCode::ShiftLeft),
-                movement_speed,
+                delta_time.as_secs_f32(),
             );
         }
 
-        // Update scene
-        self.scene.update(&mut self.gpu, delta_time);
-
-        // Run the GPU compute/render pipeline
-        let buffer = self
-            .gpu
-            .execute_pipeline(self.width, self.height, &self.scene)
-            .await;
-
-        // Copy the result into the pixel buffer
-        if let Some(pixels) = &mut self.pixels {
-            let frame = pixels.frame_mut();
-            let buffer_size = buffer.len() * 4;
-            if frame.len() == buffer_size {
-                frame.copy_from_slice(unsafe {
-                    std::slice::from_raw_parts(buffer.as_ptr() as *const u8, buffer_size)
-                });
-
-                // Present our CPU buffer to the window
-                if pixels.render().is_err() {
-                    return false;
+        if let Some(backend) = &mut self.backend {
+            match backend {
+                RenderBackend::WgpuPipeline { surface, renderer } => {
+                    match renderer.render(surface, &self.scene) {
+                        Ok(_) => {}
+                        Err(wgpu::SurfaceError::Lost) => {
+                            if let Some(window) = &self.winit_window {
+                                let size = window.inner_size();
+                                let mut config = renderer.config.clone();
+                                config.width = size.width;
+                                config.height = size.height;
+                                surface.configure(&renderer.device, &config);
+                                renderer.resize(&config);
+                            }
+                        }
+                        Err(e) => eprintln!("Render error: {:?}", e),
+                    }
                 }
-            } else {
-                eprintln!(
-                    "Buffer size mismatch: frame buffer size = {}, gpu buffer size = {}",
-                    frame.len(),
-                    buffer_size
-                );
-                return false;
+                RenderBackend::Gpu { pixels, gpu } => {
+                    self.scene.update(gpu, delta_time);
+                    let buffer = gpu
+                        .execute_pipeline(self.width, self.height, &self.scene)
+                        .await;
+
+                    let frame = pixels.frame_mut();
+                    let buffer_size = buffer.len() * 4;
+                    if frame.len() == buffer_size {
+                        frame.copy_from_slice(unsafe {
+                            std::slice::from_raw_parts(buffer.as_ptr() as *const u8, buffer_size)
+                        });
+
+                        if pixels.render().is_err() {
+                            return false;
+                        }
+                    } else {
+                        eprintln!(
+                            "Buffer size mismatch: frame buffer size = {}, gpu buffer size = {}",
+                            frame.len(),
+                            buffer_size
+                        );
+                        return false;
+                    }
+                }
             }
         }
 
-        // Check if performance collector is done
         !self.collector.update()
     }
 }
