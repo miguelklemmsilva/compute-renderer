@@ -1,8 +1,8 @@
-use crate::gpu::util::{MaterialInfo, TextureInfo};
+use crate::custom_pipeline::util::{MaterialInfo, TextureInfo};
 use crate::model::{Model, Texture};
 use crate::util::get_asset_path;
 use crate::window::BackendType;
-use crate::{camera, effect::Effect, gpu};
+use crate::{camera, effect::Effect, custom_pipeline};
 use std::time::Duration;
 
 #[repr(C)]
@@ -122,7 +122,7 @@ impl Scene {
         self.active_camera.and_then(|index| self.cameras.get(index))
     }
 
-    pub fn update(&mut self, gpu: &mut gpu::gpu::GPU, delta_time: Duration) {
+    pub fn update(&mut self, gpu: &mut custom_pipeline::gpu::GPU, delta_time: Duration) {
         self.time += delta_time.as_secs_f32();
 
         // Update effects only if there are any
