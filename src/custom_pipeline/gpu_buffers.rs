@@ -2,8 +2,8 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera,
-    effect::EffectUniform,
     custom_pipeline::util::{Fragment, MaterialInfo, Uniform, Vertex},
+    effect::EffectUniform,
     scene,
 };
 
@@ -45,7 +45,7 @@ impl GpuBuffers {
 
         for model in &scene.models {
             // Add pre-processed vertices and indices
-            vertices.extend_from_slice(&model.processed_vertices_gpu);
+            vertices.extend_from_slice(&model.processed_vertices_custom);
             indices.extend_from_slice(&model.processed_indices);
             material_infos.extend_from_slice(&model.processed_materials);
             all_texture_data.extend_from_slice(&model.processed_textures);
@@ -166,7 +166,7 @@ impl GpuBuffers {
             base_triangles_per_tile,
             std::cmp::min(
                 total_triangles, // Don't exceed total triangles
-                128,              // Minimum allocation to handle dense areas
+                128,             // Minimum allocation to handle dense areas
             ),
         );
 

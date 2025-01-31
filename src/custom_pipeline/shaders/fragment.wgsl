@@ -1,9 +1,3 @@
-// -----------------------------------------------------------------------------
-// FRAGMENT STAGE
-// -----------------------------------------------------------------------------
-// We take each emitted Fragment, perform the final shading (lighting + texturing),
-// depth test, and write to the screen output.
-
 struct OutputBuffer {
     data: array<atomic<u32>>,
 };
@@ -130,37 +124,33 @@ fn sample_texture(uv: vec2<f32>, texture_info: TextureInfo) -> vec3<f32> {
 }
 
 fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>, material: Material, uv: vec2<f32>) -> vec3<f32> {
-    let normal_normalized = normalize(normal);
-    var total_specular = vec3<f32>(0.0);
-    var total_diffuse = vec3<f32>(0.0);
-    var total_ambient = vec3<f32>(0.0);
-
-    let base_color = sample_texture(uv, material.texture_info);
-
-    // 3) Loop over lights
-    for (var i = 0u; i < arrayLength(&light_buffer.lights); i += 1u) {
+    // Basic lighting calculation
+    var final_color = vec3<f32>(0.0);
+    let ambient = vec3<f32>(0.1);
+    
+    // Start with ambient light
+    final_color = ambient;
+    
+    // Add contribution from each light
+    for (var i = 0u; i < 8u; i++) {
         let light = light_buffer.lights[i];
-
-        let light_dir = normalize(position - light.world_position);
-        let light_distance = length(position - light.world_position);
-        let attenuation = 1.0 / (1.0 + 0.1 * light_distance + 0.01 * light_distance * light_distance);
-
-        total_ambient += light.color * min(material.ambient, vec3<f32>(0.1)) * attenuation;
-
+        let light_dir = normalize(light.world_position - position);
+        
         // Diffuse
-        let diff_factor = max(dot(normal_normalized, light_dir), 0.0);
-        total_diffuse += base_color * light.color * material.diffuse * min(diff_factor, 1.0);
-
+        let diff = max(dot(normal, light_dir), 0.0);
+        
         // Specular
         let view_dir = normalize(camera.view_pos.xyz - position);
-        let reflect_dir = reflect(-light_dir, normal_normalized);
-        let spec_angle = max(dot(view_dir, reflect_dir), 0.0);
+        let reflect_dir = reflect(-light_dir, normal);
+        let spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
 
-        let spec = pow(spec_angle, material.shininess);
-        total_specular += light.color * material.specular * spec;
+        final_color += (diff + spec * 0.5) * light.color * light.intensity;
     }
+    
+    // Ensure the color doesn't exceed 1.0
+    final_color = min(final_color, vec3<f32>(1.0));
 
-    return clamp(total_ambient + total_diffuse + total_specular, vec3<f32>(0.0), vec3<f32>(1.0));
+    return final_color;
 }
 
 @compute @workgroup_size(256)
