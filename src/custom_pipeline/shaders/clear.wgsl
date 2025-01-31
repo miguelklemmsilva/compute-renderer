@@ -1,8 +1,3 @@
-// -----------------------------------------------------------------------------
-// CLEAR STAGE
-// -----------------------------------------------------------------------------
-// Efficiently clears both the output and depth buffers in parallel.
-
 struct OutputBuffer {
     data: array<atomic<u32>>,
 };
