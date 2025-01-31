@@ -9,7 +9,7 @@ use crate::{
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
-    pub processed_vertices_gpu: Vec<GpuVertex>,
+    pub processed_vertices_custom: Vec<GpuVertex>,
     pub processed_vertices_wgpu: Vec<WgpuVertex>,
     pub processed_indices: Vec<Index>,
     pub processed_materials: Vec<MaterialInfo>,
@@ -225,7 +225,7 @@ impl Model {
 
         Model {
             meshes,
-            processed_vertices_gpu,
+            processed_vertices_custom: processed_vertices_gpu,
             processed_vertices_wgpu,
             processed_indices,
             processed_materials,

@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use camera::CameraMode;
-use effect::{EdgeMeltEffect, Effect};
 use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
@@ -33,30 +32,30 @@ fn main() {
     // List of scenes to benchmark
     let scenes = vec![SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("african_head.obj"),
-        texture_path: Some(String::from("african_head_diffuse.tga")),
+        model_path: String::from("erato/erato.obj"),
+        texture_path: None,
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {
-            mode: CameraMode::Orbit,
+            mode: CameraMode::FirstPerson,
             position: [0.0, 0.0, 2.0], // Move camera closer to see the model
             ..Default::default()
         },
-        benchmark_duration_secs: 10,
+        benchmark_duration_secs: u64::MAX,
         backend_type: BackendType::CustomPipeline, // Choose which backend to use
     },
     SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("african_head.obj"),
-        texture_path: Some(String::from("african_head_diffuse.tga")),
+        model_path: String::from("erato/erato.obj"),
+        texture_path: None,
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {
-            mode: CameraMode::Orbit,
+            mode: CameraMode::FirstPerson,
             position: [0.0, 0.0, 2.0], // Move camera closer to see the model
             ..Default::default()
         },
-        benchmark_duration_secs: 10,
+        benchmark_duration_secs: u64::MAX,
         backend_type: BackendType::WgpuPipeline,
     }];
 
