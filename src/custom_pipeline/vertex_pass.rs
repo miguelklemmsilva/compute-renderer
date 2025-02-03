@@ -1,4 +1,4 @@
-use super::gpu_buffers::GpuBuffers;
+use super::{gpu_buffers::GpuBuffers, util::dispatch_size};
 
 pub struct VertexPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -177,13 +177,6 @@ impl VertexPass {
         cpass.set_bind_group(2, &self.bind_group_2, &[]);
         cpass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        // Calculate workgroups based on number of vertices
-        let workgroup_size = 16u32;
-        let total_threads_needed =
-            ((num_indices as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
-        let dispatch_x = (total_threads_needed as f32).sqrt().ceil() as u32;
-        let dispatch_y = ((total_threads_needed as f32) / (dispatch_x as f32)).ceil() as u32;
-
-        cpass.dispatch_workgroups(dispatch_x, dispatch_y, 1);
+        cpass.dispatch_workgroups(dispatch_size(num_indices), 1, 1);
     }
 }
