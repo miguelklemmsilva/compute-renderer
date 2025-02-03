@@ -1,11 +1,7 @@
-use std::path::Path;
-
 use wgpu::util::DeviceExt;
-use winit::window::Window as WinitWindow;
 
 use crate::{
-    camera::{Camera, CameraUniform},
-    effect::{Effect, EffectUniform},
+    camera::CameraUniform,
     scene::{Light, Scene},
 };
 
@@ -34,7 +30,6 @@ pub struct WgpuRenderer {
     // Camera and effect buffers
     pub camera_buffer: wgpu::Buffer,
     pub light_buffer: wgpu::Buffer,
-    pub effect_buffer: wgpu::Buffer,
 
     // Bind group for camera & effect data
     pub global_bind_group: wgpu::BindGroup,
@@ -89,7 +84,7 @@ impl WgpuRenderer {
             .cloned()
             .unwrap_or(wgpu::TextureFormat::Bgra8UnormSrgb);
 
-        let mut config = wgpu::SurfaceConfiguration {
+        let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             width: width.max(1),
@@ -126,13 +121,6 @@ impl WgpuRenderer {
         let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Buffer"),
             contents: bytemuck::cast_slice(&initial_lights),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // Create effect buffer
-        let effect_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Effect Buffer"),
-            contents: bytemuck::cast_slice(&[EffectUniform::default()]),
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
@@ -291,7 +279,6 @@ impl WgpuRenderer {
             depth_texture_view,
             camera_buffer,
             light_buffer,
-            effect_buffer,
             global_bind_group,
             model_data,
         }
