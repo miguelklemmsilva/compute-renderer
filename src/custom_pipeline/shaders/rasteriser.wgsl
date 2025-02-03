@@ -110,7 +110,7 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
         vec3<f32>(v3.x - v1.x, v2.x - v1.x, v1.x - p.x),
         vec3<f32>(v3.y - v1.y, v2.y - v1.y, v1.y - p.y)
     );
-    if (abs(u.z) < 1e-5) {
+    if abs(u.z) < 1e-5 {
         return vec3<f32>(-1.0, 1.0, 1.0);
     }
     return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
@@ -178,72 +178,74 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 vec3<f32>(v3.x, v3.y, v3.z),
                 vec2<f32>(f32(x), f32(y))
             );
-            
+
             var threshold = 0.0;
-            if (effect.effect_type == 3u) {
+            if effect.effect_type == 3u {
                 threshold = -effect.param1;
             }
-            
-            if (bc.x < threshold || bc.y < threshold || bc.z < threshold) {
+
+            if bc.x < threshold || bc.y < threshold || bc.z < threshold {
                 continue;
             }
-            
-            if (effect.effect_type == 2u) {
+
+            if effect.effect_type == 2u {
                 let amplitude = effect.param1;
                 let phase = effect.param2;
                 let wave = 0.5 + 0.5 * sin(effect.time + phase);
                 let meltdownThreshold = amplitude * wave;
                 let min_bc = min(bc.x, min(bc.y, bc.z));
-                if (min_bc < meltdownThreshold) {
+                if min_bc < meltdownThreshold {
                     continue;
                 }
             }
             
             // Interpolate depth.
             let interpolated_z = bc.x * z1 + bc.y * z2 + bc.z * z3;
-            if (interpolated_z < -1.0 || interpolated_z > 1.0) {
+            if interpolated_z < -1.0 || interpolated_z > 1.0 {
                 continue;
             }
-
-
-            // Convert to [0,1] range for depth buffer
             
             // Convert to [0,1] range for depth buffer
             let depth = interpolated_z;
             let pixel_id = x + y * u32(screen_dims.width);
-            let stored_depth = unpack_u32_to_float(atomicLoad(&fragment_buffer.frags[pixel_id].depth));
-            if (depth >= stored_depth) {
-                continue;
-            }
-
-
-            // Interpolate UV coordinates (already divided by w)
-            
-            // Interpolate UV coordinates (already divided by w)
-            let interpolated_uv = bc.x * uv1 + bc.y * uv2 + bc.z * uv3;
-            let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
-            let interpolated_normal = normalize(bc.x * normal1 + bc.y * normal2 + bc.z * normal3);
-            
+            // Convert our computed depth to a packed u32.
             let packed_depth = pack_float_to_u32(depth);
-            atomicStore(&fragment_buffer.frags[pixel_id].depth, packed_depth);
-            fragment_buffer.frags[pixel_id].uv = interpolated_uv;
-            fragment_buffer.frags[pixel_id].normal = interpolated_normal;
-            fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
-            fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
+            // Get the pointer for the current pixel.
+            let pixel_ptr = &fragment_buffer.frags[pixel_id].depth;
+
+            // Attempt an atomic update in a loop.
+            var old = atomicLoad(pixel_ptr);
+            loop {
+                let old_depth = unpack_u32_to_float(old);
+                if depth >= old_depth {
+                    // Our new depth is not better than the one already stored.
+                    break;
+                }
+                // Try to atomically update the depth.
+                let result = atomicCompareExchangeWeak(pixel_ptr, old, packed_depth);
+                if result.exchanged {
+                    // Interpolate UV coordinates (already divided by w)
+                    let interpolated_uv = bc.x * uv1 + bc.y * uv2 + bc.z * uv3;
+                    let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
+                    let interpolated_normal = normalize(bc.x * normal1 + bc.y * normal2 + bc.z * normal3);
+
+                    // We won the race: update the fragment data.
+                    fragment_buffer.frags[pixel_id].uv = interpolated_uv;
+                    fragment_buffer.frags[pixel_id].normal = interpolated_normal;
+                    fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
+                    fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
+                    break;
+                }
+    // Otherwise, update old and try again.
+                old = result.old_value;
+            }
         }
     }
 }
 
-// ---------------------------------------------------------------------
-// Entry Point: Adaptive Tile Splitting Rasterization
-//
-// Each workgroup processes one tile. The workgroup’s ID (workgroup_id.x)
-// corresponds to the tile’s index in a row–major ordering. Within a tile,
-// each of the 256 threads processes a subset of the triangle list.
-// ---------------------------------------------------------------------
 @compute @workgroup_size(1, 1, 256)
 fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
-               @builtin(local_invocation_id) lid: vec3<u32>) {
+    @builtin(local_invocation_id) lid: vec3<u32>) {
     // Use the workgroup ID to determine the tile.
     let tile_x = wg.x;
     let tile_y = wg.y;
@@ -253,18 +255,18 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
     
     // Early exit if this tile is out-of-range.
-    if (tile_x >= num_tiles_x || tile_y >= num_tiles_y) {
+    if tile_x >= num_tiles_x || tile_y >= num_tiles_y {
         return;
     }
-    
+
     let tile_idx = tile_x + tile_y * num_tiles_x;
     let triangle_count = atomicLoad(&tile_buffer.triangle_indices[tile_idx].count);
     let triangle_offset = tile_buffer.triangle_indices[tile_idx].offset;
     
     // Use the third dimension of the local invocation to split work.
-    let thread_index = lid.z; // 0 .. 255
-    
-    for (var i: u32 = thread_index; i < triangle_count; i = i + 256u) {
+    let thread_index = lid.z;
+
+    for (var i = thread_index; i < triangle_count; i += 256u) {
         let base_idx = triangle_list_buffer.indices[triangle_offset + i];
         let idx1 = index_buffer.values[base_idx];
         let idx2 = index_buffer.values[base_idx + 1u];
@@ -274,7 +276,7 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
         let v3 = projected_buffer.values[idx3];
 
         // Discard triangles with any vertex behind the near plane.
-        if (v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0) {
+        if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
             continue;
         }
         
@@ -282,10 +284,10 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
         let a = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
         let b = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
         let cross_z = a.x * b.y - a.y * b.x;
-        if (effect.effect_type != 3u && cross_z >= 0.0) {
+        if effect.effect_type != 3u && cross_z >= 0.0 {
             continue;
         }
-        
+
         rasterize_triangle_in_tile(v1, v2, v3, tile_x, tile_y);
     }
 }
