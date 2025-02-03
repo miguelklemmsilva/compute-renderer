@@ -97,9 +97,9 @@ impl BinningPass {
         // 2) Create shader module from WGSL
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Binning WGSL"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(
-                include_str!("shaders/binning.wgsl"),
-            )),
+            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
+                "shaders/binning.wgsl"
+            ))),
         });
 
         // 3) Create compute pipelines
@@ -229,7 +229,7 @@ impl BinningPass {
             pass.set_bind_group(0, &self.bind_group_0, &[]);
             pass.set_bind_group(1, &self.bind_group_1, &[]);
 
-            pass.dispatch_workgroups(gx_tris, gy_tris, 1);
+            pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
         }
 
         // ---------------------------------------------------------------------
@@ -253,7 +253,7 @@ impl BinningPass {
         }
 
         // ---------------------------------------------------------------------
-        // 4) scan_second_pass: each tile adds the partial sum from its WG
+        // 3) scan_second_pass: each tile adds the partial sum from its WG
         // ---------------------------------------------------------------------
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -267,7 +267,7 @@ impl BinningPass {
         }
 
         // ---------------------------------------------------------------------
-        // 5) store_triangles: final pass that writes triangle indices
+        // 4) store_triangles: final pass that writes triangle indices
         // ---------------------------------------------------------------------
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -278,7 +278,7 @@ impl BinningPass {
             pass.set_bind_group(0, &self.bind_group_0, &[]);
             pass.set_bind_group(1, &self.bind_group_1, &[]);
 
-            pass.dispatch_workgroups(gx_tris, gy_tris, 1);
+            pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
         }
     }
 }
