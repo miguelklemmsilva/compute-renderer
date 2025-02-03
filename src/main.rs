@@ -38,11 +38,11 @@ fn main() {
         effects: None,
         camera_config: CameraConfig {
             mode: CameraMode::FirstPerson,
-            position: [0.0, 0.0, 2.0], // Move camera closer to see the model
+            position: [0.0, 0.0, 2.0],
             ..Default::default()
         },
         benchmark_duration_secs: u64::MAX,
-        backend_type: BackendType::CustomPipeline, // Choose which backend to use
+        backend_type: BackendType::CustomPipeline,
     },
     SceneConfig {
         name: "test".to_string(),
@@ -52,7 +52,7 @@ fn main() {
         effects: None,
         camera_config: CameraConfig {
             mode: CameraMode::FirstPerson,
-            position: [0.0, 0.0, 2.0], // Move camera closer to see the model
+            position: [0.0, 0.0, 2.0],
             ..Default::default()
         },
         benchmark_duration_secs: u64::MAX,
