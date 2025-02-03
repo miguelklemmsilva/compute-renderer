@@ -206,17 +206,7 @@ impl BinningPass {
                     .sum::<usize>()
             })
             .sum::<usize>() as u32;
-
-        // Each thread handles 1 triangle, but each WG has 16*16=256 threads
-        // => # of triangles per dispatch = 256 * (# of workgroups)
-        // So we want enough WGs to cover `total_tris`.
-        let workgroup_size = 16u32;
-        let total_threads_needed =
-            ((total_tris as f32) / (workgroup_size * workgroup_size) as f32).ceil() as u32;
-
-        let gx_tris = (total_threads_needed as f32).sqrt().ceil() as u32;
-        let gy_tris = ((total_threads_needed as f32) / (gx_tris as f32)).ceil() as u32;
-
+        
         // ---------------------------------------------------------------------
         // 1) count_triangles
         // ---------------------------------------------------------------------

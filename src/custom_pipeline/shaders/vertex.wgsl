@@ -129,9 +129,9 @@ fn project_vertex(v: Vertex) -> Vertex {
 // -----------------------------------------------------------------------------
 // ENTRY POINT
 // -----------------------------------------------------------------------------
-@compute @workgroup_size(16, 16)
+@compute @workgroup_size(256)
 fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
-    let idx = global_id.y * num_workgroups.x * 16 + global_id.x;
+    let idx = global_id.x;
     if idx >= arrayLength(&index_buffer.values) {
         return;
     }
