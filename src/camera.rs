@@ -185,17 +185,4 @@ impl Camera {
         let z = self.orbit_distance * self.yaw.to_radians().sin() * pitch_cos;
         self.eye = Vec3::new(x, y, z) + self.target;
     }
-
-    pub fn adjust_orbit_distance(&mut self, delta: f32) {
-        if let CameraMode::Orbit = self.mode {
-            self.orbit_distance = (self.orbit_distance + delta).max(1.0);
-            self.update_orbit_position();
-        }
-    }
-
-    pub fn adjust_orbit_speed(&mut self, delta: f32) {
-        if let CameraMode::Orbit = self.mode {
-            self.orbit_speed = (self.orbit_speed + delta).max(0.0).min(2.0);
-        }
-    }
 }
