@@ -38,7 +38,6 @@ fn main() {
         effects: None,
         camera_config: CameraConfig {
             mode: CameraMode::FirstPerson,
-            position: [0.0, 0.0, 2.0],
             ..Default::default()
         },
         benchmark_duration_secs: u64::MAX,
@@ -52,7 +51,6 @@ fn main() {
         effects: None,
         camera_config: CameraConfig {
             mode: CameraMode::FirstPerson,
-            position: [0.0, 0.0, 2.0],
             ..Default::default()
         },
         benchmark_duration_secs: u64::MAX,

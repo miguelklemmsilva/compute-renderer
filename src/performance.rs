@@ -22,6 +22,7 @@ pub struct PerformanceCollector {
     benchmark_duration: Duration,
     scene_name: String,
     scene_index: usize,
+    has_started: bool,
 }
 
 impl PerformanceCollector {
@@ -37,10 +38,19 @@ impl PerformanceCollector {
             benchmark_duration,
             scene_name,
             scene_index,
+            has_started: false,
         }
     }
 
     pub fn update(&mut self) -> bool {
+        if !self.has_started {
+            // Reset timers on first frame
+            self.start_time = Instant::now();
+            self.last_frame_time = Instant::now();
+            self.has_started = true;
+            return false;
+        }
+
         let frame_time = self.last_frame_time.elapsed().as_secs_f64();
         self.frame_times.push(frame_time);
         self.last_frame_time = Instant::now();
