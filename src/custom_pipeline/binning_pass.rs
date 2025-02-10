@@ -206,7 +206,13 @@ impl BinningPass {
                     .sum::<usize>()
             })
             .sum::<usize>() as u32;
-        
+
+        let total_threads_needed =
+            (total_tris as f32).ceil();
+
+        let gx_tris = (total_threads_needed as f32).sqrt().ceil() as u32;
+        let gy_tris = ((total_threads_needed as f32) / (gx_tris as f32)).ceil() as u32;
+
         // ---------------------------------------------------------------------
         // 1) count_triangles
         // ---------------------------------------------------------------------
@@ -219,7 +225,7 @@ impl BinningPass {
             pass.set_bind_group(0, &self.bind_group_0, &[]);
             pass.set_bind_group(1, &self.bind_group_1, &[]);
 
-            pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
+            pass.dispatch_workgroups(gx_tris, gy_tris, 1);
         }
 
         // ---------------------------------------------------------------------
@@ -268,7 +274,7 @@ impl BinningPass {
             pass.set_bind_group(0, &self.bind_group_0, &[]);
             pass.set_bind_group(1, &self.bind_group_1, &[]);
 
-            pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
+            pass.dispatch_workgroups(gx_tris, gy_tris, 1);
         }
     }
 }

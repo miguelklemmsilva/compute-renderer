@@ -130,9 +130,11 @@ fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>, material: Material
     
     // Start with ambient light
     final_color = ambient;
+
+    let num_lights = arrayLength(&light_buffer.lights);
     
     // Add contribution from each light
-    for (var i = 0u; i < 8u; i++) {
+    for (var i = 0u; i < num_lights; i++) {
         let light = light_buffer.lights[i];
         let light_dir = normalize(light.world_position - position);
         

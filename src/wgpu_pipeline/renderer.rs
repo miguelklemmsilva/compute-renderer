@@ -113,15 +113,14 @@ impl WgpuRenderer {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
         });
 
-        // Create light buffer with space for 8 lights
-        let mut initial_lights = vec![Light::default(); 8];
+        let mut initial_lights = scene.lights.clone();
         if !scene.lights.is_empty() {
             initial_lights[..scene.lights.len()].copy_from_slice(&scene.lights);
         }
         let light_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Light Buffer"),
             contents: bytemuck::cast_slice(&initial_lights),
-            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         // Create bind group layout
@@ -145,19 +144,13 @@ impl WgpuRenderer {
                         },
                         count: None,
                     },
-                    // Lights uniform (array of 8 lights)
                     wgpu::BindGroupLayoutEntry {
                         binding: 1,
                         visibility: wgpu::ShaderStages::VERTEX | wgpu::ShaderStages::FRAGMENT,
                         ty: wgpu::BindingType::Buffer {
-                            ty: wgpu::BufferBindingType::Uniform,
+                            ty: wgpu::BufferBindingType::Storage { read_only: true },
                             has_dynamic_offset: false,
-                            min_binding_size: Some(
-                                std::num::NonZeroU64::new(
-                                    (std::mem::size_of::<Light>() * 8) as u64,
-                                )
-                                .unwrap(),
-                            ),
+                            min_binding_size: None,
                         },
                         count: None,
                     },
