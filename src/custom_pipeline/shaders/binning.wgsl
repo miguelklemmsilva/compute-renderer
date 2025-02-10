@@ -71,12 +71,15 @@ fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
 //---------------------------------------------------------------------
 // Kernel 1: Count triangles per tile.
 // Each thread processes one triangle, inlining the triangle logic.
-@compute @workgroup_size(256)
-fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let triangle_index = global_id.x;
-    // Determine how many triangles there are.
+@compute @workgroup_size(1, 1, 32)
+fn count_triangles(
+    @builtin(workgroup_id) wg: vec3<u32>,
+    @builtin(local_invocation_id) lid: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>
+) {
+    let triangle_index = wg.x + wg.y * num_workgroups.x;
     let num_triangles = arrayLength(&index_buffer.values) / 3u;
-    if (triangle_index >= num_triangles) {
+    if triangle_index >= num_triangles {
         return;
     }
     // Get the three vertex indices and load the vertices.
@@ -89,7 +92,7 @@ fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let v3 = projected_buffer.values[idx3];
 
     // Discard triangles with any vertex behind the near plane.
-    if (v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0) {
+    if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
         return;
     }
 
@@ -101,8 +104,7 @@ fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     );
 
     // Discard triangles completely outside the screen bounds.
-    if (min_max.z < 0.0 || min_max.x >= screen_dims.width ||
-        min_max.w < 0.0 || min_max.y >= screen_dims.height) {
+    if min_max.z < 0.0 || min_max.x >= screen_dims.width || min_max.w < 0.0 || min_max.y >= screen_dims.height {
         return;
     }
 
@@ -110,9 +112,9 @@ fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let start_tile_x = u32(max(floor(min_max.x / f32(TILE_SIZE)), 0.0));
     let start_tile_y = u32(max(floor(min_max.y / f32(TILE_SIZE)), 0.0));
     let end_tile_x = min(u32(ceil(min_max.z / f32(TILE_SIZE))),
-                         (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE);
+        (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE);
     let end_tile_y = min(u32(ceil(min_max.w / f32(TILE_SIZE))),
-                         (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE);
+        (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE);
 
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let tile_range_x = end_tile_x - start_tile_x;
@@ -120,7 +122,9 @@ fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let num_tiles = tile_range_x * tile_range_y;
 
     // For each tile covered by the triangle's bounding box, count its contribution.
-    for (var i = 0u; i < num_tiles; i = i + 1u) {
+    let num_threads = 32u; // matches workgroup size in z
+    let thread_id = lid.z;
+    for (var i: u32 = thread_id; i < num_tiles; i = i + num_threads) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
@@ -134,9 +138,9 @@ fn count_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
 fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
     var offset = 1u;
     var d = workgroup_size >> 1u;
-    while (d > 0u) {
+    while d > 0u {
         workgroupBarrier();
-        if (tid < d) {
+        if tid < d {
             let ai = offset * (2u * tid + 1u) - 1u;
             let bi = offset * (2u * tid + 2u) - 1u;
             shared_data[bi] += shared_data[ai];
@@ -144,14 +148,14 @@ fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
         offset *= 2u;
         d = d >> 1u;
     }
-    if (tid == workgroup_size - 1u) {
+    if tid == workgroup_size - 1u {
         shared_data[tid] = 0u;
     }
     d = 1u;
-    while (d < workgroup_size) {
+    while d < workgroup_size {
         offset = offset >> 1u;
         workgroupBarrier();
-        if (tid < d) {
+        if tid < d {
             let ai = offset * (2u * tid + 1u) - 1u;
             let bi = offset * (2u * tid + 2u) - 1u;
             let temp = shared_data[ai];
@@ -181,20 +185,20 @@ fn scan_first_pass(
     let tile_index = global_id.x;
     let tid = local_id.x;
     shared_data[tid] = 0u;
-    if (tile_index < total_tiles) {
+    if tile_index < total_tiles {
         shared_data[tid] = tile_buffer.triangle_indices[tile_index].count;
     }
     workgroupBarrier();
 
     let scan_result = workgroup_scan_exclusive(tid, 256u);
 
-    if (tid == 255u) {
+    if tid == 255u {
         let workgroup_sum = scan_result + shared_data[tid];
         atomicStore(&partial_sums.values[workgroup_id.x], workgroup_sum);
     }
     storageBarrier();
 
-    if (tile_index < total_tiles) {
+    if tile_index < total_tiles {
         tile_buffer.triangle_indices[tile_index].offset = scan_result;
     }
 }
@@ -211,9 +215,10 @@ fn scan_second_pass(
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
     let total_tiles = num_tiles_x * num_tiles_y;
     let tile_index = global_id.x;
-    if (tile_index >= total_tiles) {
+    if tile_index >= total_tiles {
         return;
     }
+    
     var workgroup_offset = 0u;
     let current_group = workgroup_id.x;
     for (var i = 0u; i < current_group; i = i + 1u) {
@@ -225,13 +230,20 @@ fn scan_second_pass(
 //---------------------------------------------------------------------
 // Kernel 3: Store triangle indices into the triangle list buffer.
 // Each thread processes one triangle and inlines the triangle logic.
-@compute @workgroup_size(256)
-fn store_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let triangle_index = global_id.x;
+@compute @workgroup_size(1, 1, 32)
+fn store_triangles(
+    @builtin(workgroup_id) wg: vec3<u32>,
+    @builtin(local_invocation_id) lid: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>
+) {
+    // Compute the global triangle index from the 2D workgroup grid.
+    let triangle_index = wg.x + wg.y * num_workgroups.x;
     let num_triangles = arrayLength(&index_buffer.values) / 3u;
-    if (triangle_index >= num_triangles) {
+    if triangle_index >= num_triangles {
         return;
     }
+    
+    // The rest of the kernel remains similar to your original logic:
     let base_idx = triangle_index * 3u;
     let idx1 = index_buffer.values[base_idx];
     let idx2 = index_buffer.values[base_idx + 1u];
@@ -240,7 +252,8 @@ fn store_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let v2 = projected_buffer.values[idx2];
     let v3 = projected_buffer.values[idx3];
 
-    if (v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0) {
+    // Discard triangles that are off-screen or behind the near plane.
+    if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
         return;
     }
 
@@ -249,31 +262,32 @@ fn store_triangles(@builtin(global_invocation_id) global_id: vec3<u32>) {
         vec3<f32>(v2.x, v2.y, v2.z),
         vec3<f32>(v3.x, v3.y, v3.z)
     );
-
-    if (min_max.z < 0.0 || min_max.x >= screen_dims.width ||
-        min_max.w < 0.0 || min_max.y >= screen_dims.height) {
+    if min_max.z < 0.0 || min_max.x >= screen_dims.width || min_max.w < 0.0 || min_max.y >= screen_dims.height {
         return;
     }
 
     let start_tile_x = u32(max(floor(min_max.x / f32(TILE_SIZE)), 0.0));
     let start_tile_y = u32(max(floor(min_max.y / f32(TILE_SIZE)), 0.0));
     let end_tile_x = min(u32(ceil(min_max.z / f32(TILE_SIZE))),
-                         (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE);
+        (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE);
     let end_tile_y = min(u32(ceil(min_max.w / f32(TILE_SIZE))),
-                         (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE);
+        (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE);
 
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let tile_range_x = end_tile_x - start_tile_x;
     let tile_range_y = end_tile_y - start_tile_y;
-    let num_tiles = tile_range_x * tile_range_y;
+    let total_tiles = tile_range_x * tile_range_y;
 
-    for (var i = 0u; i < num_tiles; i = i + 1u) {
+    let num_threads = 32u; // matches workgroup size in z
+    let thread_id = lid.z;
+    for (var i: u32 = thread_id; i < total_tiles; i = i + num_threads) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
+
         let count = atomicLoad(&tile_buffer.triangle_indices[tile_index].count);
         let write_index = atomicAdd(&tile_buffer.triangle_indices[tile_index].write_index, 1u);
-        if (write_index < count) {
+        if write_index < count {
             let offset = tile_buffer.triangle_indices[tile_index].offset;
             triangle_list_buffer.indices[offset + write_index] = base_idx;
         } else {
