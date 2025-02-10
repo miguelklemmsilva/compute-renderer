@@ -22,7 +22,7 @@ struct Light {
 var<uniform> camera: CameraUniform;
 
 @group(0) @binding(1)
-var<uniform> lights: array<Light, 8>; // or however many you want
+var<storage, read> lights: array<Light>;
 
 // Vertex inputs
 struct VertexInput {
@@ -65,9 +65,11 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     
     // Start with ambient light
     final_color = ambient;
+
+    let num_lights = arrayLength(&lights);
     
     // Add contribution from each light
-    for (var i = 0u; i < 8u; i++) {
+    for (var i = 0u; i < num_lights; i++) {
         let light = lights[i];
         let light_dir = normalize(light.world_position - in.world_position);
         

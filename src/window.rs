@@ -7,7 +7,10 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window as WinitWindow, WindowAttributes, WindowId};
 
-use crate::{custom_pipeline, performance::PerformanceCollector, scene, wgpu_pipeline::renderer::WgpuRenderer};
+use crate::{
+    custom_pipeline, performance::PerformanceCollector, scene,
+    wgpu_pipeline::renderer::WgpuRenderer,
+};
 
 pub enum RenderBackend {
     WgpuPipeline {
@@ -83,8 +86,11 @@ impl ApplicationHandler for Window {
                             .unwrap(),
                     )
                 };
-                let gpu =
-                    pollster::block_on(custom_pipeline::gpu::GPU::new(self.width, self.height, &self.scene));
+                let gpu = pollster::block_on(custom_pipeline::gpu::GPU::new(
+                    self.width,
+                    self.height,
+                    &self.scene,
+                ));
 
                 self.backend = Some(RenderBackend::CustomPipeline { pixels, gpu });
             }

@@ -32,7 +32,7 @@ fn main() {
     // List of scenes to benchmark
     let scenes = vec![SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("erato/erato.obj"),
+        model_path: String::from("sportsCar/sportsCar.obj"),
         texture_path: None,
         lights: lights.clone(),
         effects: None,
@@ -40,7 +40,7 @@ fn main() {
             mode: CameraMode::FirstPerson,
             ..Default::default()
         },
-        benchmark_duration_secs: u64::MAX,
+        benchmark_duration_secs: 10,
         backend_type: BackendType::CustomPipeline,
     },
     SceneConfig {

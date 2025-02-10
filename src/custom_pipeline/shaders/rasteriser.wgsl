@@ -236,7 +236,8 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                     fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
                     break;
                 }
-    // Otherwise, update old and try again.
+                
+                // Otherwise, update old and try again.
                 old = result.old_value;
             }
         }
