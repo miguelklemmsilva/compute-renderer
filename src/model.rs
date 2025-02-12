@@ -148,6 +148,7 @@ impl Model {
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
                                 m.mesh.positions[i * 3 + 2],
+                                1.0
                             ],
                             tex_coords: if m.mesh.texcoords.is_empty() {
                                 [0.0, 0.0]
@@ -155,16 +156,16 @@ impl Model {
                                 [m.mesh.texcoords[i * 2], 1.0 - m.mesh.texcoords[i * 2 + 1]]
                             },
                             normal: if m.mesh.normals.is_empty() {
-                                [0.0, 0.0, 0.0]
+                                [0.0, 0.0, 0.0, 0.0]
                             } else {
                                 [
                                     m.mesh.normals[i * 3],
                                     m.mesh.normals[i * 3 + 1],
                                     m.mesh.normals[i * 3 + 2],
+                                    0.0
                                 ]
                             },
-                            material_id: m.mesh.material_id.unwrap_or(0) as u32,
-                            w_clip: 0.0,
+                            padding: [0.0; 2]
                         })
                         .collect::<Vec<_>>();
                     processed_vertices_gpu.extend(vertices);
