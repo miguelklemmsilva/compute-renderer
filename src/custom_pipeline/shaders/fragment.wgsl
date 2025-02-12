@@ -94,7 +94,7 @@ struct FragmentBuffer {
 
 fn rgba(r: u32, g: u32, b: u32, a: u32) -> u32 {
     // BGRA format (0xFF for alpha)
-    return (a << 24) | (b << 16) | (g << 8) | r;
+    return (a << 24u) | (b << 16u) | (g << 8u) | r;
 }
 
 fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
@@ -117,13 +117,13 @@ fn sample_texture(uv: vec2<f32>, texture_info: TextureInfo) -> vec3<f32> {
     let index = texture_info.offset + y * texture_info.width + x;
     let texel = texture_buffer.data[index];
 
-    let r = f32((texel >> 24) & 0xFFu) / 255.0;
-    let g = f32((texel >> 16) & 0xFFu) / 255.0;
-    let b = f32((texel >> 8) & 0xFFu) / 255.0;
+    let r = f32((texel >> 24u) & 0xFFu) / 255.0;
+    let g = f32((texel >> 16u) & 0xFFu) / 255.0;
+    let b = f32((texel >> 8u) & 0xFFu) / 255.0;
     return vec3<f32>(r, g, b);
 }
 
-fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>, material: Material, uv: vec2<f32>) -> vec3<f32> {
+fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
     // Basic lighting calculation
     var final_color = vec3<f32>(0.0);
     let ambient = vec3<f32>(0.1);
@@ -166,18 +166,11 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     var normal = fragment_buffer.frags[idx].normal;
 
-    // 2) Retrieve the material
-    let mat_index = fragment_buffer.frags[idx].material_index;
-    let material = material_buffer.infos[mat_index];
-
     // 3) Calculate lighting with the material
-    let lighting_color = calculate_lighting(normal, fragment_buffer.frags[idx].world_pos, material, fragment_buffer.frags[idx].uv);
-
-    // 4) Handle transparency
-    let alpha = material.dissolve;
+    let lighting_color = calculate_lighting(normal, fragment_buffer.frags[idx].world_pos, fragment_buffer.frags[idx].uv);
 
     // 6) Final color
-    let final_color = vec4<f32>(lighting_color.rgb, alpha);
+    let final_color = vec4<f32>(lighting_color.rgb, 1.0);
 
     // Convert float color to integer
     let R = u32(final_color.r * 255.0);

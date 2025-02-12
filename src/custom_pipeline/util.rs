@@ -27,16 +27,6 @@ impl Uniform {
 pub struct Index(pub u32);
 
 #[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable, Debug)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-    pub tex_coords: [f32; 2],
-    pub material_id: u32,
-    pub w_clip: f32,
-}
-
-#[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct MaterialInfo {
     pub texture_info: TextureInfo,
