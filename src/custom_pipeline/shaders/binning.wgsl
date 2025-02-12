@@ -3,16 +3,10 @@ const TILE_SIZE: u32 = 8u;
 
 // Data structures (unchanged)
 struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32,
-    nx: f32,
-    ny: f32,
-    nz: f32,
-    u: f32,
-    v: f32,
-    texture_index: u32,
-    w_clip: f32,
+    clip_pos: vec4<f32>,
+    world_pos: vec3<f32>,
+    normal: vec3<f32>,
+    uv: vec2<f32>,
 };
 
 struct ProjectedVertexBuffer {
@@ -91,16 +85,11 @@ fn count_triangles(
     let v2 = projected_buffer.values[idx2];
     let v3 = projected_buffer.values[idx3];
 
-    // Discard triangles with any vertex behind the near plane.
-    if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
-        return;
-    }
-
     // Compute the 2D bounding box.
     let min_max = get_min_max(
-        vec3<f32>(v1.x, v1.y, v1.z),
-        vec3<f32>(v2.x, v2.y, v2.z),
-        vec3<f32>(v3.x, v3.y, v3.z)
+        v1.clip_pos.xyz,
+        v2.clip_pos.xyz,
+        v3.clip_pos.xyz
     );
 
     // Discard triangles completely outside the screen bounds.
@@ -252,16 +241,12 @@ fn store_triangles(
     let v2 = projected_buffer.values[idx2];
     let v3 = projected_buffer.values[idx3];
 
-    // Discard triangles that are off-screen or behind the near plane.
-    if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
-        return;
-    }
-
     let min_max = get_min_max(
-        vec3<f32>(v1.x, v1.y, v1.z),
-        vec3<f32>(v2.x, v2.y, v2.z),
-        vec3<f32>(v3.x, v3.y, v3.z)
+        v1.clip_pos.xyz,
+        v2.clip_pos.xyz,
+        v3.clip_pos.xyz
     );
+
     if min_max.z < 0.0 || min_max.x >= screen_dims.width || min_max.w < 0.0 || min_max.y >= screen_dims.height {
         return;
     }

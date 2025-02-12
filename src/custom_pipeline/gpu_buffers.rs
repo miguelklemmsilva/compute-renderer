@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera,
-    custom_pipeline::util::{Fragment, MaterialInfo, Uniform, Vertex},
+    custom_pipeline::util::{Fragment, MaterialInfo, ScreenUniform, Vertex},
     effect::EffectUniform,
     scene,
 };
@@ -19,6 +19,7 @@ pub struct GpuBuffers {
     pub index_buffer: wgpu::Buffer,
     pub projected_buffer: wgpu::Buffer,
     pub fragment_buffer: wgpu::Buffer,
+    pub depth_buffer: wgpu::Buffer,
     pub output_buffer: wgpu::Buffer,
     pub texture_buffer: wgpu::Buffer,
     pub texture_info_buffer: wgpu::Buffer,
@@ -30,7 +31,7 @@ pub struct GpuBuffers {
 impl GpuBuffers {
     pub fn new(device: &wgpu::Device, width: u32, height: u32, scene: &scene::Scene) -> Self {
         // 1) screen buffer
-        let screen_uniform_data = Uniform::new(width as f32, height as f32);
+        let screen_uniform_data = ScreenUniform::new(width as f32, height as f32);
         let screen_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Screen Buffer"),
             contents: bytemuck::bytes_of(&screen_uniform_data),
@@ -69,13 +70,13 @@ impl GpuBuffers {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Vertex Buffer"),
             contents: bytemuck::cast_slice(&vertices),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX,
         });
 
         let index_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("Index Buffer"),
             contents: bytemuck::cast_slice(&indices),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::VERTEX | wgpu::BufferUsages::INDEX,
         });
 
         // 3) projected buffer (same size as vertex_buffer)
@@ -91,6 +92,15 @@ impl GpuBuffers {
         let fragment_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Fragment Buffer"),
             size: max_fragments * std::mem::size_of::<Fragment>() as u64,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
+        let depth_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Depth Buffer"),
+            size: max_fragments * std::mem::size_of::<u32>() as u64,
             usage: wgpu::BufferUsages::STORAGE
                 | wgpu::BufferUsages::COPY_SRC
                 | wgpu::BufferUsages::COPY_DST,
@@ -210,6 +220,7 @@ impl GpuBuffers {
             light_buffer,
             effect_buffer,
             screen_buffer,
+            depth_buffer,
             vertex_buffer,
             index_buffer,
             projected_buffer,

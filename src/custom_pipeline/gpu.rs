@@ -1,25 +1,28 @@
 use crate::scene;
 
-use super::{
-    binning_pass::BinningPass, ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass,
-};
+use super::{binning_pass::BinningPass, ClearPass, GpuBuffers, RasterPass};
 
 pub struct GPU {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
+    pub config: wgpu::SurfaceConfiguration,
 
     pub buffers: GpuBuffers,
 
     pub clear_pass: ClearPass,
-    pub vertex_pass: VertexPass,
     pub raster_pass: RasterPass,
-    pub fragment_pass: FragmentPass,
     pub binning_pass: BinningPass,
+    pub render_pass: super::RenderPass,
 }
 
 impl GPU {
-    pub async fn new(width: usize, height: usize, scene: &scene::Scene) -> Self {
-        let instance = wgpu::Instance::default();
+    pub async fn new(
+        instance: wgpu::Instance,
+        width: usize,
+        height: usize,
+        scene: &scene::Scene,
+        surface: &wgpu::Surface<'_>,
+    ) -> Self {
         let adapter = instance
             .request_adapter(&wgpu::RequestAdapterOptions::default())
             .await
@@ -39,73 +42,58 @@ impl GPU {
 
         let buffers = GpuBuffers::new(&device, width as u32, height as u32, scene);
 
+        let format = wgpu::TextureFormat::Bgra8UnormSrgb;
+
+        let surface_caps = surface.get_capabilities(&adapter);
+
+        let config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format,
+            width: width as u32,
+            height: height as u32,
+            present_mode: wgpu::PresentMode::Immediate,
+            desired_maximum_frame_latency: 1,
+            alpha_mode: surface_caps.alpha_modes[0],
+            view_formats: vec![],
+        };
+
+        surface.configure(&device, &config);
+
         let clear_pass = ClearPass::new(&device, &buffers);
-        let vertex_pass = VertexPass::new(&device, &buffers);
         let binning_pass = BinningPass::new(&device, &buffers);
         let raster_pass = RasterPass::new(&device, &buffers);
-        let fragment_pass = FragmentPass::new(&device, &buffers);
+        let render_pass = super::RenderPass::new(&device, &buffers, format);
 
         Self {
             device,
             queue,
+            config,
             buffers,
             clear_pass,
-            vertex_pass,
             raster_pass,
-            fragment_pass,
             binning_pass,
+            render_pass,
         }
     }
 
-    pub async fn execute_pipeline(
-        &mut self,
-        width: usize,
-        height: usize,
-        scene: &scene::Scene,
-    ) -> Vec<u32> {
+    pub async fn execute_pipeline(&mut self, width: usize, height: usize, scene: &scene::Scene, surface: &wgpu::Surface<'_>) {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Command Encoder"),
             });
 
-        // Calculate total number of indices
-        let total_indices = scene
-            .models
-            .iter()
-            .map(|m| {
-                m.meshes
-                    .iter()
-                    .map(|mesh| mesh.indices.len())
-                    .sum::<usize>()
-            })
-            .sum::<usize>() as u32;
+        let frame = surface.get_current_texture().unwrap();
 
         self.clear_pass.execute(&mut encoder, width, height);
-        self.vertex_pass.execute(&mut encoder, total_indices);
         self.binning_pass
             .execute(&mut encoder, scene, width as u32, height as u32);
         self.raster_pass
             .execute(&mut encoder, width as u32, height as u32, scene);
-        self.fragment_pass.execute(&mut encoder, width, height);
+        self.render_pass.execute(&mut encoder, &frame, &self.buffers);
 
         self.queue.submit(Some(encoder.finish()));
-
-        // Read the output buffer for the final pixels
-        let buffer_slice = self.buffers.output_buffer.slice(..);
-        let (tx, rx_output) = futures_intrusive::channel::shared::oneshot_channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).unwrap();
-        });
-        self.device.poll(wgpu::Maintain::Wait);
-        rx_output.receive().await.unwrap().unwrap();
-
-        let data = buffer_slice.get_mapped_range();
-        let pixels = bytemuck::cast_slice(&data).to_vec();
-        drop(data);
-        self.buffers.output_buffer.unmap();
-
-        pixels
+        frame.present();
     }
 
     pub fn resize(&mut self, width: u32, height: u32, scene: &scene::Scene) {
@@ -114,9 +102,7 @@ impl GPU {
 
         // Recreate passes with new buffers
         self.clear_pass = ClearPass::new(&self.device, &self.buffers);
-        self.vertex_pass = VertexPass::new(&self.device, &self.buffers);
         self.binning_pass = BinningPass::new(&self.device, &self.buffers);
         self.raster_pass = RasterPass::new(&self.device, &self.buffers);
-        self.fragment_pass = FragmentPass::new(&self.device, &self.buffers);
     }
 }

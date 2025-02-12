@@ -9,7 +9,7 @@ use crate::{
 
 pub struct Model {
     pub meshes: Vec<Mesh>,
-    pub processed_vertices_custom: Vec<GpuVertex>,
+    pub processed_vertices_custom: Vec<WgpuVertex>,
     pub processed_vertices_wgpu: Vec<WgpuVertex>,
     pub processed_indices: Vec<Index>,
     pub processed_materials: Vec<MaterialInfo>,
@@ -143,7 +143,7 @@ impl Model {
             match backend_type {
                 BackendType::CustomPipeline => {
                     let vertices = (0..m.mesh.positions.len() / 3)
-                        .map(|i| GpuVertex {
+                        .map(|i| WgpuVertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],
@@ -163,8 +163,6 @@ impl Model {
                                     m.mesh.normals[i * 3 + 2],
                                 ]
                             },
-                            material_id: m.mesh.material_id.unwrap_or(0) as u32,
-                            w_clip: 0.0,
                         })
                         .collect::<Vec<_>>();
                     processed_vertices_gpu.extend(vertices);

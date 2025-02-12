@@ -8,12 +8,12 @@ pub(crate) const fn dispatch_size(len: u32) -> u32 {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct Uniform {
+pub(crate) struct ScreenUniform {
     screen_width: f32,
     screen_height: f32,
 }
 
-impl Uniform {
+impl ScreenUniform {
     pub fn new(screen_width: f32, screen_height: f32) -> Self {
         Self {
             screen_width,
@@ -91,10 +91,7 @@ impl Default for TextureInfo {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct Fragment {
-    pub depth: u32,
-    pub uv: [f32; 2],
-    pub normal: [f32; 3],
     pub world_pos: [f32; 3],
-    pub texture_index: u32,
-    pub _padding: [u32; 2],
+    pub normal: [f32; 3],
+    pub uv: [f32; 2],
 }

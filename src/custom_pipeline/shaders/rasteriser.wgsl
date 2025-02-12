@@ -8,10 +8,6 @@
 // Define the tile size in pixels.
 const TILE_SIZE: u32 = 8u;
 
-// ---------------------------------------------------------------------
-// Uniforms and Structures
-// ---------------------------------------------------------------------
-
 struct UniformRaster {
     width: f32,
     height: f32,
@@ -28,16 +24,10 @@ struct EffectUniform {
 };
 
 struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32,
-    nx: f32,
-    ny: f32,
-    nz: f32,
-    u: f32,
-    v: f32,
-    texture_index: u32,
-    w_clip: f32,
+    clip_pos: vec4<f32>,
+    world_pos: vec3<f32>,
+    normal: vec3<f32>,
+    uv: vec2<f32>,
 };
 
 struct ProjectedVertexBuffer {
@@ -49,16 +39,10 @@ struct IndexBuffer {
 };
 
 struct Fragment {
-    depth: atomic<u32>,
-    uv: vec2<f32>,
-    normal: vec3<f32>,
     world_pos: vec3<f32>,
-    texture_index: u32,
-};
-
-struct FragmentBuffer {
-    frags: array<Fragment>,
-};
+    normal: vec3<f32>,
+    uv: vec2<f32>,
+}
 
 struct TileTriangles {
     count: atomic<u32>,  // How many triangles were binned into this tile.
@@ -83,15 +67,18 @@ struct TriangleListBuffer {
 var<storage, read> projected_buffer: ProjectedVertexBuffer;
 
 @group(0) @binding(1)
-var<storage, read_write> fragment_buffer: FragmentBuffer;
+var<storage, read_write> fragment_buffer: array<Fragment>;
 
 @group(0) @binding(2)
-var<storage, read> tile_buffer: TileBuffer;
+var<storage, read_write> depth_buffer: array<atomic<u32>>;
 
 @group(0) @binding(3)
-var<storage, read> triangle_list_buffer: TriangleListBuffer;
+var<storage, read> tile_buffer: TileBuffer;
 
 @group(0) @binding(4)
+var<storage, read> triangle_list_buffer: TriangleListBuffer;
+
+@group(0) @binding(5)
 var<storage, read> index_buffer: IndexBuffer;
 
 @group(1) @binding(0)
@@ -147,35 +134,35 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let tile_end_y = min(tile_start_y + TILE_SIZE, u32(screen_dims.height));
 
     // Pre–compute reciprocal w for perspective–correct interpolation.
-    let one_over_w1 = 1.0 / v1.w_clip;
-    let one_over_w2 = 1.0 / v2.w_clip;
-    let one_over_w3 = 1.0 / v3.w_clip;
+    let one_over_w1 = 1.0 / v1.clip_pos.w;
+    let one_over_w2 = 1.0 / v2.clip_pos.w;
+    let one_over_w3 = 1.0 / v3.clip_pos.w;
 
     // Pre–divide attributes.
-    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
-    let world_pos2 = vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
-    let world_pos3 = vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
+    let world_pos1 = v1.world_pos * one_over_w1;
+    let world_pos2 = v2.world_pos * one_over_w2;
+    let world_pos3 = v3.world_pos * one_over_w3;
 
-    let normal1 = vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
-    let normal2 = vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
-    let normal3 = vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
+    let normal1 = v1.normal * one_over_w1;
+    let normal2 = v2.normal * one_over_w2;
+    let normal3 = v3.normal * one_over_w3;
 
-    let uv1 = vec2<f32>(v1.u, v1.v) * one_over_w1;
-    let uv2 = vec2<f32>(v2.u, v2.v) * one_over_w2;
-    let uv3 = vec2<f32>(v3.u, v3.v) * one_over_w3;
+    let uv1 = v1.uv * one_over_w1;
+    let uv2 = v2.uv * one_over_w2;
+    let uv3 = v3.uv * one_over_w3;
 
     // Pre-divide depth values.
-    let z1 = v1.z * one_over_w1;
-    let z2 = v2.z * one_over_w2;
-    let z3 = v3.z * one_over_w3;
+    let z1 = v1.clip_pos.z * one_over_w1;
+    let z2 = v2.clip_pos.z * one_over_w2;
+    let z3 = v3.clip_pos.z * one_over_w3;
 
     // Loop over the pixels in the tile.
     for (var x: u32 = tile_start_x; x < tile_end_x; x = x + 1u) {
         for (var y: u32 = tile_start_y; y < tile_end_y; y = y + 1u) {
             let bc = barycentric(
-                vec3<f32>(v1.x, v1.y, v1.z),
-                vec3<f32>(v2.x, v2.y, v2.z),
-                vec3<f32>(v3.x, v3.y, v3.z),
+                v1.clip_pos.xyz,
+                v2.clip_pos.xyz,
+                v3.clip_pos.xyz,
                 vec2<f32>(f32(x), f32(y))
             );
 
@@ -211,7 +198,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             // Convert our computed depth to a packed u32.
             let packed_depth = pack_float_to_u32(depth);
             // Get the pointer for the current pixel.
-            let pixel_ptr = &fragment_buffer.frags[pixel_id].depth;
+            let pixel_ptr = &depth_buffer[pixel_id];
 
             // Attempt an atomic update in a loop.
             var old = atomicLoad(pixel_ptr);
@@ -227,13 +214,12 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                     // Interpolate UV coordinates (already divided by w)
                     let interpolated_uv = bc.x * uv1 + bc.y * uv2 + bc.z * uv3;
                     let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
-                    let interpolated_normal = normalize(bc.x * normal1 + bc.y * normal2 + bc.z * normal3);
+                    let interpolated_normal = bc.x * normal1 + bc.y * normal2 + bc.z * normal3;
 
                     // We won the race: update the fragment data.
-                    fragment_buffer.frags[pixel_id].uv = interpolated_uv;
-                    fragment_buffer.frags[pixel_id].normal = interpolated_normal;
-                    fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
-                    fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
+                    fragment_buffer[pixel_id].uv = interpolated_uv;
+                    fragment_buffer[pixel_id].normal = interpolated_normal;
+                    fragment_buffer[pixel_id].world_pos = interpolated_world_pos;
                     break;
                 }
                 
@@ -275,15 +261,10 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
         let v1 = projected_buffer.values[idx1];
         let v2 = projected_buffer.values[idx2];
         let v3 = projected_buffer.values[idx3];
-
-        // Discard triangles with any vertex behind the near plane.
-        if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
-            continue;
-        }
         
         // Back-face culling (unless the effect requires both sides).
-        let a = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
-        let b = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
+        let a = vec2<f32>(v2.clip_pos.x - v1.clip_pos.x, v2.clip_pos.y - v1.clip_pos.y);
+        let b = vec2<f32>(v3.clip_pos.x - v1.clip_pos.x, v3.clip_pos.y - v1.clip_pos.y);
         let cross_z = a.x * b.y - a.y * b.x;
         if effect.effect_type != 3u && cross_z >= 0.0 {
             continue;

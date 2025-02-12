@@ -18,12 +18,10 @@ struct TriangleListBuffer {
 }
 
 struct Fragment {
-    depth: u32,
-    uv: vec2<f32>,
-    normal: vec3<f32>,
     world_pos: vec3<f32>,
-    texture_index: u32,
-};
+    normal: vec3<f32>,
+    uv: vec2<f32>,
+}
 
 struct FragmentBuffer {
     frags: array<Fragment>,
@@ -43,6 +41,7 @@ struct PartialSums {
 @group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
 @group(0) @binding(3) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
 @group(0) @binding(4) var<storage, read_write> partial_sums: PartialSums;
+@group(0) @binding(5) var<storage, read_write> depth_buffer: array<atomic<u32>>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 
@@ -64,12 +63,11 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // Clear color buffer to black (0x000000)
         output_buffer.data[idx] = 0u;
 
+        atomicStore(&depth_buffer[idx], 0xFFFFFFFu);
         // Clear fragment buffer
         fragment_buffer.frags[idx].uv = vec2<f32>(0.0, 0.0);
         fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
         fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
-        fragment_buffer.frags[idx].texture_index = 0u;
-        fragment_buffer.frags[idx].depth = 0xFFFFFFFFu;
     }
 
     // Clear tile buffer and set up offsets - ensure we clear all tiles
