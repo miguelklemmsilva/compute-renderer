@@ -9,16 +9,9 @@ struct Camera {
 };
 
 struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32,
-    nx: f32,
-    ny: f32,
-    nz: f32,
-    u: f32,
-    v: f32,
-    texture_index: u32,
-    w_clip: f32,
+    world_pos: vec4<f32>,
+    normal: vec4<f32>,
+    uv: vec2<f32>,
 };
 
 struct VertexBuffer {
@@ -80,49 +73,31 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
 // The original projection logic, but placed in a separate function here.
 fn project_vertex(v: Vertex) -> Vertex {
     var modified_v = v;
-    var world_pos = vec3<f32>(v.x, v.y, v.z);
+    var world_pos = v.world_pos;
 
     // If there's an effect that modifies position, apply it:
     if effect.effect_type == 1u { // Wave
-        world_pos = apply_wave_effect(world_pos, effect);
+        world_pos = vec4<f32>(apply_wave_effect(world_pos.xyz, effect), 1.0);
     }
 
     // Multiply by the view-projection matrix.
-    let clip_pos = camera.view_proj * vec4<f32>(world_pos, 1.0);
-
-    // Check if vertex is behind near plane (w < 0)
-    // We'll mark these vertices with a special w value that the rasterizer can check
-    if clip_pos.w <= 0.0 {
-        return Vertex(
-            0.0, 0.0, 0.0,  // Invalid screen position
-            v.u, v.v,
-            v.nx, v.ny, v.nz,  // Keep original normals
-            v.texture_index,
-            -1.0, // Special marker for invalid vertices
-        );
-    }
+    let clip_pos = camera.view_proj * world_pos;
 
     let ndc_pos = clip_pos.xyz / clip_pos.w;
 
     // Convert NDC -> screen
-    let screen_pos = vec3<f32>(
+    let screen_pos = vec4<f32>(
         ((ndc_pos.x + 1.0) * 0.5) * screen_dims.width,
         ((1.0 - ndc_pos.y) * 0.5) * screen_dims.height,
-        clip_pos.z
+        clip_pos.z,
+        clip_pos.w
     );
 
     // Keep the original normals and store world position separately
     return Vertex(
-        screen_pos.x,
-        screen_pos.y,
-        screen_pos.z,
-        v.nx,
-        v.ny,
-        v.nz,
-        v.u,
-        v.v,
-        v.texture_index,
-        clip_pos.w,
+        screen_pos,
+        v.normal,
+        v.uv
     );
 }
 
