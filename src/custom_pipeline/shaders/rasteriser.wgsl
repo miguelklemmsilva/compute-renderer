@@ -1,16 +1,10 @@
-// rasteriser_adaptive.wgsl
 // ---------------------------------------------------------------------
 // This shader implements adaptive tile splitting for rasterization.
 // When a tile has many triangles (for example, when the camera is far away),
 // each tile’s triangle list is processed in parallel by a workgroup of 64 threads.
 // ---------------------------------------------------------------------
 
-// Define the tile size in pixels.
 const TILE_SIZE: u32 = 8u;
-
-// ---------------------------------------------------------------------
-// Uniforms and Structures
-// ---------------------------------------------------------------------
 
 struct UniformRaster {
     width: f32,
@@ -28,16 +22,9 @@ struct EffectUniform {
 };
 
 struct Vertex {
-    x: f32,
-    y: f32,
-    z: f32,
-    nx: f32,
-    ny: f32,
-    nz: f32,
-    u: f32,
-    v: f32,
-    texture_index: u32,
-    w_clip: f32,
+    world_pos: vec4<f32>,
+    normal: vec4<f32>,
+    uv: vec2<f32>,
 };
 
 struct ProjectedVertexBuffer {
@@ -147,35 +134,35 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let tile_end_y = min(tile_start_y + TILE_SIZE, u32(screen_dims.height));
 
     // Pre–compute reciprocal w for perspective–correct interpolation.
-    let one_over_w1 = 1.0 / v1.w_clip;
-    let one_over_w2 = 1.0 / v2.w_clip;
-    let one_over_w3 = 1.0 / v3.w_clip;
+    let one_over_w1 = 1.0 / v1.world_pos.w;
+    let one_over_w2 = 1.0 / v2.world_pos.w;
+    let one_over_w3 = 1.0 / v3.world_pos.w;
 
     // Pre–divide attributes.
-    let world_pos1 = vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
-    let world_pos2 = vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
-    let world_pos3 = vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
+    let world_pos1 = v1.normal * one_over_w1;
+    let world_pos2 = v2.normal * one_over_w2;
+    let world_pos3 = v3.normal * one_over_w3;
 
-    let normal1 = vec3<f32>(v1.nx, v1.ny, v1.nz) * one_over_w1;
-    let normal2 = vec3<f32>(v2.nx, v2.ny, v2.nz) * one_over_w2;
-    let normal3 = vec3<f32>(v3.nx, v3.ny, v3.nz) * one_over_w3;
+    let normal1 = v1.normal * one_over_w1;
+    let normal2 = v2.normal * one_over_w2;
+    let normal3 = v3.normal * one_over_w3;
 
-    let uv1 = vec2<f32>(v1.u, v1.v) * one_over_w1;
-    let uv2 = vec2<f32>(v2.u, v2.v) * one_over_w2;
-    let uv3 = vec2<f32>(v3.u, v3.v) * one_over_w3;
+    let uv1 = v1.uv * one_over_w1;
+    let uv2 = v2.uv * one_over_w2;
+    let uv3 = v3.uv * one_over_w3;
 
     // Pre-divide depth values.
-    let z1 = v1.z * one_over_w1;
-    let z2 = v2.z * one_over_w2;
-    let z3 = v3.z * one_over_w3;
+    let z1 = v1.world_pos.z * one_over_w1;
+    let z2 = v2.world_pos.z * one_over_w2;
+    let z3 = v3.world_pos.z * one_over_w3;
 
     // Loop over the pixels in the tile.
     for (var x: u32 = tile_start_x; x < tile_end_x; x = x + 1u) {
         for (var y: u32 = tile_start_y; y < tile_end_y; y = y + 1u) {
             let bc = barycentric(
-                vec3<f32>(v1.x, v1.y, v1.z),
-                vec3<f32>(v2.x, v2.y, v2.z),
-                vec3<f32>(v3.x, v3.y, v3.z),
+                v1.world_pos.xyz,
+                v2.world_pos.xyz,
+                v3.world_pos.xyz,
                 vec2<f32>(f32(x), f32(y))
             );
 
@@ -231,9 +218,8 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
 
                     // We won the race: update the fragment data.
                     fragment_buffer.frags[pixel_id].uv = interpolated_uv;
-                    fragment_buffer.frags[pixel_id].normal = interpolated_normal;
-                    fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos;
-                    fragment_buffer.frags[pixel_id].texture_index = v1.texture_index;
+                    fragment_buffer.frags[pixel_id].normal = interpolated_normal.xyz;
+                    fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos.xyz;
                     break;
                 }
                 
@@ -277,13 +263,13 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
         let v3 = projected_buffer.values[idx3];
 
         // Discard triangles with any vertex behind the near plane.
-        if v1.w_clip < 0.0 || v2.w_clip < 0.0 || v3.w_clip < 0.0 {
+        if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
             continue;
         }
         
         // Back-face culling (unless the effect requires both sides).
-        let a = vec2<f32>(v2.x - v1.x, v2.y - v1.y);
-        let b = vec2<f32>(v3.x - v1.x, v3.y - v1.y);
+        let a = vec2<f32>(v2.world_pos.x - v1.world_pos.x, v2.world_pos.y - v1.world_pos.y);
+        let b = vec2<f32>(v3.world_pos.x - v1.world_pos.x, v3.world_pos.y - v1.world_pos.y);
         let cross_z = a.x * b.y - a.y * b.x;
         if effect.effect_type != 3u && cross_z >= 0.0 {
             continue;

@@ -2,9 +2,9 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera,
-    custom_pipeline::util::{Fragment, MaterialInfo, Uniform, Vertex},
+    custom_pipeline::util::{Fragment, MaterialInfo, Uniform},
     effect::EffectUniform,
-    scene,
+    scene, vertex::GpuVertex,
 };
 
 use super::raster_pass::TILE_SIZE;
@@ -81,7 +81,7 @@ impl GpuBuffers {
         // 3) projected buffer (same size as vertex_buffer)
         let projected_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Projected Buffer"),
-            size: (vertices.len() * std::mem::size_of::<Vertex>()) as u64,
+            size: (vertices.len() * std::mem::size_of::<GpuVertex>()) as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
