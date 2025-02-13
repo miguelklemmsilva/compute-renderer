@@ -1,21 +1,9 @@
-struct OutputBuffer {
-    data: array<atomic<u32>>,
-};
-
 struct TileTriangles {
-    count: atomic<u32>,
-    offset: u32, 
-    write_index: atomic<u32>,
+    count: u32,
+    offset: u32,
+    write_index: u32,
     padding: u32,
 };
-
-struct TileBuffer {
-    triangle_indices: array<TileTriangles>,
-}
-
-struct TriangleListBuffer {
-    indices: array<u32>,
-}
 
 struct Fragment {
     depth: u32,
@@ -25,24 +13,15 @@ struct Fragment {
     texture_index: u32,
 };
 
-struct FragmentBuffer {
-    frags: array<Fragment>,
-};
-
 struct Uniform {
     width: f32,
     height: f32,
 };
 
-struct PartialSums {
-    values: array<u32>,
-}
-
-@group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
-@group(0) @binding(1) var<storage, read_write> fragment_buffer: FragmentBuffer;
-@group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
-@group(0) @binding(3) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
-@group(0) @binding(4) var<storage, read_write> partial_sums: PartialSums;
+@group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
+@group(0) @binding(1) var<storage, read_write> fragment_buffer: array<Fragment>;
+@group(0) @binding(2) var<storage, read_write> tile_buffer: array<TileTriangles>;
+@group(0) @binding(3) var<storage, read_write> triangle_list_buffer: array<u32>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 
@@ -62,28 +41,16 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     // Clear pixel-dependent buffers
     if idx < total_pixels {
         // Clear color buffer to black (0x000000)
-        output_buffer.data[idx] = 0u;
+        output_buffer[idx] = 0u;
 
-        // Clear fragment buffer
-        fragment_buffer.frags[idx].uv = vec2<f32>(0.0, 0.0);
-        fragment_buffer.frags[idx].normal = vec3<f32>(0.0, 0.0, 0.0);
-        fragment_buffer.frags[idx].world_pos = vec3<f32>(0.0, 0.0, 0.0);
-        fragment_buffer.frags[idx].texture_index = 0u;
-        fragment_buffer.frags[idx].depth = 0xFFFFFFFFu;
+        fragment_buffer[idx].depth = 0xFFFFFFFFu;
     }
 
     // Clear tile buffer and set up offsets - ensure we clear all tiles
     if idx < total_tiles {
         // Ensure complete reset of tile data
-
-        tile_buffer.triangle_indices[idx].count = 0u;
-        tile_buffer.triangle_indices[idx].offset = 0u;
-        tile_buffer.triangle_indices[idx].write_index = 0u;
-        tile_buffer.triangle_indices[idx].padding = 0u;  // Clear padding just to be safe
-    }
-
-    // Clear partial sums buffer - ensure we clear enough entries for all workgroups
-    if idx < num_workgroups {
-        partial_sums.values[idx] = 0u;
+        tile_buffer[idx].count = 0u;
+        tile_buffer[idx].offset = 0u;
+        tile_buffer[idx].write_index = 0u;
     }
 } 

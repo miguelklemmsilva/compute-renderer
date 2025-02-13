@@ -170,7 +170,6 @@ impl RasterPass {
         encoder: &mut wgpu::CommandEncoder,
         width: u32,
         height: u32,
-        _scene: &scene::Scene,
     ) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Raster Pass"),

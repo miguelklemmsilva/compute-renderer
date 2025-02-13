@@ -8,10 +8,6 @@ struct Vertex {
     uv: vec2<f32>,
 };
 
-struct ProjectedVertexBuffer {
-    values: array<Vertex>,
-};
-
 struct IndexBuffer {
     values: array<u32>,
 };
@@ -23,28 +19,16 @@ struct TileTriangles {
     padding: u32,
 };
 
-struct TileBuffer {
-    triangle_indices: array<TileTriangles>,
-};
-
-struct TriangleListBuffer {
-    indices: array<u32>,
-};
-
 struct UniformBinning {
     width: f32,
     height: f32,
 };
 
-struct PartialSums {
-    values: array<atomic<u32>>,
-};
-
-@group(0) @binding(0) var<storage, read> projected_buffer: ProjectedVertexBuffer;
-@group(0) @binding(1) var<storage, read> index_buffer: IndexBuffer;
-@group(0) @binding(2) var<storage, read_write> tile_buffer: TileBuffer;
-@group(0) @binding(3) var<storage, read_write> triangle_list_buffer: TriangleListBuffer;
-@group(0) @binding(4) var<storage, read_write> partial_sums: PartialSums;
+@group(0) @binding(0) var<storage, read> projected_buffer: array<Vertex>;
+@group(0) @binding(1) var<storage, read> index_buffer: array<u32>;
+@group(0) @binding(2) var<storage, read_write> tile_buffer: array<TileTriangles>;
+@group(0) @binding(3) var<storage, read_write> triangle_list_buffer: array<u32>;
+@group(0) @binding(4) var<storage, read_write> partial_sums: array<atomic<u32>>;
 
 @group(1) @binding(0) var<uniform> screen_dims: UniformBinning;
 
@@ -71,18 +55,18 @@ fn count_triangles(
     @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
     let triangle_index = wg.x + wg.y * num_workgroups.x;
-    let num_triangles = arrayLength(&index_buffer.values) / 3u;
+    let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
     }
     // Get the three vertex indices and load the vertices.
     let base_idx = triangle_index * 3u;
-    let idx1 = index_buffer.values[base_idx];
-    let idx2 = index_buffer.values[base_idx + 1u];
-    let idx3 = index_buffer.values[base_idx + 2u];
-    let v1 = projected_buffer.values[idx1];
-    let v2 = projected_buffer.values[idx2];
-    let v3 = projected_buffer.values[idx3];
+    let idx1 = index_buffer[base_idx];
+    let idx2 = index_buffer[base_idx + 1u];
+    let idx3 = index_buffer[base_idx + 2u];
+    let v1 = projected_buffer[idx1];
+    let v2 = projected_buffer[idx2];
+    let v3 = projected_buffer[idx3];
 
     // Discard triangles with any vertex behind the near plane.
     if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
@@ -121,7 +105,7 @@ fn count_triangles(
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
-        atomicAdd(&tile_buffer.triangle_indices[tile_index].count, 1u);
+        atomicAdd(&tile_buffer[tile_index].count, 1u);
     }
 }
 
@@ -179,7 +163,7 @@ fn scan_first_pass(
     let tid = local_id.x;
     shared_data[tid] = 0u;
     if tile_index < total_tiles {
-        shared_data[tid] = tile_buffer.triangle_indices[tile_index].count;
+        shared_data[tid] = tile_buffer[tile_index].count;
     }
     workgroupBarrier();
 
@@ -187,12 +171,12 @@ fn scan_first_pass(
 
     if tid == 255u {
         let workgroup_sum = scan_result + shared_data[tid];
-        atomicStore(&partial_sums.values[workgroup_id.x], workgroup_sum);
+        atomicStore(&partial_sums[workgroup_id.x], workgroup_sum);
     }
     storageBarrier();
 
     if tile_index < total_tiles {
-        tile_buffer.triangle_indices[tile_index].offset = scan_result;
+        tile_buffer[tile_index].offset = scan_result;
     }
 }
 
@@ -215,9 +199,9 @@ fn scan_second_pass(
     var workgroup_offset = 0u;
     let current_group = workgroup_id.x;
     for (var i = 0u; i < current_group; i = i + 1u) {
-        workgroup_offset += atomicLoad(&partial_sums.values[i]);
+        workgroup_offset += atomicLoad(&partial_sums[i]);
     }
-    tile_buffer.triangle_indices[tile_index].offset += workgroup_offset;
+    tile_buffer[tile_index].offset += workgroup_offset;
 }
 
 //---------------------------------------------------------------------
@@ -231,19 +215,19 @@ fn store_triangles(
 ) {
     // Compute the global triangle index from the 2D workgroup grid.
     let triangle_index = wg.x + wg.y * num_workgroups.x;
-    let num_triangles = arrayLength(&index_buffer.values) / 3u;
+    let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
     }
     
     // The rest of the kernel remains similar to your original logic:
     let base_idx = triangle_index * 3u;
-    let idx1 = index_buffer.values[base_idx];
-    let idx2 = index_buffer.values[base_idx + 1u];
-    let idx3 = index_buffer.values[base_idx + 2u];
-    let v1 = projected_buffer.values[idx1];
-    let v2 = projected_buffer.values[idx2];
-    let v3 = projected_buffer.values[idx3];
+    let idx1 = index_buffer[base_idx];
+    let idx2 = index_buffer[base_idx + 1u];
+    let idx3 = index_buffer[base_idx + 2u];
+    let v1 = projected_buffer[idx1];
+    let v2 = projected_buffer[idx2];
+    let v3 = projected_buffer[idx3];
 
     // Discard triangles that are off-screen or behind the near plane.
     if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
@@ -279,13 +263,13 @@ fn store_triangles(
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
 
-        let count = atomicLoad(&tile_buffer.triangle_indices[tile_index].count);
-        let write_index = atomicAdd(&tile_buffer.triangle_indices[tile_index].write_index, 1u);
+        let count = atomicLoad(&tile_buffer[tile_index].count);
+        let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
         if write_index < count {
-            let offset = tile_buffer.triangle_indices[tile_index].offset;
-            triangle_list_buffer.indices[offset + write_index] = base_idx;
+            let offset = tile_buffer[tile_index].offset;
+            triangle_list_buffer[offset + write_index] = base_idx;
         } else {
-            atomicSub(&tile_buffer.triangle_indices[tile_index].count, 1u);
+            atomicSub(&tile_buffer[tile_index].count, 1u);
         }
     }
 }

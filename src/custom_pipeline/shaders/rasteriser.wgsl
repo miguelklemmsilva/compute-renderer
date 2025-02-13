@@ -31,10 +31,6 @@ struct ProjectedVertexBuffer {
     values: array<Vertex>,
 };
 
-struct IndexBuffer {
-    values: array<u32>,
-};
-
 struct Fragment {
     depth: atomic<u32>,
     uv: vec2<f32>,
@@ -54,18 +50,6 @@ struct TileTriangles {
     padding: u32,
 };
 
-struct TileBuffer {
-    triangle_indices: array<TileTriangles>,
-};
-
-struct TriangleListBuffer {
-    indices: array<u32>,
-};
-
-// ---------------------------------------------------------------------
-// Bindings
-// ---------------------------------------------------------------------
-
 @group(0) @binding(0)
 var<storage, read> projected_buffer: ProjectedVertexBuffer;
 
@@ -73,13 +57,13 @@ var<storage, read> projected_buffer: ProjectedVertexBuffer;
 var<storage, read_write> fragment_buffer: FragmentBuffer;
 
 @group(0) @binding(2)
-var<storage, read> tile_buffer: TileBuffer;
+var<storage, read> tile_buffer: array<TileTriangles>;
 
 @group(0) @binding(3)
-var<storage, read> triangle_list_buffer: TriangleListBuffer;
+var<storage, read> triangle_list_buffer: array<u32>;
 
 @group(0) @binding(4)
-var<storage, read> index_buffer: IndexBuffer;
+var<storage, read> indices: array<u32>;
 
 @group(1) @binding(0)
 var<uniform> screen_dims: UniformRaster;
@@ -247,17 +231,17 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
     }
 
     let tile_idx = tile_x + tile_y * num_tiles_x;
-    let triangle_count = atomicLoad(&tile_buffer.triangle_indices[tile_idx].count);
-    let triangle_offset = tile_buffer.triangle_indices[tile_idx].offset;
+    let triangle_count = atomicLoad(&tile_buffer[tile_idx].count);
+    let triangle_offset = tile_buffer[tile_idx].offset;
     
     // Use the third dimension of the local invocation to split work.
     let thread_index = lid.z;
 
     for (var i = thread_index; i < triangle_count; i += 256u) {
-        let base_idx = triangle_list_buffer.indices[triangle_offset + i];
-        let idx1 = index_buffer.values[base_idx];
-        let idx2 = index_buffer.values[base_idx + 1u];
-        let idx3 = index_buffer.values[base_idx + 2u];
+        let base_idx = triangle_list_buffer[triangle_offset + i];
+        let idx1 = indices[base_idx];
+        let idx2 = indices[base_idx + 1u];
+        let idx3 = indices[base_idx + 2u];
         let v1 = projected_buffer.values[idx1];
         let v2 = projected_buffer.values[idx2];
         let v3 = projected_buffer.values[idx3];
