@@ -191,24 +191,10 @@ impl BinningPass {
     pub fn execute(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        scene: &scene::Scene,
-        width: u32,
-        height: u32,
+        total_tris: u32,
+        total_pixel_dispatch: u32,
     ) {
-        // Calculate total number of triangles from indices
-        let total_tris = scene
-            .models
-            .iter()
-            .map(|m| {
-                m.meshes
-                    .iter()
-                    .map(|mesh| mesh.indices.len() / 3)
-                    .sum::<usize>()
-            })
-            .sum::<usize>() as u32;
-
-        let total_threads_needed =
-            (total_tris as f32).ceil();
+        let total_threads_needed = (total_tris as f32).ceil();
 
         let gx_tris = (total_threads_needed as f32).sqrt().ceil() as u32;
         let gy_tris = ((total_threads_needed as f32) / (gx_tris as f32)).ceil() as u32;
@@ -232,10 +218,6 @@ impl BinningPass {
         // 2) scan_first_pass: do a local prefix-scan per tile
         //    Each tile is handled by exactly one thread => #threads = #tiles
         // ---------------------------------------------------------------------
-        let tile_w = (width + TILE_SIZE - 1) / TILE_SIZE;
-        let tile_h = (height + TILE_SIZE - 1) / TILE_SIZE;
-
-        let dispatch = tile_w * tile_h;
 
         {
             let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -245,7 +227,7 @@ impl BinningPass {
             pass.set_pipeline(&self.pipeline_scan_first);
             pass.set_bind_group(0, &self.bind_group_0, &[]);
             pass.set_bind_group(1, &self.bind_group_1, &[]);
-            pass.dispatch_workgroups(dispatch_size(dispatch), 1, 1);
+            pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
         }
 
         // ---------------------------------------------------------------------
@@ -259,7 +241,7 @@ impl BinningPass {
             pass.set_pipeline(&self.pipeline_scan_second);
             pass.set_bind_group(0, &self.bind_group_0, &[]);
             pass.set_bind_group(1, &self.bind_group_1, &[]);
-            pass.dispatch_workgroups(dispatch_size(dispatch), 1, 1);
+            pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
         }
 
         // ---------------------------------------------------------------------
