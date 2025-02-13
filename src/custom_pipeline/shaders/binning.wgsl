@@ -8,15 +8,11 @@ struct Vertex {
     uv: vec2<f32>,
 };
 
-struct IndexBuffer {
-    values: array<u32>,
-};
-
 struct TileTriangles {
     count: atomic<u32>,
     offset: u32,
     write_index: atomic<u32>,
-    padding: u32,
+    padding: u32
 };
 
 struct UniformBinning {
@@ -101,7 +97,7 @@ fn count_triangles(
     // For each tile covered by the triangle's bounding box, count its contribution.
     let num_threads = 32u; // matches workgroup size in z
     let thread_id = lid.z;
-    for (var i: u32 = thread_id; i < num_tiles; i = i + num_threads) {
+    for (var i: u32 = thread_id; i < num_tiles; i += num_threads) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
@@ -258,7 +254,7 @@ fn store_triangles(
 
     let num_threads = 32u; // matches workgroup size in z
     let thread_id = lid.z;
-    for (var i: u32 = thread_id; i < total_tiles; i = i + num_threads) {
+    for (var i: u32 = thread_id; i < total_tiles; i += num_threads) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
@@ -268,8 +264,6 @@ fn store_triangles(
         if write_index < count {
             let offset = tile_buffer[tile_index].offset;
             triangle_list_buffer[offset + write_index] = base_idx;
-        } else {
-            atomicSub(&tile_buffer[tile_index].count, 1u);
         }
     }
 }

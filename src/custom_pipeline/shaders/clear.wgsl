@@ -2,7 +2,7 @@ struct TileTriangles {
     count: u32,
     offset: u32,
     write_index: u32,
-    padding: u32,
+    padding: u32
 };
 
 struct Fragment {
