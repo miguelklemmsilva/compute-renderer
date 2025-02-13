@@ -1,7 +1,7 @@
 use crate::scene;
 
 use super::{
-    binning_pass::BinningPass, ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass,
+    binning_pass::BinningPass, util::dispatch_size, ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass
 };
 
 pub struct GPU {
@@ -81,13 +81,17 @@ impl GPU {
             })
             .sum::<usize>() as u32;
 
-        self.clear_pass.execute(&mut encoder, width, height);
+        let total_tris = total_indices / 3;
+
+        let total_pixel_dispatch = dispatch_size((width * height) as u32);
+
+        self.clear_pass.execute(&mut encoder, total_pixel_dispatch);
         self.vertex_pass.execute(&mut encoder, total_indices);
         self.binning_pass
-            .execute(&mut encoder, scene, width as u32, height as u32);
+            .execute(&mut encoder, total_tris, total_pixel_dispatch);
         self.raster_pass
-            .execute(&mut encoder, width as u32, height as u32, scene);
-        self.fragment_pass.execute(&mut encoder, width, height);
+            .execute(&mut encoder, width as u32, height as u32);
+        self.fragment_pass.execute(&mut encoder, total_pixel_dispatch);
 
         self.queue.submit(Some(encoder.finish()));
 

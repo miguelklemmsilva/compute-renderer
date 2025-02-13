@@ -140,7 +140,7 @@ impl ClearPass {
         }
     }
 
-    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, width: usize, height: usize) {
+    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, total_pixel_dispatch: u32) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Clear Pass"),
             timestamp_writes: None,
@@ -150,7 +150,6 @@ impl ClearPass {
         cpass.set_bind_group(0, &self.bind_group_0, &[]);
         cpass.set_bind_group(1, &self.bind_group_1, &[]);
 
-        let total_threads = (width * height) as u32;
-        cpass.dispatch_workgroups(dispatch_size(total_threads), 1, 1);
+        cpass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
     }
 }

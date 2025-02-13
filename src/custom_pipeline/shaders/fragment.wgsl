@@ -1,7 +1,3 @@
-struct OutputBuffer {
-    data: array<atomic<u32>>,
-};
-
 struct Uniform {
     width: f32,
     height: f32,
@@ -48,10 +44,6 @@ struct Light {
     intensity: f32,
 };
 
-struct LightBuffer {
-    lights: array<Light>,
-};
-
 struct EffectUniform {
     effect_type: u32,
     param1: f32,
@@ -63,26 +55,19 @@ struct EffectUniform {
 };
 
 struct Fragment {
-    depth: atomic<u32>,
+    depth: u32,
     uv: vec2<f32>,
     normal: vec3<f32>,
     world_pos: vec3<f32>,
     material_index: u32,
 };
 
-struct FragmentBuffer {
-    frags: array<Fragment>,
-};
-
-// -----------------------------------------------------------------------------
-// BINDINGS
-// -----------------------------------------------------------------------------
-@group(0) @binding(0) var<storage, read_write> output_buffer: OutputBuffer;
+@group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
 
-@group(3) @binding(0) var<storage, read> light_buffer: LightBuffer;
+@group(3) @binding(0) var<storage, read> light_buffer: array<Light>;
 
 @group(4) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
 @group(4) @binding(1) var<storage, read> material_buffer: MaterialBuffer;
@@ -90,7 +75,7 @@ struct FragmentBuffer {
 @group(5) @binding(0) var<uniform> effect: EffectUniform;
 
 // The fragment data & count from the raster pass
-@group(6) @binding(0) var<storage, read> fragment_buffer: FragmentBuffer;
+@group(6) @binding(0) var<storage, read> fragment_buffer: array<Fragment>;
 
 fn rgba(r: u32, g: u32, b: u32, a: u32) -> u32 {
     // BGRA format (0xFF for alpha)
@@ -131,11 +116,11 @@ fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>, uv: vec2<f32>) -> 
     // Start with ambient light
     final_color = ambient;
 
-    let num_lights = arrayLength(&light_buffer.lights);
+    let num_lights = arrayLength(&light_buffer);
     
     // Add contribution from each light
     for (var i = 0u; i < num_lights; i++) {
-        let light = light_buffer.lights[i];
+        let light = light_buffer[i];
         let light_dir = normalize(light.world_position - position);
         
         // Diffuse
@@ -160,14 +145,14 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x + global_id.y * u32(screen_dims.width);
 
     // Early-out if there's no valid fragment
-    if idx >= arrayLength(&fragment_buffer.frags) || fragment_buffer.frags[idx].depth == 0xFFFFFFFFu {
+    if idx >= arrayLength(&fragment_buffer) || fragment_buffer[idx].depth == 0xFFFFFFFFu {
         return;
     }
 
-    var normal = fragment_buffer.frags[idx].normal;
+    var normal = fragment_buffer[idx].normal;
 
     // 3) Calculate lighting with the material
-    let lighting_color = calculate_lighting(normal, fragment_buffer.frags[idx].world_pos, fragment_buffer.frags[idx].uv);
+    let lighting_color = calculate_lighting(normal, fragment_buffer[idx].world_pos, fragment_buffer[idx].uv);
 
     // 6) Final color
     let final_color = vec4<f32>(lighting_color.rgb, 1.0);
@@ -179,5 +164,5 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let A = u32(final_color.a * 255.0);
 
     let output_color = rgba(R, G, B, A);
-    output_buffer.data[idx] = output_color;
+    output_buffer[idx] = output_color;
 }
