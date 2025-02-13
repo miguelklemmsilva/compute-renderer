@@ -14,18 +14,6 @@ struct Vertex {
     uv: vec2<f32>,
 };
 
-struct VertexBuffer {
-    values: array<Vertex>,
-};
-
-struct IndexBuffer {
-    values: array<u32>,
-};
-
-struct ProjectedVertexBuffer {
-    values: array<Vertex>,
-};
-
 struct EffectUniform {
     effect_type: u32,
     param1: f32,
@@ -58,9 +46,9 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
 // -----------------------------------------------------------------------------
 // BINDINGS
 // -----------------------------------------------------------------------------
-@group(0) @binding(0) var<storage, read> vertex_buffer: VertexBuffer;
-@group(0) @binding(1) var<storage, read> index_buffer: IndexBuffer;
-@group(0) @binding(2) var<storage, read_write> projected_buffer: ProjectedVertexBuffer;
+@group(0) @binding(0) var<storage, read> vertex_buffer: array<Vertex>;
+@group(0) @binding(1) var<storage, read> index_buffer: array<u32>;
+@group(0) @binding(2) var<storage, read_write> projected_buffer: array<Vertex>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
@@ -104,13 +92,13 @@ fn project_vertex(v: Vertex) -> Vertex {
 @compute @workgroup_size(256)
 fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
     let idx = global_id.x;
-    if idx >= arrayLength(&index_buffer.values) {
+    if idx >= arrayLength(&index_buffer) {
         return;
     }
 
     // Get vertex through index buffer
-    let vertex_idx = index_buffer.values[idx];
-    let v = vertex_buffer.values[vertex_idx];
+    let vertex_idx = index_buffer[idx];
+    let v = vertex_buffer[vertex_idx];
     let projected = project_vertex(v);
-    projected_buffer.values[vertex_idx] = projected;
+    projected_buffer[vertex_idx] = projected;
 }
