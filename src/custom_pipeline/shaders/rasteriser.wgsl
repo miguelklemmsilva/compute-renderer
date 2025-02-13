@@ -27,10 +27,6 @@ struct Vertex {
     uv: vec2<f32>,
 };
 
-struct ProjectedVertexBuffer {
-    values: array<Vertex>,
-};
-
 struct Fragment {
     depth: atomic<u32>,
     uv: vec2<f32>,
@@ -39,22 +35,18 @@ struct Fragment {
     texture_index: u32,
 };
 
-struct FragmentBuffer {
-    frags: array<Fragment>,
-};
-
 struct TileTriangles {
-    count: atomic<u32>,  // How many triangles were binned into this tile.
-    offset: u32,         // Starting offset into the global triangle list buffer.
+    count: atomic<u32>,
+    offset: u32,
     write_index: atomic<u32>,
-    padding: u32,
-};
+    padding: u32
+}
 
 @group(0) @binding(0)
-var<storage, read> projected_buffer: ProjectedVertexBuffer;
+var<storage, read> projected_buffer: array<Vertex>;
 
 @group(0) @binding(1)
-var<storage, read_write> fragment_buffer: FragmentBuffer;
+var<storage, read_write> fragment_buffer: array<Fragment>;
 
 @group(0) @binding(2)
 var<storage, read> tile_buffer: array<TileTriangles>;
@@ -182,7 +174,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             // Convert our computed depth to a packed u32.
             let packed_depth = pack_float_to_u32(depth);
             // Get the pointer for the current pixel.
-            let pixel_ptr = &fragment_buffer.frags[pixel_id].depth;
+            let pixel_ptr = &fragment_buffer[pixel_id].depth;
 
             // Attempt an atomic update in a loop.
             var old = atomicLoad(pixel_ptr);
@@ -201,9 +193,9 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                     let interpolated_normal = normalize(bc.x * normal1 + bc.y * normal2 + bc.z * normal3);
 
                     // We won the race: update the fragment data.
-                    fragment_buffer.frags[pixel_id].uv = interpolated_uv;
-                    fragment_buffer.frags[pixel_id].normal = interpolated_normal.xyz;
-                    fragment_buffer.frags[pixel_id].world_pos = interpolated_world_pos.xyz;
+                    fragment_buffer[pixel_id].uv = interpolated_uv;
+                    fragment_buffer[pixel_id].normal = interpolated_normal.xyz;
+                    fragment_buffer[pixel_id].world_pos = interpolated_world_pos.xyz;
                     break;
                 }
                 
@@ -242,9 +234,9 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
         let idx1 = indices[base_idx];
         let idx2 = indices[base_idx + 1u];
         let idx3 = indices[base_idx + 2u];
-        let v1 = projected_buffer.values[idx1];
-        let v2 = projected_buffer.values[idx2];
-        let v3 = projected_buffer.values[idx3];
+        let v1 = projected_buffer[idx1];
+        let v2 = projected_buffer[idx2];
+        let v3 = projected_buffer[idx3];
 
         // Discard triangles with any vertex behind the near plane.
         if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
