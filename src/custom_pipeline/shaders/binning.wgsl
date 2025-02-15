@@ -52,11 +52,24 @@ fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
     return vec4<f32>(min_x, min_y, max_x, max_y);
 }
 
-@compute @workgroup_size(256)
+// Helper function to clip a bounding box to the screen (frustum) bounds.
+fn clip_bbox_to_screen(bbox: vec4<f32>) -> vec4<f32> {
+    // bbox = (min_x, min_y, max_x, max_y)
+    return vec4<f32>(
+        max(bbox.x, 0.0),
+        max(bbox.y, 0.0),
+        min(bbox.z, screen_dims.width),
+        min(bbox.w, screen_dims.height)
+    );
+}
+
+@compute @workgroup_size(1, 1, 32)
 fn compute_triangle_meta(
-    @builtin(global_invocation_id) global_id: vec3<u32>
+    @builtin(global_invocation_id) global_id: vec3<u32>,
+    @builtin(workgroup_id) wg: vec3<u32>,
+    @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
-    let triangle_index = global_id.x;
+    let triangle_index = wg.x + wg.y * num_workgroups.x;
     let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
@@ -71,36 +84,42 @@ fn compute_triangle_meta(
     let v2 = projected_buffer[idx2];
     let v3 = projected_buffer[idx3];
     
+    // First, perform a simple clip test in clip/screen space:
     // Discard triangles with any vertex behind the near plane.
     if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
+        triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(0u, 0u);
         return;
     }
     
-    // Compute the 2D bounding box.
+    // Compute the 2D bounding box in screen space.
     let bbox = get_min_max(v1.world_pos.xyz, v2.world_pos.xyz, v3.world_pos.xyz);
     
-    // Discard triangles completely outside the screen bounds.
+    // Quick cull: if the triangle’s bbox is completely outside the screen,
+    // then discard it.
     if bbox.z < 0.0 || bbox.x >= screen_dims.width || bbox.w < 0.0 || bbox.y >= screen_dims.height {
+        triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(0u, 0u);
         return;
     }
     
-    // Compute the tile indices.
-    let start_tile_x = u32(max(floor(bbox.x / f32(TILE_SIZE)), 0.0));
-    let start_tile_y = u32(max(floor(bbox.y / f32(TILE_SIZE)), 0.0));
-    let end_tile_x = min(u32(ceil(bbox.z / f32(TILE_SIZE))),
+    // Now “clip” the bbox to the screen dimensions.
+    let clipped_bbox = clip_bbox_to_screen(bbox);
+    
+    // Use the clipped bbox to compute tile indices.
+    let start_tile_x = u32(max(floor(clipped_bbox.x / f32(TILE_SIZE)), 0.0));
+    let start_tile_y = u32(max(floor(clipped_bbox.y / f32(TILE_SIZE)), 0.0));
+    let end_tile_x = min(u32(ceil(clipped_bbox.z / f32(TILE_SIZE))),
         (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE);
-    let end_tile_y = min(u32(ceil(bbox.w / f32(TILE_SIZE))),
+    let end_tile_y = min(u32(ceil(clipped_bbox.w / f32(TILE_SIZE))),
         (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE);
 
     let tile_range_x = end_tile_x - start_tile_x;
     let tile_range_y = end_tile_y - start_tile_y;
     
     // Store the computed metadata.
-    triangle_binning_buffer[triangle_index].min_max = bbox;
+    triangle_binning_buffer[triangle_index].min_max = clipped_bbox;
     triangle_binning_buffer[triangle_index].start_tile = vec2<u32>(start_tile_x, start_tile_y);
     triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(tile_range_x, tile_range_y);
 }
-
 
 // ---------------------------------------------------------------------
 // Kernel 1 (Modified): Count Triangles per Tile using Precomputed Meta
@@ -194,7 +213,7 @@ fn scan_first_pass(
     let tid = local_id.x;
     shared_data[tid] = 0u;
     if tile_index < total_tiles {
-        shared_data[tid] = tile_buffer[tile_index].count;
+        shared_data[tid] = atomicLoad(&tile_buffer[tile_index].count);
     }
     workgroupBarrier();
 

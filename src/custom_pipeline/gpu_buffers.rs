@@ -199,8 +199,6 @@ impl GpuBuffers {
             min_max: [f32; 4],
             start_tile: [u32; 2],
             tile_range: [u32; 2],
-            valid: u32,
-            // padding: [u32; 3]
         }
 
         let triangle_meta_buffer = device.create_buffer(&wgpu::BufferDescriptor {

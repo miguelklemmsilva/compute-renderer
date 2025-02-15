@@ -88,15 +88,6 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
     return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
 }
 
-// Simple min/max helper for 3 points (used to compute the screen-space bounding box)
-fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
-    let min_x = min(min(v1.x, v2.x), v3.x);
-    let min_y = min(min(v1.y, v2.y), v3.y);
-    let max_x = max(max(v1.x, v2.x), v3.x);
-    let max_y = max(max(v1.y, v2.y), v3.y);
-    return vec4<f32>(min_x, min_y, max_x, max_y);
-}
-
 // Pack and unpack functions for depth values.
 fn pack_float_to_u32(value: f32) -> u32 {
     return bitcast<u32>(value);
@@ -224,9 +215,10 @@ fn raster_main(
     let tile_x = wg.x;
     let tile_y = wg.y;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
+    let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
 
     // Early exit if this tile is out of range.
-    if (tile_x >= num_tiles_x) {
+    if tile_x >= num_tiles_x || tile_y >= num_tiles_y {
         return;
     }
 
@@ -243,7 +235,6 @@ fn raster_main(
         let triangle_index = base_idx / 3u;
         // Load precomputed metadata.
         let triangle_meta = triangle_binning_buffer[triangle_index];
-        // (Optionally, you can also use meta.min_max to do an additional quick check.)
 
         // Retrieve the vertex indices.
         let idx1 = indices[base_idx];
@@ -262,7 +253,7 @@ fn raster_main(
         let a = vec2<f32>(v2.world_pos.x - v1.world_pos.x, v2.world_pos.y - v1.world_pos.y);
         let b = vec2<f32>(v3.world_pos.x - v1.world_pos.x, v3.world_pos.y - v1.world_pos.y);
         let cross_z = a.x * b.y - a.y * b.x;
-        if (effect.effect_type != 3u && cross_z >= 0.0) {
+        if effect.effect_type != 3u && cross_z >= 0.0 {
             continue;
         }
 
