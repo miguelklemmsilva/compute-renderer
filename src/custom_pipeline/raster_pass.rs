@@ -1,5 +1,4 @@
 use super::GpuBuffers;
-use crate::scene;
 
 pub const TILE_SIZE: u32 = 8;
 
