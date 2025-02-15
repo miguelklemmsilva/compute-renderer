@@ -63,18 +63,7 @@ fn clip_bbox_to_screen(bbox: vec4<f32>) -> vec4<f32> {
     );
 }
 
-@compute @workgroup_size(1, 1, 32)
-fn compute_triangle_meta(
-    @builtin(global_invocation_id) global_id: vec3<u32>,
-    @builtin(workgroup_id) wg: vec3<u32>,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>
-) {
-    let triangle_index = wg.x + wg.y * num_workgroups.x;
-    let num_triangles = arrayLength(&index_buffer) / 3u;
-    if triangle_index >= num_triangles {
-        return;
-    }
-
+fn compute_triangle_meta(triangle_index: u32) {
     let base_idx = triangle_index * 3u;
     let idx1 = index_buffer[base_idx];
     let idx2 = index_buffer[base_idx + 1u];
@@ -125,7 +114,7 @@ fn compute_triangle_meta(
 // Kernel 1 (Modified): Count Triangles per Tile using Precomputed Meta
 // ---------------------------------------------------------------------
 // Instead of computing the bounding box and tile range here, we load them.
-@compute @workgroup_size(1, 1, 32)
+@compute @workgroup_size(1, 1, 64)
 fn count_triangles(
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
@@ -136,6 +125,8 @@ fn count_triangles(
     if triangle_index >= num_triangles {
         return;
     }
+
+    compute_triangle_meta(triangle_index);
     
     // Load the precomputed metadata.
     let triangle_meta = triangle_binning_buffer[triangle_index];
@@ -149,7 +140,7 @@ fn count_triangles(
 
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
 
-    let num_threads = 32u; // matches workgroup size in z
+    let num_threads = 64u; // matches workgroup size in z
     let thread_id = lid.z;
     for (var i: u32 = thread_id; i < num_tiles; i += num_threads) {
         let tile_x = start_tile_x + (i % tile_range_x);
@@ -257,7 +248,7 @@ fn scan_second_pass(
 //---------------------------------------------------------------------
 // Kernel 3: Store triangle indices into the triangle list buffer.
 // Each thread processes one triangle and inlines the triangle logic.
-@compute @workgroup_size(1, 1, 32)
+@compute @workgroup_size(1, 1, 64)
 fn store_triangles(
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
@@ -282,7 +273,7 @@ fn store_triangles(
     let total_tiles = tile_range_x * tile_range_y;
 
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    let num_threads = 32u; // matches workgroup size in z
+    let num_threads = 64u; // matches workgroup size in z
     let thread_id = lid.z;
     for (var i: u32 = thread_id; i < total_tiles; i += num_threads) {
         let tile_x = start_tile_x + (i % tile_range_x);
