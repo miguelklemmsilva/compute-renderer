@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera::CameraUniform,
-    scene::{Light, Scene},
+    scene::Scene,
 };
 
 /// Data to hold GPU buffers and bind groups for each Model in the Scene.
