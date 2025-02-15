@@ -65,6 +65,16 @@ impl RasterPass {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -136,6 +146,10 @@ impl RasterPass {
                     binding: 4,
                     resource: buffers.index_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: buffers.triangle_list_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -165,12 +179,7 @@ impl RasterPass {
         }
     }
 
-    pub fn execute(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        width: u32,
-        height: u32,
-    ) {
+    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, width: u32, height: u32) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Raster Pass"),
             timestamp_writes: None,

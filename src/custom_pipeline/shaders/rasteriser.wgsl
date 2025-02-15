@@ -42,6 +42,12 @@ struct TileTriangles {
     padding: u32
 }
 
+struct TriangleBinningData {
+    min_max: vec4<f32>,
+    start_tile: vec2<u32>,
+    tile_range: vec2<u32>,
+};
+
 @group(0) @binding(0)
 var<storage, read> projected_buffer: array<Vertex>;
 
@@ -56,6 +62,9 @@ var<storage, read> triangle_list_buffer: array<u32>;
 
 @group(0) @binding(4)
 var<storage, read> indices: array<u32>;
+
+@group(0) @binding(5)
+var<storage, read> triangle_binning_buffer: array<TriangleBinningData>;
 
 @group(1) @binding(0)
 var<uniform> screen_dims: UniformRaster;
@@ -206,19 +215,18 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     }
 }
 
-@compute @workgroup_size(1, 1, 256)
-fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
-    @builtin(local_invocation_id) lid: vec3<u32>) {
-    // Use the workgroup ID to determine the tile.
+@compute @workgroup_size(1, 1, 64)
+fn raster_main(
+    @builtin(workgroup_id) wg: vec3<u32>,
+    @builtin(local_invocation_id) lid: vec3<u32>
+) {
+    // Determine the tile for this workgroup.
     let tile_x = wg.x;
     let tile_y = wg.y;
-
-    // Compute total number of tiles along x and y.
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
-    
-    // Early exit if this tile is out-of-range.
-    if tile_x >= num_tiles_x || tile_y >= num_tiles_y {
+
+    // Early exit if this tile is out of range.
+    if (tile_x >= num_tiles_x) {
         return;
     }
 
@@ -228,9 +236,16 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
     
     // Use the third dimension of the local invocation to split work.
     let thread_index = lid.z;
-
-    for (var i = thread_index; i < triangle_count; i += 256u) {
+    for (var i = thread_index; i < triangle_count; i += 64u) {
+        // Get the triangle's base index from the triangle list.
         let base_idx = triangle_list_buffer[triangle_offset + i];
+        // Compute the triangle index from the base index.
+        let triangle_index = base_idx / 3u;
+        // Load precomputed metadata.
+        let triangle_meta = triangle_binning_buffer[triangle_index];
+        // (Optionally, you can also use meta.min_max to do an additional quick check.)
+
+        // Retrieve the vertex indices.
         let idx1 = indices[base_idx];
         let idx2 = indices[base_idx + 1u];
         let idx3 = indices[base_idx + 2u];
@@ -239,7 +254,7 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
         let v3 = projected_buffer[idx3];
 
         // Discard triangles with any vertex behind the near plane.
-        if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
+        if (v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0) {
             continue;
         }
         
@@ -247,10 +262,11 @@ fn raster_main(@builtin(workgroup_id) wg: vec3<u32>,
         let a = vec2<f32>(v2.world_pos.x - v1.world_pos.x, v2.world_pos.y - v1.world_pos.y);
         let b = vec2<f32>(v3.world_pos.x - v1.world_pos.x, v3.world_pos.y - v1.world_pos.y);
         let cross_z = a.x * b.y - a.y * b.x;
-        if effect.effect_type != 3u && cross_z >= 0.0 {
+        if (effect.effect_type != 3u && cross_z >= 0.0) {
             continue;
         }
 
+        // Now rasterize the triangle into this tile.
         rasterize_triangle_in_tile(v1, v2, v3, tile_x, tile_y);
     }
 }

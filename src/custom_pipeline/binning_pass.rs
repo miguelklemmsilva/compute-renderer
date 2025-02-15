@@ -1,9 +1,9 @@
 use wgpu::PipelineCompilationOptions;
 
-use super::{raster_pass::TILE_SIZE, util::dispatch_size, GpuBuffers};
-use crate::scene;
+use super::GpuBuffers;
 
 pub struct BinningPass {
+    pub pipeline_triangle_meta: wgpu::ComputePipeline,
     pub pipeline_count: wgpu::ComputePipeline,
     pub pipeline_scan_first: wgpu::ComputePipeline,
     pub pipeline_scan_second: wgpu::ComputePipeline,
@@ -68,6 +68,16 @@ impl BinningPass {
                     },
                     count: None,
                 },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 5,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -100,6 +110,15 @@ impl BinningPass {
             source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
                 "shaders/binning.wgsl"
             ))),
+        });
+
+        let pipeline_triangle_meta = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Binning::Triangle Meta"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("compute_triangle_meta"),
+            cache: None,
+            compilation_options: PipelineCompilationOptions::default(),
         });
 
         // 3) Create compute pipelines
@@ -166,6 +185,10 @@ impl BinningPass {
                     binding: 4,
                     resource: buffers.partial_sums_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: buffers.triangle_meta_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -179,6 +202,7 @@ impl BinningPass {
         });
 
         Self {
+            pipeline_triangle_meta,
             pipeline_count,
             pipeline_scan_first,
             pipeline_scan_second,
@@ -198,6 +222,18 @@ impl BinningPass {
 
         let gx_tris = (total_threads_needed as f32).sqrt().ceil() as u32;
         let gy_tris = ((total_threads_needed as f32) / (gx_tris as f32)).ceil() as u32;
+
+        {
+            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+                label: Some("Binning::triangle_meta"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(&self.pipeline_triangle_meta);
+            pass.set_bind_group(0, &self.bind_group_0, &[]);
+            pass.set_bind_group(1, &self.bind_group_1, &[]);
+
+            pass.dispatch_workgroups(gx_tris, gy_tris, 1);
+        }
 
         // ---------------------------------------------------------------------
         // 1) count_triangles
