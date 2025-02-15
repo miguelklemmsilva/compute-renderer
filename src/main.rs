@@ -40,7 +40,7 @@ fn main() {
             mode: CameraMode::FirstPerson,
             ..Default::default()
         },
-        benchmark_duration_secs: 10,
+        benchmark_duration_secs: u64::MAX,
         backend_type: BackendType::CustomPipeline,
     },
     SceneConfig {
