@@ -25,6 +25,7 @@ pub struct GpuBuffers {
     pub tile_buffer: wgpu::Buffer,
     pub triangle_list_buffer: wgpu::Buffer,
     pub partial_sums_buffer: wgpu::Buffer,
+    pub triangle_meta_buffer: wgpu::Buffer,
 }
 
 impl GpuBuffers {
@@ -192,6 +193,23 @@ impl GpuBuffers {
             mapped_at_creation: false,
         });
 
+        #[repr(C)]
+        #[derive(Copy, Clone)]
+        struct TriangleMeta {
+            min_max: [f32; 4],
+            start_tile: [u32; 2],
+            tile_range: [u32; 2],
+            valid: u32,
+            // padding: [u32; 3]
+        }
+
+        let triangle_meta_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Triangle Meta Buffer"),
+            size: (total_triangles as usize * std::mem::size_of::<TriangleMeta>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         // Calculate number of workgroups needed for parallel scan
         let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
         let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
@@ -220,6 +238,7 @@ impl GpuBuffers {
             tile_buffer,
             triangle_list_buffer,
             partial_sums_buffer,
+            triangle_meta_buffer
         }
     }
 }
