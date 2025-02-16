@@ -223,11 +223,6 @@ fn raster_main(
         let v1 = projected_buffer[idx1];
         let v2 = projected_buffer[idx2];
         let v3 = projected_buffer[idx3];
-
-        // Discard triangles with any vertex behind the near plane.
-        if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
-            continue;
-        }
         
         // Back-face culling (unless the effect requires both sides).
         let a = vec2<f32>(v2.world_pos.x - v1.world_pos.x, v2.world_pos.y - v1.world_pos.y);

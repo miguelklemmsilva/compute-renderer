@@ -42,8 +42,6 @@ struct TriangleBinningData {
 // Use workgroup shared memory for the local scan:
 var<workgroup> shared_data: array<u32, 256>;
 
-//---------------------------------------------------------------------
-// Utility: Compute the axis–aligned bounding box of a triangle (x and y)
 fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
     let min_x = min(min(v1.x, v2.x), v3.x);
     let min_y = min(min(v1.y, v2.y), v3.y);
@@ -58,8 +56,8 @@ fn clip_bbox_to_screen(bbox: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(
         max(bbox.x, 0.0),
         max(bbox.y, 0.0),
-        min(bbox.z, screen_dims.width),
-        min(bbox.w, screen_dims.height)
+        min(bbox.z, screen_dims.width - 1.0),
+        min(bbox.w, screen_dims.height - 1.0)
     );
 }
 
@@ -114,13 +112,14 @@ fn compute_triangle_meta(triangle_index: u32) {
 // Kernel 1 (Modified): Count Triangles per Tile using Precomputed Meta
 // ---------------------------------------------------------------------
 // Instead of computing the bounding box and tile range here, we load them.
-@compute @workgroup_size(1, 1, 64)
+@compute @workgroup_size(256)
 fn count_triangles(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
-    let triangle_index = wg.x + wg.y * num_workgroups.x;
+    let triangle_index = global_id.x;
     let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
@@ -142,7 +141,7 @@ fn count_triangles(
 
     let num_threads = 64u; // matches workgroup size in z
     let thread_id = lid.z;
-    for (var i: u32 = thread_id; i < num_tiles; i += num_threads) {
+    for (var i: u32 = thread_id; i < num_tiles; i += 1u) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
@@ -248,13 +247,14 @@ fn scan_second_pass(
 //---------------------------------------------------------------------
 // Kernel 3: Store triangle indices into the triangle list buffer.
 // Each thread processes one triangle and inlines the triangle logic.
-@compute @workgroup_size(1, 1, 64)
+@compute @workgroup_size(256)
 fn store_triangles(
+    @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
-    let triangle_index = wg.x + wg.y * num_workgroups.x;
+    let triangle_index = global_id.x;
     let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
@@ -275,7 +275,7 @@ fn store_triangles(
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let num_threads = 64u; // matches workgroup size in z
     let thread_id = lid.z;
-    for (var i: u32 = thread_id; i < total_tiles; i += num_threads) {
+    for (var i: u32 = thread_id; i < total_tiles; i += 1u) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
