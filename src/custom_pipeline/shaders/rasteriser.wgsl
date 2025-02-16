@@ -28,11 +28,9 @@ struct Vertex {
 };
 
 struct Fragment {
-    depth: atomic<u32>,
     uv: vec2<f32>,
-    normal: vec3<f32>,
-    world_pos: vec3<f32>,
-    texture_index: u32,
+    normal: vec4<f32>,
+    world_pos: vec4<f32>,
 };
 
 struct TileTriangles {
@@ -66,6 +64,9 @@ var<storage, read> indices: array<u32>;
 @group(0) @binding(5)
 var<storage, read> triangle_binning_buffer: array<TriangleBinningData>;
 
+@group(0) @binding(6)
+var <storage, read_write> depth_buffer: array<atomic<u32>>;
+
 @group(1) @binding(0)
 var<uniform> screen_dims: UniformRaster;
 
@@ -82,8 +83,8 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
         vec3<f32>(v3.x - v1.x, v2.x - v1.x, v1.x - p.x),
         vec3<f32>(v3.y - v1.y, v2.y - v1.y, v1.y - p.y)
     );
-    if abs(u.z) < 1e-5 {
-        return vec3<f32>(-1.0, 1.0, 1.0);
+    if abs(u.z) < 0.0 {
+        return vec3<f32>(-1.0, -1.0, -1.0);
     }
     return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
 }
@@ -115,13 +116,13 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let one_over_w3 = 1.0 / v3.world_pos.w;
 
     // Pre–divide attributes.
-    let world_pos1 = v1.normal * one_over_w1;
-    let world_pos2 = v2.normal * one_over_w2;
-    let world_pos3 = v3.normal * one_over_w3;
+    let world_pos1 = v1.world_pos * one_over_w1;
+    let world_pos2 = v2.world_pos * one_over_w2;
+    let world_pos3 = v3.world_pos * one_over_w3;
 
-    let normal1 = v1.normal * one_over_w1;
-    let normal2 = v2.normal * one_over_w2;
-    let normal3 = v3.normal * one_over_w3;
+    let normal1 = normalize(v1.normal);
+    let normal2 = normalize(v2.normal);
+    let normal3 = normalize(v3.normal);
 
     let uv1 = v1.uv * one_over_w1;
     let uv2 = v2.uv * one_over_w2;
@@ -164,38 +165,40 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             
             // Interpolate depth.
             let interpolated_z = bc.x * z1 + bc.y * z2 + bc.z * z3;
-            if interpolated_z < -1.0 || interpolated_z > 1.0 {
-                continue;
-            }
             
             // Convert to [0,1] range for depth buffer
-            let depth = interpolated_z;
+            let depth = interpolated_z * 0.5 + 0.5;
             let pixel_id = x + y * u32(screen_dims.width);
             // Convert our computed depth to a packed u32.
             let packed_depth = pack_float_to_u32(depth);
             // Get the pointer for the current pixel.
-            let pixel_ptr = &fragment_buffer[pixel_id].depth;
+            let pixel_ptr = &depth_buffer[pixel_id];
 
             // Attempt an atomic update in a loop.
             var old = atomicLoad(pixel_ptr);
             loop {
                 let old_depth = unpack_u32_to_float(old);
                 if depth >= old_depth {
-                    // Our new depth is not better than the one already stored.
+                    // Our computed depth is not closer.
                     break;
                 }
-                // Try to atomically update the depth.
+
+                // sporadic atomic change failures occur if there is no barrier
+                storageBarrier();
+
                 let result = atomicCompareExchangeWeak(pixel_ptr, old, packed_depth);
+
+                // Try to atomically update the depth.
                 if result.exchanged {
                     // Interpolate UV coordinates (already divided by w)
                     let interpolated_uv = bc.x * uv1 + bc.y * uv2 + bc.z * uv3;
                     let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
-                    let interpolated_normal = normalize(bc.x * normal1 + bc.y * normal2 + bc.z * normal3);
+                    let interpolated_normal = bc.x * normal1 + bc.y * normal2 + bc.z * normal3;
 
                     // We won the race: update the fragment data.
                     fragment_buffer[pixel_id].uv = interpolated_uv;
-                    fragment_buffer[pixel_id].normal = interpolated_normal.xyz;
-                    fragment_buffer[pixel_id].world_pos = interpolated_world_pos.xyz;
+                    fragment_buffer[pixel_id].normal = normalize(interpolated_normal);
+                    fragment_buffer[pixel_id].world_pos = interpolated_world_pos;
                     break;
                 }
                 
@@ -206,7 +209,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     }
 }
 
-@compute @workgroup_size(1, 1, 256)
+@compute @workgroup_size(1, 1, 64)
 fn raster_main(
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>
@@ -228,7 +231,7 @@ fn raster_main(
     
     // Use the third dimension of the local invocation to split work.
     let thread_index = lid.z;
-    for (var i = thread_index; i < triangle_count; i += 256u) {
+    for (var i = thread_index; i < triangle_count; i += 64u) {
         // Get the triangle's base index from the triangle list.
         let base_idx = triangle_list_buffer[triangle_offset + i];
         // Compute the triangle index from the base index.
@@ -245,7 +248,7 @@ fn raster_main(
         let v3 = projected_buffer[idx3];
 
         // Discard triangles with any vertex behind the near plane.
-        if (v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0) {
+        if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
             continue;
         }
         
