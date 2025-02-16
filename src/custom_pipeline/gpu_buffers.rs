@@ -205,7 +205,7 @@ impl GpuBuffers {
 
         let triangle_meta_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Triangle Meta Buffer"),
-            size: (total_triangles as usize * std::mem::size_of::<TriangleMeta>()) as u64,
+            size: ((num_tiles * max_triangles_per_tile) as usize * std::mem::size_of::<TriangleMeta>()) as u64,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });

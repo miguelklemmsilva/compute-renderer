@@ -165,7 +165,7 @@ impl VertexPass {
         }
     }
 
-    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, num_indices: u32) {
+    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, num_tris: u32) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Vertex Pass"),
             timestamp_writes: None,
@@ -177,6 +177,6 @@ impl VertexPass {
         cpass.set_bind_group(2, &self.bind_group_2, &[]);
         cpass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        cpass.dispatch_workgroups(dispatch_size(num_indices), 1, 1);
+        cpass.dispatch_workgroups(dispatch_size(num_tris), 1, 1);
     }
 }

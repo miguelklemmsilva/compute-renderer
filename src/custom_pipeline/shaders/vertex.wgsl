@@ -96,9 +96,7 @@ fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num
         return;
     }
 
-    // Get vertex through index buffer
-    let vertex_idx = index_buffer[idx];
-    let v = vertex_buffer[vertex_idx];
+    let v = vertex_buffer[idx];
     let projected = project_vertex(v);
-    projected_buffer[vertex_idx] = projected;
+    projected_buffer[idx] = projected;
 }

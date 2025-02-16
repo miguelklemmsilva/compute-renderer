@@ -86,7 +86,7 @@ impl GPU {
         let total_pixel_dispatch = dispatch_size((width * height) as u32);
 
         self.clear_pass.execute(&mut encoder, total_pixel_dispatch);
-        self.vertex_pass.execute(&mut encoder, total_indices);
+        self.vertex_pass.execute(&mut encoder, total_tris);
         self.binning_pass
             .execute(&mut encoder, total_tris, total_pixel_dispatch);
         self.raster_pass
