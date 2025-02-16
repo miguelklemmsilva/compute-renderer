@@ -1,4 +1,4 @@
-use super::{util::dispatch_size, GpuBuffers};
+use super::GpuBuffers;
 
 pub struct FragmentPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -15,16 +15,28 @@ impl FragmentPass {
     pub fn new(device: &wgpu::Device, buffers: &GpuBuffers) -> Self {
         let group0_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fragment Pass: Group0 Layout (Output)"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: false },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: false },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
                 },
-                count: None,
-            }],
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
         });
 
         let group1_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -154,6 +166,10 @@ impl FragmentPass {
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffers.output_buffer.as_entire_binding(),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: buffers.depth_buffer.as_entire_binding(),
             }],
         });
 

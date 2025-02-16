@@ -24,9 +24,9 @@ fn main() {
     // Update light position to better illuminate the model
     let lights = vec![
         // Key light
-        ([5.0, 5.0, 5.0], [1.0, 0.9, 0.8], 2.0),
+        ([0.0, 0.0, 0.0], [1.0, 0.9, 0.8], 1.0),
         // Fill light
-        ([-5.0, 3.0, 0.0], [0.3, 0.4, 0.5], 1.0),
+        ([-5.0, 3.0, 0.0], [0.3, 0.4, 0.5], 0.5),
     ];
 
     // List of scenes to benchmark
@@ -50,10 +50,10 @@ fn main() {
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {
-            mode: CameraMode::Orbit,
+            mode: CameraMode::FirstPerson,
             ..Default::default()
         },
-        benchmark_duration_secs: 10,
+        benchmark_duration_secs: u64::MAX,
         backend_type: BackendType::WgpuPipeline,
     }];
 
