@@ -110,29 +110,6 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let tile_start_y = tile_y * TILE_SIZE;
     let tile_end_y = min(tile_start_y + TILE_SIZE, u32(screen_dims.height));
 
-    // Pre–compute reciprocal w for perspective–correct interpolation.
-    let one_over_w1 = 1.0 / v1.world_pos.w;
-    let one_over_w2 = 1.0 / v2.world_pos.w;
-    let one_over_w3 = 1.0 / v3.world_pos.w;
-
-    // Pre–divide attributes.
-    let world_pos1 = v1.world_pos * one_over_w1;
-    let world_pos2 = v2.world_pos * one_over_w2;
-    let world_pos3 = v3.world_pos * one_over_w3;
-
-    let normal1 = normalize(v1.normal);
-    let normal2 = normalize(v2.normal);
-    let normal3 = normalize(v3.normal);
-
-    let uv1 = v1.uv * one_over_w1;
-    let uv2 = v2.uv * one_over_w2;
-    let uv3 = v3.uv * one_over_w3;
-
-    // Pre-divide depth values.
-    let z1 = v1.world_pos.z * one_over_w1;
-    let z2 = v2.world_pos.z * one_over_w2;
-    let z3 = v3.world_pos.z * one_over_w3;
-
     // Loop over the pixels in the tile.
     for (var x: u32 = tile_start_x; x < tile_end_x; x = x + 1u) {
         for (var y: u32 = tile_start_y; y < tile_end_y; y = y + 1u) {
@@ -164,7 +141,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             }
             
             // Interpolate depth.
-            let interpolated_z = bc.x * z1 + bc.y * z2 + bc.z * z3;
+            let interpolated_z = bc.x * v1.world_pos.z + bc.y * v2.world_pos.z + bc.z * v3.world_pos.z;
             
             // Convert to [0,1] range for depth buffer
             let depth = interpolated_z * 0.5 + 0.5;
@@ -177,8 +154,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             // Attempt an atomic update in a loop.
             var old = atomicLoad(pixel_ptr);
             loop {
-                let old_depth = unpack_u32_to_float(old);
-                if depth >= old_depth {
+                if packed_depth >= old {
                     // Our computed depth is not closer.
                     break;
                 }
@@ -191,13 +167,13 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 // Try to atomically update the depth.
                 if result.exchanged {
                     // Interpolate UV coordinates (already divided by w)
-                    let interpolated_uv = bc.x * uv1 + bc.y * uv2 + bc.z * uv3;
-                    let interpolated_world_pos = bc.x * world_pos1 + bc.y * world_pos2 + bc.z * world_pos3;
-                    let interpolated_normal = bc.x * normal1 + bc.y * normal2 + bc.z * normal3;
+                    let interpolated_uv = bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv;
+                    let interpolated_world_pos = bc.x * v1.world_pos + bc.y * v2.world_pos + bc.z * v3.world_pos;
+                    let interpolated_normal = bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal;
 
                     // We won the race: update the fragment data.
                     fragment_buffer[pixel_id].uv = interpolated_uv;
-                    fragment_buffer[pixel_id].normal = normalize(interpolated_normal);
+                    fragment_buffer[pixel_id].normal = interpolated_normal;
                     fragment_buffer[pixel_id].world_pos = interpolated_world_pos;
                     break;
                 }
