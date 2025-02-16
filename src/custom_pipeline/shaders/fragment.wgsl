@@ -55,14 +55,13 @@ struct EffectUniform {
 };
 
 struct Fragment {
-    depth: u32,
     uv: vec2<f32>,
-    normal: vec3<f32>,
-    world_pos: vec3<f32>,
-    material_index: u32,
+    normal: vec4<f32>,
+    world_pos: vec4<f32>,
 };
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
+@group(0) @binding(1) var <storage, read> depth_buffer: array<u32>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
@@ -80,32 +79,6 @@ struct Fragment {
 fn rgba(r: u32, g: u32, b: u32, a: u32) -> u32 {
     // BGRA format (0xFF for alpha)
     return (a << 24u) | (b << 16u) | (g << 8u) | r;
-}
-
-fn calculate_diffuse_lighting(normal: vec3<f32>, light_dir: vec3<f32>) -> f32 {
-    return max(dot(normalize(normal), normalize(light_dir)), 0.0);
-}
-
-fn sample_texture(uv: vec2<f32>, texture_info: TextureInfo) -> vec3<f32> {
-    if texture_info.offset > arrayLength(&texture_buffer.data) {
-        return vec3<f32>(1.0, 1.0, 1.0);
-    }
-
-    let tex_width = f32(texture_info.width);
-    let tex_height = f32(texture_info.height);
-
-    let u = clamp(uv.x, 0.0, 1.0);
-    let v = clamp(uv.y, 0.0, 1.0);
-
-    let x = u32(u * (tex_width - 1.0));
-    let y = u32(v * (tex_height - 1.0));
-    let index = texture_info.offset + y * texture_info.width + x;
-    let texel = texture_buffer.data[index];
-
-    let r = f32((texel >> 24u) & 0xFFu) / 255.0;
-    let g = f32((texel >> 16u) & 0xFFu) / 255.0;
-    let b = f32((texel >> 8u) & 0xFFu) / 255.0;
-    return vec3<f32>(r, g, b);
 }
 
 fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>, uv: vec2<f32>) -> vec3<f32> {
@@ -145,14 +118,14 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x + global_id.y * u32(screen_dims.width);
 
     // Early-out if there's no valid fragment
-    if idx >= arrayLength(&fragment_buffer) || fragment_buffer[idx].depth == 0xFFFFFFFFu {
+    if idx >= arrayLength(&fragment_buffer) || depth_buffer[idx] >= 0xFFFFFFFFu {
         return;
     }
 
-    var normal = fragment_buffer[idx].normal;
+    var normal = normalize(fragment_buffer[idx].normal);
 
     // 3) Calculate lighting with the material
-    let lighting_color = calculate_lighting(normal, fragment_buffer[idx].world_pos, fragment_buffer[idx].uv);
+    let lighting_color = calculate_lighting(normal.xyz, fragment_buffer[idx].world_pos.xyz, fragment_buffer[idx].uv);
 
     // 6) Final color
     let final_color = vec4<f32>(lighting_color.rgb, 1.0);

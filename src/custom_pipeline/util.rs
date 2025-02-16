@@ -81,10 +81,8 @@ impl Default for TextureInfo {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct Fragment {
-    pub depth: u32,
     pub uv: [f32; 2],
-    pub normal: [f32; 3],
-    pub world_pos: [f32; 3],
-    pub texture_index: u32,
-    pub _padding: [u32; 2],
+    pub normal: [f32; 4],
+    pub world_pos: [f32; 4],
+    pub padding: [f32; 2],
 }

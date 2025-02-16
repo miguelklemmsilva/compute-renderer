@@ -1,4 +1,4 @@
-use super::{util::dispatch_size, GpuBuffers};
+use super::GpuBuffers;
 
 pub struct ClearPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -107,7 +107,7 @@ impl ClearPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
-                    resource: buffers.fragment_buffer.as_entire_binding(),
+                    resource: buffers.depth_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
