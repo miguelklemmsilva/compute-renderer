@@ -83,10 +83,11 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
         vec3<f32>(v3.x - v1.x, v2.x - v1.x, v1.x - p.x),
         vec3<f32>(v3.y - v1.y, v2.y - v1.y, v1.y - p.y)
     );
-    if abs(u.z) < 0.0 {
-        return vec3<f32>(-1.0, -1.0, -1.0);
-    }
-    return vec3<f32>(1.0 - (u.x + u.y) / u.z, u.y / u.z, u.x / u.z);
+    return vec3<f32>(
+        1.0 - (u.x + u.y) / u.z,
+         u.y / u.z,
+         u.x / u.z
+    );
 }
 
 // Pack and unpack functions for depth values.
@@ -111,8 +112,8 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let tile_end_y = min(tile_start_y + TILE_SIZE, u32(screen_dims.height));
 
     // Loop over the pixels in the tile.
-    for (var x: u32 = tile_start_x; x < tile_end_x; x = x + 1u) {
-        for (var y: u32 = tile_start_y; y < tile_end_y; y = y + 1u) {
+    for (var x: u32 = tile_start_x; x < tile_end_x; x++) {
+        for (var y: u32 = tile_start_y; y < tile_end_y; y++) {
             let bc = barycentric(
                 v1.world_pos.xyz,
                 v2.world_pos.xyz,
