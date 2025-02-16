@@ -32,7 +32,7 @@ fn main() {
     // List of scenes to benchmark
     let scenes = vec![SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("erato/erato.obj"),
+        model_path: String::from("bmw/bmw.obj"),
         texture_path: None,
         lights: lights.clone(),
         effects: None,
@@ -45,7 +45,7 @@ fn main() {
     },
     SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("sportsCar/sportsCar.obj"),
+        model_path: String::from("test.obj"),
         texture_path: None,
         lights: lights.clone(),
         effects: None,
