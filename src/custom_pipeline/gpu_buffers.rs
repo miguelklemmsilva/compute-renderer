@@ -4,7 +4,8 @@ use crate::{
     camera,
     custom_pipeline::util::{Fragment, MaterialInfo, Uniform},
     effect::EffectUniform,
-    scene, vertex::GpuVertex,
+    scene,
+    vertex::GpuVertex,
 };
 
 use super::raster_pass::TILE_SIZE;
@@ -26,6 +27,7 @@ pub struct GpuBuffers {
     pub triangle_list_buffer: wgpu::Buffer,
     pub partial_sums_buffer: wgpu::Buffer,
     pub triangle_meta_buffer: wgpu::Buffer,
+    pub depth_buffer: wgpu::Buffer,
 }
 
 impl GpuBuffers {
@@ -221,6 +223,16 @@ impl GpuBuffers {
             mapped_at_creation: false,
         });
 
+        let depth_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Depth Buffer"),
+            size: (width as usize * height as usize * std::mem::size_of::<u32>()) as u64,
+            usage: wgpu::BufferUsages::STORAGE
+                | wgpu::BufferUsages::COPY_SRC
+                | wgpu::BufferUsages::MAP_READ
+                | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+
         Self {
             camera_buffer,
             light_buffer,
@@ -236,7 +248,8 @@ impl GpuBuffers {
             tile_buffer,
             triangle_list_buffer,
             partial_sums_buffer,
-            triangle_meta_buffer
+            triangle_meta_buffer,
+            depth_buffer,
         }
     }
 }

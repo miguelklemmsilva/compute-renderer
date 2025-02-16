@@ -5,21 +5,13 @@ struct TileTriangles {
     padding: u32
 };
 
-struct Fragment {
-    depth: u32,
-    uv: vec2<f32>,
-    normal: vec3<f32>,
-    world_pos: vec3<f32>,
-    texture_index: u32,
-};
-
 struct Uniform {
     width: f32,
     height: f32,
 };
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
-@group(0) @binding(1) var<storage, read_write> fragment_buffer: array<Fragment>;
+@group(0) @binding(1) var<storage, read_write> depth_buffer: array<atomic<u32>>;
 @group(0) @binding(2) var<storage, read_write> tile_buffer: array<TileTriangles>;
 @group(0) @binding(3) var<storage, read_write> triangle_list_buffer: array<u32>;
 
@@ -43,7 +35,7 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         // Clear color buffer to black (0x000000)
         output_buffer[idx] = 0u;
 
-        fragment_buffer[idx].depth = 0xFFFFFFFFu;
+        atomicStore(&depth_buffer[idx], 0xFFFFFFFFu);
     }
 
     // Clear tile buffer and set up offsets - ensure we clear all tiles
