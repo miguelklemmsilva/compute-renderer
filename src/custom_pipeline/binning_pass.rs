@@ -1,7 +1,7 @@
 use wgpu::PipelineCompilationOptions;
 
 use super::{
-    util::{create_buffer_bind_group_layout_entry, dispatch_size},
+    util::create_buffer_bind_group_layout_entry,
     GpuBuffers,
 };
 

@@ -8,12 +8,12 @@ pub(crate) const fn dispatch_size(len: u32) -> u32 {
 
 #[repr(C)]
 #[derive(Clone, Copy, Pod, Zeroable)]
-pub(crate) struct Uniform {
+pub(crate) struct ScreenUniform {
     screen_width: f32,
     screen_height: f32,
 }
 
-impl Uniform {
+impl ScreenUniform {
     pub fn new(screen_width: f32, screen_height: f32) -> Self {
         Self {
             screen_width,

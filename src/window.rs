@@ -56,7 +56,6 @@ impl ApplicationHandler for Window {
 
         let window = self.winit_window.as_ref().unwrap();
 
-        // Initialize the appropriate backend based on configuration
         match self.backend_type {
             BackendType::WgpuPipeline => {
                 let instance = wgpu::Instance::default();

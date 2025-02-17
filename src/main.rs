@@ -1,7 +1,6 @@
 use std::time::Duration;
 
 use camera::CameraMode;
-use effect::{EdgeMeltEffect, Effect};
 use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
