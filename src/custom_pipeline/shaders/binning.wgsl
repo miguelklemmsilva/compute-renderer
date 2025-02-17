@@ -121,14 +121,14 @@ fn compute_triangle_meta(triangle_index: u32) {
     triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(tile_range_x, tile_range_y);
 }
 
-@compute @workgroup_size(256)
+@compute @workgroup_size(1, 1, 64)
 fn count_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
-    let triangle_index = global_id.x;
+    let triangle_index = wg.x + wg.y * num_workgroups.x;
     let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
@@ -149,7 +149,7 @@ fn count_triangles(
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
 
     let thread_id = lid.z;
-    for (var i: u32 = thread_id; i < num_tiles; i += 1u) {
+    for (var i: u32 = thread_id; i < num_tiles; i += 64u) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
@@ -255,14 +255,14 @@ fn scan_second_pass(
 //---------------------------------------------------------------------
 // Kernel 3: Store triangle indices into the triangle list buffer.
 // Each thread processes one triangle and inlines the triangle logic.
-@compute @workgroup_size(256)
+@compute @workgroup_size(1, 1, 64)
 fn store_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>,
     @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
-    let triangle_index = global_id.x;
+    let triangle_index = wg.x + wg.y * num_workgroups.x;
     let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
@@ -282,7 +282,7 @@ fn store_triangles(
 
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let thread_id = lid.z;
-    for (var i: u32 = thread_id; i < total_tiles; i += 1u) {
+    for (var i: u32 = thread_id; i < total_tiles; i += 64u) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
