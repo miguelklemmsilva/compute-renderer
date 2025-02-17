@@ -5,7 +5,6 @@ use crate::{
     custom_pipeline::util::{Fragment, Uniform},
     effect::EffectUniform,
     scene,
-    vertex::GpuVertex,
 };
 
 use super::raster_pass::TILE_SIZE;

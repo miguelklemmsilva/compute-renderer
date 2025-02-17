@@ -86,3 +86,19 @@ pub struct Fragment {
     pub world_pos: [f32; 3],
     pub padding: [f32; 4],
 }
+
+pub fn create_buffer_bind_group_layout_entry(
+    index: u32,
+    read_only: bool,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding: index,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
+}
