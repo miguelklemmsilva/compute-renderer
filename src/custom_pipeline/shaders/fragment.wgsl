@@ -29,9 +29,10 @@ struct EffectUniform {
 
 struct Fragment {
     uv: vec2<f32>,
-    normal: vec4<f32>,
+    normal: vec3<f32>,
     world_pos: vec4<f32>,
 };
+
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
 @group(0) @binding(1) var <storage, read> depth_buffer: array<u32>;

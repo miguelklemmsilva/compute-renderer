@@ -8,9 +8,15 @@ struct Camera {
     view_proj: mat4x4<f32>,
 };
 
+struct VertexIn {
+    world_pos: vec3<f32>,
+    normal: vec3<f32>,
+    uv: vec2<f32>,
+};
+
 struct Vertex {
     world_pos: vec4<f32>,
-    normal: vec4<f32>,
+    normal: vec3<f32>,
     uv: vec2<f32>,
 };
 
@@ -43,10 +49,7 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
     return modified_pos;
 }
 
-// -----------------------------------------------------------------------------
-// BINDINGS
-// -----------------------------------------------------------------------------
-@group(0) @binding(0) var<storage, read> vertex_buffer: array<Vertex>;
+@group(0) @binding(0) var<storage, read> vertex_buffer: array<VertexIn>;
 @group(0) @binding(1) var<storage, read> index_buffer: array<u32>;
 @group(0) @binding(2) var<storage, read_write> projected_buffer: array<Vertex>;
 
@@ -54,14 +57,10 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
 @group(2) @binding(0) var<uniform> camera: Camera;
 @group(3) @binding(0) var<uniform> effect: EffectUniform;
 
-// -----------------------------------------------------------------------------
-// VERTEX LOGIC
-// -----------------------------------------------------------------------------
-
 // The original projection logic, but placed in a separate function here.
-fn project_vertex(v: Vertex) -> Vertex {
+fn project_vertex(v: VertexIn) -> Vertex {
     var modified_v = v;
-    var world_pos = v.world_pos;
+    var world_pos = vec4<f32>(v.world_pos, 1.0);
 
     // If there's an effect that modifies position, apply it:
     if effect.effect_type == 1u { // Wave
