@@ -82,7 +82,7 @@ impl Default for TextureInfo {
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct Fragment {
     pub uv: [f32; 2],
-    pub normal: [f32; 4],
-    pub world_pos: [f32; 4],
-    pub padding: [f32; 2],
+    pub normal: [f32; 3],
+    pub world_pos: [f32; 3],
+    pub padding: [f32; 4],
 }

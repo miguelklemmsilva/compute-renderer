@@ -2,8 +2,8 @@
 const TILE_SIZE: u32 = 8u;
 
 struct Vertex {
-    world_pos: vec4<f32>,
-    normal: vec4<f32>,
+    screen_pos: vec4<f32>,
+    normal: vec3<f32>,
     uv: vec2<f32>,
 };
 
@@ -76,17 +76,17 @@ fn compute_triangle_meta(triangle_index: u32) {
     let v2 = projected_buffer[idx2];
     let v3 = projected_buffer[idx3];
 
-    let area = edge_func(v1.world_pos.xy, v2.world_pos.xy, v3.world_pos.xy);
+    let area = edge_func(v1.screen_pos.xy, v2.screen_pos.xy, v3.screen_pos.xy);
     
     // First, perform a simple clip test in clip/screen space:
     // Discard triangles with any vertex behind the near plane.
-    if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 || area == 0.0 {
+    if v1.screen_pos.w < 0.0 || v2.screen_pos.w < 0.0 || v3.screen_pos.w < 0.0 || area == 0.0 {
         triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(0u, 0u);
         return;
     }
     
     // Compute the 2D bounding box in screen space.
-    let bbox = get_min_max(v1.world_pos.xyz, v2.world_pos.xyz, v3.world_pos.xyz);
+    let bbox = get_min_max(v1.screen_pos.xyz, v2.screen_pos.xyz, v3.screen_pos.xyz);
     
     // Quick cull: if the triangle’s bbox is completely outside the screen,
     // then discard it.
@@ -115,10 +115,6 @@ fn compute_triangle_meta(triangle_index: u32) {
     triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(tile_range_x, tile_range_y);
 }
 
-// ---------------------------------------------------------------------
-// Kernel 1 (Modified): Count Triangles per Tile using Precomputed Meta
-// ---------------------------------------------------------------------
-// Instead of computing the bounding box and tile range here, we load them.
 @compute @workgroup_size(256)
 fn count_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
@@ -146,7 +142,6 @@ fn count_triangles(
 
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
 
-    let num_threads = 64u; // matches workgroup size in z
     let thread_id = lid.z;
     for (var i: u32 = thread_id; i < num_tiles; i += 1u) {
         let tile_x = start_tile_x + (i % tile_range_x);
@@ -280,7 +275,6 @@ fn store_triangles(
     let total_tiles = tile_range_x * tile_range_y;
 
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    let num_threads = 64u; // matches workgroup size in z
     let thread_id = lid.z;
     for (var i: u32 = thread_id; i < total_tiles; i += 1u) {
         let tile_x = start_tile_x + (i % tile_range_x);

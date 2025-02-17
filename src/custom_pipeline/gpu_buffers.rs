@@ -65,7 +65,7 @@ impl GpuBuffers {
         // 3) projected buffer (same size as vertex_buffer)
         let projected_buffer = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("Projected Buffer"),
-            size: (vertices.len() * std::mem::size_of::<GpuVertex>()) as u64,
+            size: (vertices.len() * std::mem::size_of::<[u32; 12]>()) as u64,
             usage: wgpu::BufferUsages::STORAGE,
             mapped_at_creation: false,
         });
@@ -135,10 +135,7 @@ impl GpuBuffers {
         // Add safety margin for overlapping triangles and uneven distribution
         let max_triangles_per_tile = std::cmp::max(
             base_triangles_per_tile,
-            std::cmp::min(
-                total_triangles, // Don't exceed total triangles
-                128,             // Minimum allocation to handle dense areas
-            ),
+            128
         );
 
         // Create tile buffer with count and offset for each tile

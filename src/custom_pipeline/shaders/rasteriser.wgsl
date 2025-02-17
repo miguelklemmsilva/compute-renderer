@@ -22,15 +22,15 @@ struct EffectUniform {
 };
 
 struct Vertex {
-    world_pos: vec4<f32>,
-    normal: vec4<f32>,
+    screen_pos: vec4<f32>,
+    normal: vec3<f32>,
     uv: vec2<f32>,
 };
 
 struct Fragment {
     uv: vec2<f32>,
-    normal: vec4<f32>,
-    world_pos: vec4<f32>,
+    normal: vec3<f32>,
+    screen_pos: vec4<f32>,
 };
 
 struct TileTriangles {
@@ -115,9 +115,9 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     for (var x: u32 = tile_start_x; x < tile_end_x; x++) {
         for (var y: u32 = tile_start_y; y < tile_end_y; y++) {
             let bc = barycentric(
-                v1.world_pos.xyz,
-                v2.world_pos.xyz,
-                v3.world_pos.xyz,
+                v1.screen_pos.xyz,
+                v2.screen_pos.xyz,
+                v3.screen_pos.xyz,
                 vec2<f32>(f32(x), f32(y))
             );
 
@@ -142,7 +142,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             }
             
             // Interpolate depth.
-            let interpolated_z = bc.x * v1.world_pos.z + bc.y * v2.world_pos.z + bc.z * v3.world_pos.z;
+            let interpolated_z = bc.x * v1.screen_pos.z + bc.y * v2.screen_pos.z + bc.z * v3.screen_pos.z;
             
             // Convert to [0,1] range for depth buffer
             let depth = interpolated_z * 0.5 + 0.5;
@@ -169,13 +169,13 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 if result.exchanged {
                     // Interpolate UV coordinates (already divided by w)
                     let interpolated_uv = bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv;
-                    let interpolated_world_pos = bc.x * v1.world_pos + bc.y * v2.world_pos + bc.z * v3.world_pos;
+                    let interpolated_screen_pos = bc.x * v1.screen_pos + bc.y * v2.screen_pos + bc.z * v3.screen_pos;
                     let interpolated_normal = bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal;
 
                     // We won the race: update the fragment data.
                     fragment_buffer[pixel_id].uv = interpolated_uv;
                     fragment_buffer[pixel_id].normal = interpolated_normal;
-                    fragment_buffer[pixel_id].world_pos = interpolated_world_pos;
+                    fragment_buffer[pixel_id].screen_pos = interpolated_screen_pos;
                     break;
                 }
                 
@@ -225,8 +225,8 @@ fn raster_main(
         let v3 = projected_buffer[idx3];
         
         // Back-face culling (unless the effect requires both sides).
-        let a = vec2<f32>(v2.world_pos.x - v1.world_pos.x, v2.world_pos.y - v1.world_pos.y);
-        let b = vec2<f32>(v3.world_pos.x - v1.world_pos.x, v3.world_pos.y - v1.world_pos.y);
+        let a = vec2<f32>(v2.screen_pos.x - v1.screen_pos.x, v2.screen_pos.y - v1.screen_pos.y);
+        let b = vec2<f32>(v3.screen_pos.x - v1.screen_pos.x, v3.screen_pos.y - v1.screen_pos.y);
         let cross_z = a.x * b.y - a.y * b.x;
         if effect.effect_type != 3u && cross_z >= 0.0 {
             continue;
