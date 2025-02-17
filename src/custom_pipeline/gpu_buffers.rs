@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera,
-    custom_pipeline::util::{Fragment, MaterialInfo, Uniform},
+    custom_pipeline::util::{Fragment, Uniform},
     effect::EffectUniform,
     scene,
     vertex::GpuVertex,
@@ -21,8 +21,6 @@ pub struct GpuBuffers {
     pub projected_buffer: wgpu::Buffer,
     pub fragment_buffer: wgpu::Buffer,
     pub output_buffer: wgpu::Buffer,
-    pub texture_buffer: wgpu::Buffer,
-    pub texture_info_buffer: wgpu::Buffer,
     pub tile_buffer: wgpu::Buffer,
     pub triangle_list_buffer: wgpu::Buffer,
     pub partial_sums_buffer: wgpu::Buffer,
@@ -43,29 +41,12 @@ impl GpuBuffers {
         // 2) Get pre-processed data from all models
         let mut vertices = Vec::new();
         let mut indices = Vec::new();
-        let mut all_texture_data = Vec::new();
-        let mut material_infos = Vec::new();
 
         for model in &scene.models {
             // Add pre-processed vertices and indices
             vertices.extend_from_slice(&model.processed_vertices_custom);
             indices.extend_from_slice(&model.processed_indices);
-            material_infos.extend_from_slice(&model.processed_materials);
-            all_texture_data.extend_from_slice(&model.processed_textures);
         }
-
-        // If no textures exist, use a small fallback
-        let texture_data = if all_texture_data.is_empty() {
-            vec![0]
-        } else {
-            all_texture_data
-        };
-
-        let material_data = if material_infos.is_empty() {
-            vec![MaterialInfo::default()]
-        } else {
-            material_infos
-        };
 
         let index_length = indices.len();
 
@@ -135,19 +116,6 @@ impl GpuBuffers {
                 | wgpu::BufferUsages::MAP_READ
                 | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
-        });
-
-        let texture_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Texture Buffer"),
-            contents: bytemuck::cast_slice(&texture_data),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
-
-        // 3) Create the texture info buffer
-        let material_info_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Material Buffer"),
-            contents: bytemuck::cast_slice(&material_data),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
 
         // 10) tile buffer - now just stores count and offset per tile
@@ -243,8 +211,6 @@ impl GpuBuffers {
             projected_buffer,
             fragment_buffer,
             output_buffer,
-            texture_buffer,
-            texture_info_buffer: material_info_buffer,
             tile_buffer,
             triangle_list_buffer,
             partial_sums_buffer,

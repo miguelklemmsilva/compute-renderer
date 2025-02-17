@@ -8,33 +8,6 @@ struct Camera {
     view_proj: mat4x4<f32>,
 };
 
-struct TextureBuffer {
-    data: array<u32>,
-};
-
-struct MaterialBuffer {
-    infos: array<Material>,
-};
-
-struct TextureInfo {
-    offset: u32,
-    width: u32,
-    height: u32,
-    _padding: u32,
-};
-
-struct Material {
-    texture_info: TextureInfo,
-    ambient: vec3<f32>,
-    _padding1: f32,
-    specular: vec3<f32>,
-    _padding2: f32,
-    diffuse: vec3<f32>,
-    shininess: f32,
-    dissolve: f32,
-    optical_density: f32,
-}
-
 struct Light {
     world_position: vec3<f32>,
     _padding1: f32,
@@ -68,13 +41,10 @@ struct Fragment {
 
 @group(3) @binding(0) var<storage, read> light_buffer: array<Light>;
 
-@group(4) @binding(0) var<storage, read> texture_buffer: TextureBuffer;
-@group(4) @binding(1) var<storage, read> material_buffer: MaterialBuffer;
-
-@group(5) @binding(0) var<uniform> effect: EffectUniform;
+@group(4) @binding(0) var<uniform> effect: EffectUniform;
 
 // The fragment data & count from the raster pass
-@group(6) @binding(0) var<storage, read> fragment_buffer: array<Fragment>;
+@group(5) @binding(0) var<storage, read> fragment_buffer: array<Fragment>;
 
 fn rgba(r: u32, g: u32, b: u32, a: u32) -> u32 {
     // BGRA format (0xFF for alpha)
