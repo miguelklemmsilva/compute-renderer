@@ -11,8 +11,23 @@ pub struct WgpuVertex {
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
 pub struct GpuVertex {
-    pub position: [f32; 4],
-    pub normal: [f32; 4],
+    pub position: [f32; 3],
+    pub _padding: f32,
+    pub normal: [f32; 3],
+    pub _padding2: f32,
     pub tex_coords: [f32; 2],
     pub padding: [f32; 2]
+}
+
+impl Default for GpuVertex {
+    fn default() -> Self {
+        Self {
+            position: [0.0; 3],
+            _padding: 0.0,
+            normal: [0.0; 3],
+            _padding2: 0.0,
+            tex_coords: [0.0; 2],
+            padding: [0.0; 2],
+        }
+    }
 }
