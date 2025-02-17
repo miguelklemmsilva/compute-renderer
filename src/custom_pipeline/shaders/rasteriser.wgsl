@@ -85,8 +85,8 @@ fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec
     );
     return vec3<f32>(
         1.0 - (u.x + u.y) / u.z,
-         u.y / u.z,
-         u.x / u.z
+        u.y / u.z,
+        u.x / u.z
     );
 }
 

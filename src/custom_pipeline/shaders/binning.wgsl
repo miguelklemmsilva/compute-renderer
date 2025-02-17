@@ -61,6 +61,11 @@ fn clip_bbox_to_screen(bbox: vec4<f32>) -> vec4<f32> {
     );
 }
 
+fn edge_func(a: vec2<f32>, b: vec2<f32>, p: vec2<f32>) -> f32 {
+    // Returns a positive or negative signed area * 2
+    return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
+}
+
 fn compute_triangle_meta(triangle_index: u32) {
     let base_idx = triangle_index * 3u;
     let idx1 = index_buffer[base_idx];
@@ -70,10 +75,12 @@ fn compute_triangle_meta(triangle_index: u32) {
     let v1 = projected_buffer[idx1];
     let v2 = projected_buffer[idx2];
     let v3 = projected_buffer[idx3];
+
+    let area = edge_func(v1.world_pos.xy, v2.world_pos.xy, v3.world_pos.xy);
     
     // First, perform a simple clip test in clip/screen space:
     // Discard triangles with any vertex behind the near plane.
-    if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 {
+    if v1.world_pos.w < 0.0 || v2.world_pos.w < 0.0 || v3.world_pos.w < 0.0 || area == 0.0 {
         triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(0u, 0u);
         return;
     }
