@@ -33,7 +33,6 @@ fn main() {
     let scenes = vec![SceneConfig {
         name: "test".to_string(),
         model_path: String::from("test.obj"),
-        texture_path: None,
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {
@@ -46,7 +45,6 @@ fn main() {
     SceneConfig {
         name: "test".to_string(),
         model_path: String::from("test.obj"),
-        texture_path: None,
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {

@@ -1,6 +1,4 @@
-use crate::custom_pipeline::util::{MaterialInfo, TextureInfo};
-use crate::model::{Model, Texture};
-use crate::util::get_asset_path;
+use crate::model::Model;
 use crate::window::BackendType;
 use crate::{camera, effect::Effect, custom_pipeline};
 use std::time::Duration;
@@ -57,12 +55,6 @@ impl Scene {
         scene
             .add_obj_with_mtl(&scene_config.model_path, scene_config.backend_type)
             .await;
-
-        // if model has texture, load it
-        if let Some(texture_path) = &scene_config.texture_path {
-            println!("Loading texture: {}", texture_path);
-            scene.add_texture_to_model(0, texture_path);
-        }
 
         // Add lights from config if not a stress test
         for (position, color, intensity) in &scene_config.lights {
@@ -200,48 +192,11 @@ impl Scene {
         self.effects.push(effect);
         self.effects.len() - 1
     }
-
-    /// Adds a texture to a model at the specified index
-    pub fn add_texture_to_model(&mut self, model_index: usize, texture_path: &str) -> usize {
-        if let Some(model) = self.models.get_mut(model_index) {
-            // Create a new material info for the texture
-            let texture_offset = model.processed_textures.len() as u32;
-
-            // Load texture
-            let texture_data = Texture::load(get_asset_path(texture_path).to_str().unwrap());
-
-            // Add texture data
-            model
-                .processed_textures
-                .extend_from_slice(&texture_data.data);
-
-            // Create and add material info
-            let texture_info = TextureInfo {
-                offset: texture_offset,
-                width: texture_data.width,
-                height: texture_data.height,
-                _padding: 0,
-            };
-
-            let material_info = MaterialInfo {
-                texture_info,
-                ..Default::default()
-            };
-
-            model.processed_materials.push(material_info);
-
-            // Return the index of the new material
-            model.processed_materials.len() - 1
-        } else {
-            panic!("Model index out of bounds");
-        }
-    }
 }
 
 pub struct SceneConfig {
     pub name: String,
     pub model_path: String,
-    pub texture_path: Option<String>,
     pub lights: Vec<(
         /* position */ [f32; 3],
         /* color */ [f32; 3],
@@ -282,7 +237,6 @@ impl Default for SceneConfig {
         Self {
             name: String::new(),
             model_path: String::new(),
-            texture_path: None,
             lights: Vec::new(),
             effects: None,
             camera_config: CameraConfig::default(),
