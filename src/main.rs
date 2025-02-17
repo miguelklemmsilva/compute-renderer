@@ -1,6 +1,7 @@
 use std::time::Duration;
 
 use camera::CameraMode;
+use effect::{EdgeMeltEffect, Effect};
 use performance::PerformanceCollector;
 use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
@@ -34,7 +35,11 @@ fn main() {
         name: "test".to_string(),
         model_path: String::from("test.obj"),
         lights: lights.clone(),
-        effects: None,
+        effects: Some(vec![Effect::EdgeMelt(EdgeMeltEffect {
+            amplitude: 0.1,
+            phase: 0.2,
+            speed: 0.1,
+        })]),
         camera_config: CameraConfig {
             mode: CameraMode::FirstPerson,
             ..Default::default()
