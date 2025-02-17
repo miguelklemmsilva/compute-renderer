@@ -23,7 +23,7 @@ pub struct PerformanceCollector {
     scene_name: String,
     scene_index: usize,
     has_started: bool,
-    has_printed: bool, // New flag to prevent duplicate printing
+    has_printed: bool,
 }
 
 impl PerformanceCollector {
@@ -98,7 +98,6 @@ impl PerformanceCollector {
         sorted_frame_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let total_frames = sorted_frame_times.len();
 
-        // Instead of taking the absolute minimum (which might be an outlier),
         // compute max_fps as the reciprocal of the average of the fastest 5% of frame times.
         let fastest_count = ((total_frames as f64) * 0.05).ceil() as usize;
         let fastest_count = if fastest_count == 0 { 1 } else { fastest_count };
