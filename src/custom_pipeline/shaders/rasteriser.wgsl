@@ -186,7 +186,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     }
 }
 
-@compute @workgroup_size(1, 1, 64)
+@compute @workgroup_size(1, 1, 256)
 fn raster_main(
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>
@@ -208,7 +208,7 @@ fn raster_main(
     
     // Use the third dimension of the local invocation to split work.
     let thread_index = lid.z;
-    for (var i = thread_index; i < triangle_count; i += 64u) {
+    for (var i = thread_index; i < triangle_count; i += 256u) {
         // Get the triangle's base index from the triangle list.
         let base_idx = triangle_list_buffer[triangle_offset + i];
         // Compute the triangle index from the base index.
