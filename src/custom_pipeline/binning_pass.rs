@@ -73,35 +73,30 @@ impl BinningPass {
             entries: &[create_buffer_bind_group_layout_entry(0, false)],
         });
 
-        let count_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Count Pipeline layout"),
-            bind_group_layouts: &[
-                &group0_layout,
-                &group1_layout,
-                &group2_layout,
-            ],
-            push_constant_ranges: &[],
-        });
+        let count_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Count Pipeline layout"),
+                bind_group_layouts: &[&group0_layout, &group1_layout, &group2_layout],
+                push_constant_ranges: &[],
+            });
 
         let scan_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Scan Pipeline layout"),
-            bind_group_layouts: &[
-                &group0_layout,
-                &group1_layout,
-            ],
+            bind_group_layouts: &[&group0_layout, &group1_layout],
             push_constant_ranges: &[],
         });
 
-        let store_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Store Pipeline layout"),
-            bind_group_layouts: &[
-                &group0_layout,
-                &group1_layout,
-                &group2_layout,
-                &group3_layout,
-            ],
-            push_constant_ranges: &[],
-        });
+        let store_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Store Pipeline layout"),
+                bind_group_layouts: &[
+                    &group0_layout,
+                    &group1_layout,
+                    &group2_layout,
+                    &group3_layout,
+                ],
+                push_constant_ranges: &[],
+            });
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/binning.wgsl"));
 
@@ -223,7 +218,12 @@ impl BinningPass {
         pass.set_bind_group(2, &self.bind_group_2, &[]);
         pass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
+        let total_threads_needed = (total_tris as f32).ceil();
+
+        let gx_tris = (total_threads_needed as f32).sqrt().ceil() as u32;
+        let gy_tris = ((total_threads_needed as f32) / (gx_tris as f32)).ceil() as u32;
+
+        pass.dispatch_workgroups(gx_tris, gy_tris, 1);
 
         pass.set_pipeline(&self.pipeline_scan_first);
         pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
@@ -232,6 +232,6 @@ impl BinningPass {
         pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
 
         pass.set_pipeline(&self.pipeline_store);
-        pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
+        pass.dispatch_workgroups(gx_tris, gy_tris, 1);
     }
 }
