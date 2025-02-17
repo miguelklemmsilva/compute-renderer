@@ -1,6 +1,9 @@
 use wgpu::PipelineCompilationOptions;
 
-use super::{util::dispatch_size, GpuBuffers};
+use super::{
+    util::{create_buffer_bind_group_layout_entry, dispatch_size},
+    GpuBuffers,
+};
 
 pub struct BinningPass {
     pub pipeline_count: wgpu::ComputePipeline,
@@ -9,6 +12,8 @@ pub struct BinningPass {
     pub pipeline_store: wgpu::ComputePipeline,
     pub bind_group_0: wgpu::BindGroup,
     pub bind_group_1: wgpu::BindGroup,
+    pub bind_group_2: wgpu::BindGroup,
+    pub bind_group_3: wgpu::BindGroup,
 }
 
 impl BinningPass {
@@ -17,75 +22,10 @@ impl BinningPass {
         let group0_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Binning Pass: Group0 Layout"),
             entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
+                create_buffer_bind_group_layout_entry(0, false),
+                create_buffer_bind_group_layout_entry(1, false),
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let group1_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("BinningPass::Group1"),
-            entries: &[
-                // [0] screen_dims
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -97,24 +37,77 @@ impl BinningPass {
             ],
         });
 
-        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Binning Pipeline Layout"),
-            bind_group_layouts: &[&group0_layout, &group1_layout],
+        let group1_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("BinningPass::Group1"),
+            entries: &[create_buffer_bind_group_layout_entry(0, false)],
+        });
+
+        let group2_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("BinningPass::Group2"),
+            entries: &[
+                wgpu::BindGroupLayoutEntry {
+                    binding: 0,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 1,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Storage { read_only: true },
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+            ],
+        });
+
+        let group3_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("BinningPass::Group3"),
+            entries: &[create_buffer_bind_group_layout_entry(0, false)],
+        });
+
+        let count_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Count Pipeline layout"),
+            bind_group_layouts: &[
+                &group0_layout,
+                &group1_layout,
+                &group2_layout,
+            ],
             push_constant_ranges: &[],
         });
 
-        // 2) Create shader module from WGSL
-        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("Binning WGSL"),
-            source: wgpu::ShaderSource::Wgsl(std::borrow::Cow::Borrowed(include_str!(
-                "shaders/binning.wgsl"
-            ))),
+        let scan_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Scan Pipeline layout"),
+            bind_group_layouts: &[
+                &group0_layout,
+                &group1_layout,
+            ],
+            push_constant_ranges: &[],
         });
 
-        // 3) Create compute pipelines
+        let store_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Store Pipeline layout"),
+            bind_group_layouts: &[
+                &group0_layout,
+                &group1_layout,
+                &group2_layout,
+                &group3_layout,
+            ],
+            push_constant_ranges: &[],
+        });
+
+        let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/binning.wgsl"));
+
         let pipeline_count = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Count Triangles"),
-            layout: Some(&pipeline_layout),
+            layout: Some(&count_pipeline_layout),
             module: &shader,
             entry_point: Some("count_triangles"),
             cache: None,
@@ -124,7 +117,7 @@ impl BinningPass {
         let pipeline_scan_first =
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some("Scan First Pass"),
-                layout: Some(&pipeline_layout),
+                layout: Some(&scan_pipeline_layout),
                 module: &shader,
                 entry_point: Some("scan_first_pass"),
                 cache: None,
@@ -134,7 +127,7 @@ impl BinningPass {
         let pipeline_scan_second =
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some("Scan Second Pass"),
-                layout: Some(&pipeline_layout),
+                layout: Some(&scan_pipeline_layout),
                 module: &shader,
                 entry_point: Some("scan_second_pass"),
                 cache: None,
@@ -143,41 +136,28 @@ impl BinningPass {
 
         let pipeline_store = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Store Triangles"),
-            layout: Some(&pipeline_layout),
+            layout: Some(&store_pipeline_layout),
             module: &shader,
             entry_point: Some("store_triangles"),
             cache: None,
             compilation_options: PipelineCompilationOptions::default(),
         });
 
-        // 4) Create bind groups
         let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Binning Pass: Group0"),
             layout: &group0_layout,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
-                    resource: buffers.projected_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: buffers.index_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 2,
                     resource: buffers.tile_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 3,
-                    resource: buffers.triangle_list_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 4,
-                    resource: buffers.partial_sums_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 5,
+                    binding: 1,
                     resource: buffers.triangle_meta_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
+                    resource: buffers.screen_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -187,7 +167,31 @@ impl BinningPass {
             layout: &group1_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
-                resource: buffers.screen_buffer.as_entire_binding(),
+                resource: buffers.partial_sums_buffer.as_entire_binding(),
+            }],
+        });
+
+        let bind_group_2 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("BinningPass::BG2"),
+            layout: &group2_layout,
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffers.projected_buffer.as_entire_binding(),
+                },
+            ],
+        });
+
+        let bind_group_3 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("BinningPass::BG3"),
+            layout: &group3_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: buffers.triangle_list_buffer.as_entire_binding(),
             }],
         });
 
@@ -198,6 +202,8 @@ impl BinningPass {
             pipeline_store,
             bind_group_0,
             bind_group_1,
+            bind_group_2,
+            bind_group_3,
         }
     }
 
@@ -207,64 +213,25 @@ impl BinningPass {
         total_tris: u32,
         total_pixel_dispatch: u32,
     ) {
-        // ---------------------------------------------------------------------
-        // 1) count_triangles
-        // ---------------------------------------------------------------------
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Binning::count_triangles"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline_count);
-            pass.set_bind_group(0, &self.bind_group_0, &[]);
-            pass.set_bind_group(1, &self.bind_group_1, &[]);
+        let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
+            label: Some("Binning::count_triangles"),
+            timestamp_writes: None,
+        });
+        pass.set_pipeline(&self.pipeline_count);
+        pass.set_bind_group(0, &self.bind_group_0, &[]);
+        pass.set_bind_group(1, &self.bind_group_1, &[]);
+        pass.set_bind_group(2, &self.bind_group_2, &[]);
+        pass.set_bind_group(3, &self.bind_group_3, &[]);
 
-            pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
-        }
+        pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
 
-        // ---------------------------------------------------------------------
-        // 2) scan_first_pass: do a local prefix-scan per tile
-        //    Each tile is handled by exactly one thread => #threads = #tiles
-        // ---------------------------------------------------------------------
+        pass.set_pipeline(&self.pipeline_scan_first);
+        pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
 
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Binning::scan_first_pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline_scan_first);
-            pass.set_bind_group(0, &self.bind_group_0, &[]);
-            pass.set_bind_group(1, &self.bind_group_1, &[]);
-            pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
-        }
+        pass.set_pipeline(&self.pipeline_scan_second);
+        pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
 
-        // ---------------------------------------------------------------------
-        // 3) scan_second_pass: each tile adds the partial sum from its WG
-        // ---------------------------------------------------------------------
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Binning::scan_second_pass"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline_scan_second);
-            pass.set_bind_group(0, &self.bind_group_0, &[]);
-            pass.set_bind_group(1, &self.bind_group_1, &[]);
-            pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
-        }
-
-        // ---------------------------------------------------------------------
-        // 4) store_triangles: final pass that writes triangle indices
-        // ---------------------------------------------------------------------
-        {
-            let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
-                label: Some("Binning::store_triangles"),
-                timestamp_writes: None,
-            });
-            pass.set_pipeline(&self.pipeline_store);
-            pass.set_bind_group(0, &self.bind_group_0, &[]);
-            pass.set_bind_group(1, &self.bind_group_1, &[]);
-
-            pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
-        }
+        pass.set_pipeline(&self.pipeline_store);
+        pass.dispatch_workgroups(dispatch_size(total_tris), 1, 1);
     }
 }
