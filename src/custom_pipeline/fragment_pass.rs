@@ -8,7 +8,6 @@ pub struct FragmentPass {
     pub bind_group_3: wgpu::BindGroup,
     pub bind_group_4: wgpu::BindGroup,
     pub bind_group_5: wgpu::BindGroup,
-    pub bind_group_6: wgpu::BindGroup,
 }
 
 impl FragmentPass {
@@ -82,33 +81,7 @@ impl FragmentPass {
         });
 
         let group4_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Fragment Pass: Group4 Layout (Textures)"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-            ],
-        });
-
-        let group5_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Fragment Pass: Group5 Layout (Effect)"),
+            label: Some("Fragment Pass: Group4 Layout (Effect)"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -121,8 +94,8 @@ impl FragmentPass {
             }],
         });
 
-        let group6_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("Fragment Pass: Group6 Layout (Fragments)"),
+        let group5_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("Fragment Pass: Group5 Layout (Fragments)"),
             entries: &[wgpu::BindGroupLayoutEntry {
                 binding: 0,
                 visibility: wgpu::ShaderStages::COMPUTE,
@@ -144,7 +117,6 @@ impl FragmentPass {
                 &group3_layout,
                 &group4_layout,
                 &group5_layout,
-                &group6_layout,
             ],
             push_constant_ranges: &[],
         });
@@ -203,30 +175,15 @@ impl FragmentPass {
         let bind_group_4 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Fragment Pass: Group4"),
             layout: &group4_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.texture_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: buffers.texture_info_buffer.as_entire_binding(),
-                },
-            ],
-        });
-
-        let bind_group_5 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Fragment Pass: Group5"),
-            layout: &group5_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffers.effect_buffer.as_entire_binding(),
             }],
         });
 
-        let bind_group_6 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("Fragment Pass: Group6"),
-            layout: &group6_layout,
+        let bind_group_5 = device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: Some("Fragment Pass: Group5"),
+            layout: &group5_layout,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffers.fragment_buffer.as_entire_binding(),
@@ -241,7 +198,6 @@ impl FragmentPass {
             bind_group_3,
             bind_group_4,
             bind_group_5,
-            bind_group_6,
         }
     }
 
@@ -258,7 +214,6 @@ impl FragmentPass {
         cpass.set_bind_group(3, &self.bind_group_3, &[]);
         cpass.set_bind_group(4, &self.bind_group_4, &[]);
         cpass.set_bind_group(5, &self.bind_group_5, &[]);
-        cpass.set_bind_group(6, &self.bind_group_6, &[]);
 
         cpass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
     }
