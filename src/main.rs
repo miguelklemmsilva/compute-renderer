@@ -1,4 +1,4 @@
-use std::time::Duration;
+use std::{time::Duration, u64};
 
 use camera::CameraMode;
 use performance::PerformanceCollector;
@@ -32,19 +32,19 @@ fn main() {
     // List of scenes to benchmark
     let scenes = vec![SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("suzanne.obj"),
+        model_path: String::from("test.obj"),
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {
-            mode: CameraMode::Orbit,
+            mode: CameraMode::FirstPerson,
             ..Default::default()
         },
-        benchmark_duration_secs: 10,
+        benchmark_duration_secs: u64::MAX,
         backend_type: BackendType::CustomPipeline,
     },
     SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("suzanne.obj"),
+        model_path: String::from("sportsCar/sportsCar.obj"),
         lights: lights.clone(),
         effects: None,
         camera_config: CameraConfig {
