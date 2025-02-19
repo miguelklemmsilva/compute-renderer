@@ -1,4 +1,4 @@
-use super::GpuBuffers;
+use super::{util::create_buffer_bind_group_layout_entry, GpuBuffers};
 
 pub struct FragmentPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -15,26 +15,8 @@ impl FragmentPass {
         let group0_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fragment Pass: Group0 Layout (Output)"),
             entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
+                create_buffer_bind_group_layout_entry(0, false),
+                create_buffer_bind_group_layout_entry(1, true),
             ],
         });
 
@@ -68,16 +50,7 @@ impl FragmentPass {
 
         let group3_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fragment Pass: Group3 Layout (Lights)"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
+            entries: &[create_buffer_bind_group_layout_entry(0, true)],
         });
 
         let group4_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -96,16 +69,7 @@ impl FragmentPass {
 
         let group5_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fragment Pass: Group5 Layout (Fragments)"),
-            entries: &[wgpu::BindGroupLayoutEntry {
-                binding: 0,
-                visibility: wgpu::ShaderStages::COMPUTE,
-                ty: wgpu::BindingType::Buffer {
-                    ty: wgpu::BufferBindingType::Storage { read_only: true },
-                    has_dynamic_offset: false,
-                    min_binding_size: None,
-                },
-                count: None,
-            }],
+            entries: &[create_buffer_bind_group_layout_entry(0, true)],
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -135,14 +99,16 @@ impl FragmentPass {
         let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Fragment Pass: Group0"),
             layout: &group0_layout,
-            entries: &[wgpu::BindGroupEntry {
-                binding: 0,
-                resource: buffers.output_buffer.as_entire_binding(),
-            },
-            wgpu::BindGroupEntry {
-                binding: 1,
-                resource: buffers.depth_buffer.as_entire_binding(),
-            }],
+            entries: &[
+                wgpu::BindGroupEntry {
+                    binding: 0,
+                    resource: buffers.output_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 1,
+                    resource: buffers.depth_buffer.as_entire_binding(),
+                },
+            ],
         });
 
         let bind_group_1 = device.create_bind_group(&wgpu::BindGroupDescriptor {

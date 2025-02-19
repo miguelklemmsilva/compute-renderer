@@ -4,7 +4,7 @@
 // each tile’s triangle list is processed in parallel by a workgroup of 64 threads.
 // ---------------------------------------------------------------------
 
-const TILE_SIZE: u32 = 8u;
+const TILE_SIZE: u32 = 4u;
 
 struct UniformRaster {
     width: f32,
@@ -62,9 +62,6 @@ var<storage, read> triangle_list_buffer: array<u32>;
 var<storage, read> indices: array<u32>;
 
 @group(0) @binding(5)
-var<storage, read> triangle_binning_buffer: array<TriangleBinningData>;
-
-@group(0) @binding(6)
 var <storage, read_write> depth_buffer: array<atomic<u32>>;
 
 @group(1) @binding(0)
@@ -72,10 +69,6 @@ var<uniform> screen_dims: UniformRaster;
 
 @group(2) @binding(0)
 var<uniform> effect: EffectUniform;
-
-// ---------------------------------------------------------------------
-// Utility functions
-// ---------------------------------------------------------------------
 
 // Compute barycentric coordinates for point p (in 2D screen space)
 fn barycentric(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>, p: vec2<f32>) -> vec3<f32> {
@@ -213,8 +206,6 @@ fn raster_main(
         let base_idx = triangle_list_buffer[triangle_offset + i];
         // Compute the triangle index from the base index.
         let triangle_index = base_idx / 3u;
-        // Load precomputed metadata.
-        let triangle_meta = triangle_binning_buffer[triangle_index];
 
         // Retrieve the vertex indices.
         let idx1 = indices[base_idx];
