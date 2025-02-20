@@ -1,7 +1,8 @@
 use crate::model::Model;
 use crate::window::BackendType;
-use crate::{camera, effect::Effect, custom_pipeline};
+use crate::{camera, custom_pipeline, effect::Effect};
 use std::time::Duration;
+use std::u64;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -206,6 +207,24 @@ pub struct SceneConfig {
     pub backend_type: BackendType,
 }
 
+impl Default for SceneConfig {
+    fn default() -> Self {
+        Self {
+            name: "test scene".to_string(),
+            model_path: "suzanne.obj".to_string(),
+            lights: vec![
+                ([0.0, 0.0, 0.0], [1.0, 0.9, 0.8], 1.0),
+                // Fill light
+                ([-5.0, 3.0, 0.0], [0.3, 0.4, 0.5], 0.5),
+            ],
+            effects: None,
+            camera_config: CameraConfig::default(),
+            benchmark_duration_secs: u64::MAX,
+            backend_type: BackendType::CustomPipeline,
+        }
+    }
+}
+
 pub struct CameraConfig {
     pub distance: f32,
     pub theta: f32,
@@ -218,26 +237,12 @@ pub struct CameraConfig {
 impl Default for CameraConfig {
     fn default() -> Self {
         Self {
-            distance: 2.0,
+            distance: 4.0,
             theta: 0.0,
             phi: 0.0,
             target: [0.0, 0.0, 0.0],
             mode: crate::camera::CameraMode::Orbit,
             position: [0.0, 2.0, 5.0],
-        }
-    }
-}
-
-impl Default for SceneConfig {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            model_path: String::new(),
-            lights: Vec::new(),
-            effects: None,
-            camera_config: CameraConfig::default(),
-            benchmark_duration_secs: 10,
-            backend_type: BackendType::WgpuPipeline,
         }
     }
 }

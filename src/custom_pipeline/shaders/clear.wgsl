@@ -1,4 +1,4 @@
-const TILE_SIZE: u32 = 8u;
+const TILE_SIZE = 4u;
 
 struct TileTriangles {
     count: u32,

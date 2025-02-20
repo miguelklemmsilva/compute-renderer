@@ -1,5 +1,5 @@
 // Define a tile size constant
-const TILE_SIZE = 8u;
+const TILE_SIZE = 4u;
 
 struct Vertex {
     screen_pos: vec4<f32>,
@@ -121,11 +121,11 @@ fn compute_triangle_meta(triangle_index: u32) {
     triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(tile_range_x, tile_range_y);
 }
 
-const z_dispatches = 32u;
+const z_dispatches = 128u;
 
 // Maximum number of tiles we'll accumulate in local memory
 // before we fall back to a direct atomicAdd per tile.
-const LOCAL_MAX_TILES: u32 = 32u;
+const LOCAL_MAX_TILES: u32 = 128u;
 
 // Shared arrays:
 //   local_tile_indices: store the absolute tile index
@@ -165,41 +165,11 @@ fn count_triangles(
     let thread_id = lid.z;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
 
-    // We'll do local accumulation only if the triangle's coverage is small enough.
-    if num_tiles <= LOCAL_MAX_TILES {
-        // Each thread accumulates into the shared arrays
-        for (var i = thread_id; i < num_tiles; i += z_dispatches) {
-            let tile_x = start_tile_x + (i % tile_range_x);
-            let tile_y = start_tile_y + (i / tile_range_x);
-            let tile_idx = tile_x + tile_y * num_tiles_x;
-
-            // Write tile_idx into local array at slot `i` (which is guaranteed < LOCAL_MAX_TILES)
-            local_tile_indices[i] = tile_idx;
-            // Count how many times we “hit” that tile (for a single triangle, it’s always 1)
-            local_tile_counts[i] = 1u;
-        }
-
-        // Now each thread writes its tile accumulations to global memory *exactly once*:
-        // This reduces atomicAdd calls from "num_tiles" to "num_tiles / 64" or fewer.
-        for (var i = thread_id; i < num_tiles; i += z_dispatches) {
-            let tile_idx = local_tile_indices[i];
-            let tile_inc = local_tile_counts[i];
-            if tile_inc > 0u {
-                // Single atomicAdd per tile
-                atomicAdd(&tile_buffer[tile_idx].count, tile_inc);
-            }
-        }
-    } else {
-        // ------------------------------
-        // Fall back on the original approach
-        // (for very large bounding boxes)
-        // ------------------------------
-        for (var i: u32 = thread_id; i < num_tiles; i += z_dispatches) {
-            let tile_x = start_tile_x + (i % tile_range_x);
-            let tile_y = start_tile_y + (i / tile_range_x);
-            let tile_index = tile_x + tile_y * num_tiles_x;
-            atomicAdd(&tile_buffer[tile_index].count, 1u);
-        }
+    for (var i: u32 = thread_id; i < num_tiles; i += z_dispatches) {
+        let tile_x = start_tile_x + (i % tile_range_x);
+        let tile_y = start_tile_y + (i / tile_range_x);
+        let tile_index = tile_x + tile_y * num_tiles_x;
+        atomicAdd(&tile_buffer[tile_index].count, 1u);
     }
 }
 
@@ -336,56 +306,17 @@ fn store_triangles(
     // We'll again split the tile iteration among 64 threads (in z).
     let thread_id = lid.z;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
+    for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
+        let tile_x = start_tile_x + (i % tile_range_x);
+        let tile_y = start_tile_y + (i / tile_range_x);
+        let tile_index = tile_x + tile_y * num_tiles_x;
 
-    // Decide if we do local accumulation or fallback.
-    if total_tiles <= LOCAL_MAX_TILES {
-        //---------------------------------------
-        // 1) Accumulate tile indices in shared memory
-        //---------------------------------------
-        for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
-            let tile_x = start_tile_x + (i % tile_range_x);
-            let tile_y = start_tile_y + (i / tile_range_x);
-            let tile_idx = tile_x + tile_y * num_tiles_x;
+        let count = tile_buffer[tile_index].count;
+        let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
 
-            local_tile_indices[i] = tile_idx;
-            local_tile_counts[i] = 1u;  // We'll store exactly one copy for this tile
-        }
-
-        //---------------------------------------
-        // 2) Single atomicAdd per tile in final buffer
-        //---------------------------------------
-        for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
-            let tile_idx = local_tile_indices[i];
-            let inc = local_tile_counts[i];
-            if inc > 0u {
-                // We’re about to reserve slots in the tile’s final list.
-                let count = tile_buffer[tile_idx].count;
-                let write_idx = atomicAdd(&tile_buffer[tile_idx].write_index, inc);
-
-                // Only write if we’re within the tile’s total count
-                if write_idx < count {
-                    let offset = tile_buffer[tile_idx].offset;
-                    triangle_list_buffer[offset + write_idx] = base_idx;
-                }
-            }
-        }
-    } else {
-        //---------------------------------------
-        // Fallback path for large bounding boxes
-        // (unchanged from your original code).
-        //---------------------------------------
-        for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
-            let tile_x = start_tile_x + (i % tile_range_x);
-            let tile_y = start_tile_y + (i / tile_range_x);
-            let tile_index = tile_x + tile_y * num_tiles_x;
-
-            let count = tile_buffer[tile_index].count;
-            let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
-
-            if write_index < count {
-                let offset = tile_buffer[tile_index].offset;
-                triangle_list_buffer[offset + write_index] = base_idx;
-            }
+        if write_index < count {
+            let offset = tile_buffer[tile_index].offset;
+            triangle_list_buffer[offset + write_index] = base_idx;
         }
     }
 }
