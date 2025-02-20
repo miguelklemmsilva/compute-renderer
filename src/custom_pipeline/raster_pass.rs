@@ -1,6 +1,6 @@
 use super::{util::create_buffer_bind_group_layout_entry, GpuBuffers};
 
-pub const TILE_SIZE: u32 = 4;
+pub const TILE_SIZE: u32 = 8;
 
 pub struct RasterPass {
     pub pipeline: wgpu::ComputePipeline,

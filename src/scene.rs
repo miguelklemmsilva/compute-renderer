@@ -184,10 +184,6 @@ impl Scene {
         self.lights.len() - 1
     }
 
-    pub fn get_lights(&self) -> &[Light] {
-        &self.lights
-    }
-
     pub fn add_effect(&mut self, effect: Effect) -> usize {
         self.effects.push(effect);
         self.effects.len() - 1
