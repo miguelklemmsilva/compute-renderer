@@ -1,4 +1,4 @@
-const TILE_SIZE: u32 = 4u;
+const TILE_SIZE: u32 = 8u;
 
 struct TileTriangles {
     count: u32,
@@ -30,7 +30,6 @@ fn clear_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
     let total_tiles = num_tiles_x * num_tiles_y;
-    let num_workgroups = (total_tiles + 255u) / 256u * 256u;  // Round up to next multiple of workgroup size
     
     // Clear pixel-dependent buffers
     if idx < total_pixels {
