@@ -4,7 +4,7 @@
 // each tile’s triangle list is processed in parallel by a workgroup of 64 threads.
 // ---------------------------------------------------------------------
 
-const TILE_SIZE: u32 = 4u;
+const TILE_SIZE: u32 = 8u;
 
 struct UniformRaster {
     width: f32,
