@@ -1,8 +1,7 @@
-use std::{time::Duration, u64};
+use std::time::Duration;
 
-use camera::CameraMode;
 use performance::PerformanceCollector;
-use scene::{CameraConfig, SceneConfig};
+use scene::SceneConfig;
 use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -21,38 +20,17 @@ fn main() {
     let height = 900;
     let width = 1600;
 
-    // Update light position to better illuminate the model
-    let lights = vec![
-        // Key light
-        ([0.0, 0.0, 0.0], [1.0, 0.9, 0.8], 1.0),
-        // Fill light
-        ([-5.0, 3.0, 0.0], [0.3, 0.4, 0.5], 0.5),
-    ];
-
     // List of scenes to benchmark
     let scenes = vec![SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("test.obj"),
-        lights: lights.clone(),
-        effects: None,
-        camera_config: CameraConfig {
-            mode: CameraMode::FirstPerson,
-            ..Default::default()
-        },
-        benchmark_duration_secs: u64::MAX,
-        backend_type: BackendType::CustomPipeline,
+        model_path: String::from("suzanne.obj"),
+        ..Default::default()
     },
     SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("test.obj"),
-        lights: lights.clone(),
-        effects: None,
-        camera_config: CameraConfig {
-            mode: CameraMode::FirstPerson,
-            ..Default::default()
-        },
-        benchmark_duration_secs: u64::MAX,
+        model_path: String::from("suzanne.obj"),
         backend_type: BackendType::WgpuPipeline,
+        ..Default::default()
     }];
 
     // Create a single event loop for all scenes
