@@ -1,5 +1,5 @@
 // Define a tile size constant
-const TILE_SIZE: u32 = 4u;
+const TILE_SIZE = 8u;
 
 struct Vertex {
     screen_pos: vec4<f32>,
@@ -121,9 +121,11 @@ fn compute_triangle_meta(triangle_index: u32) {
     triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(tile_range_x, tile_range_y);
 }
 
+const z_dispatches = 32u;
+
 // Maximum number of tiles we'll accumulate in local memory
 // before we fall back to a direct atomicAdd per tile.
-const LOCAL_MAX_TILES: u32 = 64u;
+const LOCAL_MAX_TILES: u32 = 32u;
 
 // Shared arrays:
 //   local_tile_indices: store the absolute tile index
@@ -131,7 +133,7 @@ const LOCAL_MAX_TILES: u32 = 64u;
 var<workgroup> local_tile_indices: array<u32, LOCAL_MAX_TILES>;
 var<workgroup> local_tile_counts:  array<u32, LOCAL_MAX_TILES>;
 
-@compute @workgroup_size(1, 1, 64)
+@compute @workgroup_size(1, 1, z_dispatches)
 fn count_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
@@ -166,7 +168,7 @@ fn count_triangles(
     // We'll do local accumulation only if the triangle's coverage is small enough.
     if num_tiles <= LOCAL_MAX_TILES {
         // Each thread accumulates into the shared arrays
-        for (var i = thread_id; i < num_tiles; i += 64u) {
+        for (var i = thread_id; i < num_tiles; i += z_dispatches) {
             let tile_x = start_tile_x + (i % tile_range_x);
             let tile_y = start_tile_y + (i / tile_range_x);
             let tile_idx = tile_x + tile_y * num_tiles_x;
@@ -179,7 +181,7 @@ fn count_triangles(
 
         // Now each thread writes its tile accumulations to global memory *exactly once*:
         // This reduces atomicAdd calls from "num_tiles" to "num_tiles / 64" or fewer.
-        for (var i = thread_id; i < num_tiles; i += 64u) {
+        for (var i = thread_id; i < num_tiles; i += z_dispatches) {
             let tile_idx = local_tile_indices[i];
             let tile_inc = local_tile_counts[i];
             if tile_inc > 0u {
@@ -192,7 +194,7 @@ fn count_triangles(
         // Fall back on the original approach
         // (for very large bounding boxes)
         // ------------------------------
-        for (var i: u32 = thread_id; i < num_tiles; i += 64u) {
+        for (var i: u32 = thread_id; i < num_tiles; i += z_dispatches) {
             let tile_x = start_tile_x + (i % tile_range_x);
             let tile_y = start_tile_y + (i / tile_range_x);
             let tile_index = tile_x + tile_y * num_tiles_x;
@@ -298,7 +300,7 @@ fn scan_second_pass(
 //---------------------------------------------------------------------
 // Kernel 3: Store triangle indices into the triangle list buffer.
 // Each thread processes one triangle and inlines the triangle logic.
-@compute @workgroup_size(1, 1, 64)
+@compute @workgroup_size(1, 1, z_dispatches)
 fn store_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
@@ -340,7 +342,7 @@ fn store_triangles(
         //---------------------------------------
         // 1) Accumulate tile indices in shared memory
         //---------------------------------------
-        for (var i: u32 = thread_id; i < total_tiles; i += 64u) {
+        for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
             let tile_x = start_tile_x + (i % tile_range_x);
             let tile_y = start_tile_y + (i / tile_range_x);
             let tile_idx = tile_x + tile_y * num_tiles_x;
@@ -352,7 +354,7 @@ fn store_triangles(
         //---------------------------------------
         // 2) Single atomicAdd per tile in final buffer
         //---------------------------------------
-        for (var i: u32 = thread_id; i < total_tiles; i += 64u) {
+        for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
             let tile_idx = local_tile_indices[i];
             let inc = local_tile_counts[i];
             if inc > 0u {
@@ -372,7 +374,7 @@ fn store_triangles(
         // Fallback path for large bounding boxes
         // (unchanged from your original code).
         //---------------------------------------
-        for (var i: u32 = thread_id; i < total_tiles; i += 64u) {
+        for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
             let tile_x = start_tile_x + (i % tile_range_x);
             let tile_y = start_tile_y + (i / tile_range_x);
             let tile_index = tile_x + tile_y * num_tiles_x;
