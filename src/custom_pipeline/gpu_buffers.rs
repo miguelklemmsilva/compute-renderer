@@ -143,7 +143,7 @@ impl GpuBuffers {
             partial_sums_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Partial Sums Buffer"),
                 size: (total_workgroups as usize * std::mem::size_of::<u32>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+                usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
             triangle_meta_buffer: device.create_buffer(&wgpu::BufferDescriptor {
