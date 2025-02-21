@@ -166,11 +166,13 @@ fn count_triangles(
     let thread_id = lid.z;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
 
-    for (var i = thread_id; i < num_tiles; i += z_dispatches) {
-        let tile_x = start_tile_x + (i % tile_range_x);
-        let tile_y = start_tile_y + (i / tile_range_x);
-        let tile_index = tile_x + tile_y * num_tiles_x;
-        atomicAdd(&tile_buffer[tile_index].count, 1u);
+    for (var ty = 0u; ty < tile_range_y; ty++) {
+        let tile_y = start_tile_y + ty;
+        for (var tx = thread_id; tx < tile_range_x; tx += z_dispatches) {
+            let tile_x = start_tile_x + tx;
+            let tile_index = tile_x + tile_y * num_tiles_x;
+            atomicAdd(&tile_buffer[tile_index].count, 1u);
+        }
     }
 }
 
@@ -301,17 +303,19 @@ fn store_triangles(
     // We'll again split the tile iteration among 64 threads (in z).
     let thread_id = lid.z;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    for (var i = thread_id; i < total_tiles; i += z_dispatches) {
-        let tile_x = start_tile_x + (i % tile_range_x);
-        let tile_y = start_tile_y + (i / tile_range_x);
-        let tile_index = tile_x + tile_y * num_tiles_x;
+    for (var ty = 0u; ty < tile_range_y; ty ++) {
+        let tile_y = start_tile_y + ty;
+        for (var tx = thread_id; tx < tile_range_x; tx += z_dispatches) {
+            let tile_x = start_tile_x + tx;
+            let tile_index = tile_x + tile_y * num_tiles_x;
 
-        let count = atomicLoad(&tile_buffer[tile_index].count);
-        let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
+            let count = atomicLoad(&tile_buffer[tile_index].count);
+            let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
 
-        if write_index < count {
-            let offset = tile_buffer[tile_index].offset;
-            triangle_list_buffer[offset + write_index] = base_idx;
+            if write_index < count {
+                let offset = tile_buffer[tile_index].offset;
+                triangle_list_buffer[offset + write_index] = base_idx;
+            }
         }
     }
 }
