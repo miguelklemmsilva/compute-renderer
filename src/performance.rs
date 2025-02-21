@@ -18,7 +18,7 @@ pub struct PerformanceCollector {
     system: System,
     current_pid: sysinfo::Pid,
     start_time: Instant,
-    last_frame_time: Instant,
+    pub last_frame_time: Instant,
     benchmark_duration: Duration,
     scene_name: String,
     scene_index: usize,
@@ -54,14 +54,14 @@ impl PerformanceCollector {
 
         // Measure elapsed time
         let measured = self.last_frame_time.elapsed().as_secs_f64();
-        // Clamp to a minimum frame time (e.g., 5ms)
+        self.last_frame_time = std::time::Instant::now();
+
         if measured < 0.0001 {
             println!("Measured: {}", measured);
         }
         let frame_time = if measured < 0.0001 { 0.0001 } else { measured };
 
         self.frame_times.push(frame_time);
-        self.last_frame_time = std::time::Instant::now();
 
         self.system.refresh_cpu_all();
         self.system.refresh_memory();

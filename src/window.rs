@@ -31,10 +31,7 @@ pub struct Window {
     pub scene: scene::Scene,
     pub keys_down: HashSet<KeyCode>,
     pub mouse_pressed: bool,
-    pub collector: PerformanceCollector,
-
-    last_frame_time: std::time::Instant,
-    frame_times: Vec<f64>,
+    pub collector: Option<PerformanceCollector>,
 
     // Scene cycling
     scene_configs: Vec<scene::SceneConfig>,
@@ -45,6 +42,14 @@ pub struct Window {
 
 impl ApplicationHandler for Window {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        self.collector = Some(PerformanceCollector::new(
+            self.scene_configs[self.current_scene_index].name.clone(),
+            self.current_scene_index,
+            Duration::from_secs(
+                self.scene_configs[self.current_scene_index].benchmark_duration_secs,
+            ),
+        ));
+
         self.winit_window = Some(
             event_loop
                 .create_window(
@@ -99,7 +104,7 @@ impl ApplicationHandler for Window {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
-                self.collector.finalise();
+                self.collector.as_mut().unwrap().finalise();
                 event_loop.exit();
             }
             WindowEvent::KeyboardInput { event, .. } => {
@@ -108,7 +113,7 @@ impl ApplicationHandler for Window {
                         ElementState::Pressed => {
                             self.keys_down.insert(keycode);
                             if keycode == KeyCode::Escape {
-                                self.collector.finalise();
+                                self.collector.as_mut().unwrap().finalise();
                                 pollster::block_on(self.load_next_scene(event_loop));
                             }
                         }
@@ -180,15 +185,13 @@ impl ApplicationHandler for Window {
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // Update per frame
-        let now = std::time::Instant::now();
-        let delta_time = now.duration_since(self.last_frame_time);
-        self.last_frame_time = now;
+        let delta_time = self.collector.as_mut().unwrap().last_frame_time.elapsed();
 
         // Async block to call `self.update(delta_time).await`
         if pollster::block_on(async {
             if !self.update(delta_time).await {
                 // Scene is done, try to load next scene
-                self.collector.finalise();
+                self.collector.as_mut().unwrap().finalise();
                 if !self.load_next_scene(event_loop).await {
                     event_loop.exit();
                     return Err(());
@@ -208,7 +211,7 @@ impl ApplicationHandler for Window {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
-        self.collector.finalise();
+        self.collector.as_mut().unwrap().finalise();
     }
 }
 
@@ -224,7 +227,6 @@ impl Window {
         width: usize,
         height: usize,
         scene: scene::Scene,
-        collector: PerformanceCollector,
         backend_type: BackendType,
     ) -> Result<Window, Box<dyn std::error::Error>> {
         Ok(Window {
@@ -236,9 +238,7 @@ impl Window {
             scene,
             keys_down: HashSet::new(),
             mouse_pressed: false,
-            collector,
-            last_frame_time: std::time::Instant::now(),
-            frame_times: Vec::with_capacity(100),
+            collector: None,
             scene_configs: Vec::new(),
             current_scene_index: 0,
         })
@@ -262,11 +262,11 @@ impl Window {
         let scene_config = &self.scene_configs[self.current_scene_index];
 
         // Create new performance collector
-        self.collector = PerformanceCollector::new(
+        self.collector = Some(PerformanceCollector::new(
             scene_config.name.clone(),
             self.current_scene_index,
             Duration::from_secs(scene_config.benchmark_duration_secs),
-        );
+        ));
 
         // Create new scene
         self.scene = crate::scene::Scene::from_config(
@@ -324,14 +324,6 @@ impl Window {
 
     /// Update the application each frame
     pub async fn update(&mut self, delta_time: Duration) -> bool {
-        let frame_time = self.last_frame_time.elapsed().as_secs_f64();
-        self.last_frame_time = std::time::Instant::now();
-
-        self.frame_times.push(frame_time);
-        if self.frame_times.len() > 100 {
-            self.frame_times.remove(0);
-        }
-
         if let Some(camera) = self.scene.get_active_camera_mut() {
             camera.update_over_time(delta_time.as_secs_f32());
             camera.process_keyboard(
@@ -392,6 +384,6 @@ impl Window {
             }
         }
 
-        !self.collector.update()
+        !self.collector.as_mut().unwrap().update()
     }
 }
