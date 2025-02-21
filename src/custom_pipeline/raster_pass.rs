@@ -1,6 +1,6 @@
 use super::{util::create_buffer_bind_group_layout_entry, GpuBuffers};
 
-pub const TILE_SIZE: u32 = 4;
+pub const TILE_SIZE: u32 = 8;
 
 pub struct RasterPass {
     pub pipeline: wgpu::ComputePipeline,
@@ -16,10 +16,11 @@ impl RasterPass {
             entries: &[
                 create_buffer_bind_group_layout_entry(0, true),
                 create_buffer_bind_group_layout_entry(1, false),
-                create_buffer_bind_group_layout_entry(2, true),
+                create_buffer_bind_group_layout_entry(2, false),
                 create_buffer_bind_group_layout_entry(3, true),
                 create_buffer_bind_group_layout_entry(4, true),
                 create_buffer_bind_group_layout_entry(5, false),
+                create_buffer_bind_group_layout_entry(6, true)
             ],
         });
 
@@ -94,6 +95,10 @@ impl RasterPass {
                 wgpu::BindGroupEntry {
                     binding: 5,
                     resource: buffers.depth_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: buffers.triangle_meta_buffer.as_entire_binding(),
                 },
             ],
         });

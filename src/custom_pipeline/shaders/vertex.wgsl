@@ -57,9 +57,14 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
 @group(2) @binding(0) var<uniform> camera: Camera;
 @group(3) @binding(0) var<uniform> effect: EffectUniform;
 
-// The original projection logic, but placed in a separate function here.
-fn project_vertex(v: VertexIn) -> Vertex {
-    var modified_v = v;
+@compute @workgroup_size(256)
+fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+    let idx = global_id.x;
+    if idx >= arrayLength(&vertex_buffer) {
+        return;
+    }
+
+    var v = vertex_buffer[idx];
     var world_pos = vec4<f32>(v.world_pos, 1.0);
 
     // If there's an effect that modifies position, apply it:
@@ -81,21 +86,9 @@ fn project_vertex(v: VertexIn) -> Vertex {
     );
 
     // Keep the original normals and store world position separately
-    return Vertex(
+    projected_buffer[idx] = Vertex(
         screen_pos,
         v.normal,
         v.uv
     );
-}
-
-@compute @workgroup_size(256)
-fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
-    let idx = global_id.x;
-    if idx >= arrayLength(&index_buffer) {
-        return;
-    }
-
-    let v = vertex_buffer[idx];
-    let projected = project_vertex(v);
-    projected_buffer[idx] = projected;
 }

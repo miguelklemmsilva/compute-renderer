@@ -1,5 +1,5 @@
 // Define a tile size constant
-const TILE_SIZE = 4u;
+const TILE_SIZE = 8u;
 
 struct Vertex {
     screen_pos: vec4<f32>,
@@ -29,24 +29,32 @@ struct TriangleBinningData {
     tile_range: vec2<u32>,
 };
 
+struct EffectUniform {
+    effect_type: u32,
+    param1: f32,
+    param2: f32,
+    param3: f32,
+    param4: f32,
+    time: f32,
+    _padding: vec2<f32>,
+};
+
 // universal buffers
 @group(0) @binding(0) var<storage, read_write> tile_buffer: array<TileTriangles>;
 @group(0) @binding(1) var<storage, read_write> triangle_binning_buffer: array<TriangleBinningData>;
 @group(0) @binding(2) var<uniform> screen_dims: UniformBinning;
+@group(0) @binding(3) var<uniform> effect: EffectUniform;
 
-// scan passes
 @group(1) @binding(0) var<storage, read_write> partial_sums: array<u32>;
 
-// count and store triangles
 @group(2) @binding(0) var<storage, read> index_buffer: array<u32>;
 @group(2) @binding(1) var<storage, read> projected_buffer: array<Vertex>;
 
-// just store
 @group(3) @binding(0) var<storage, read_write> triangle_list_buffer: array<u32>;
 
 
 // Use workgroup shared memory for the local scan:
-var<workgroup> shared_data: array<u32, 256>;
+var<workgroup> shared_data: array<u32, 256u>;
 
 fn get_min_max(v1: vec3<f32>, v2: vec3<f32>, v3: vec3<f32>) -> vec4<f32> {
     let min_x = min(min(v1.x, v2.x), v3.x);
@@ -67,11 +75,6 @@ fn clip_bbox_to_screen(bbox: vec4<f32>) -> vec4<f32> {
     );
 }
 
-fn edge_func(a: vec2<f32>, b: vec2<f32>, p: vec2<f32>) -> f32 {
-    // Returns a positive or negative signed area * 2
-    return (b.x - a.x) * (p.y - a.y) - (b.y - a.y) * (p.x - a.x);
-}
-
 fn compute_triangle_meta(triangle_index: u32) {
     let base_idx = triangle_index * 3u;
     let idx1 = index_buffer[base_idx];
@@ -81,12 +84,10 @@ fn compute_triangle_meta(triangle_index: u32) {
     let v1 = projected_buffer[idx1];
     let v2 = projected_buffer[idx2];
     let v3 = projected_buffer[idx3];
-
-    let area = edge_func(v1.screen_pos.xy, v2.screen_pos.xy, v3.screen_pos.xy);
     
     // First, perform a simple clip test in clip/screen space:
     // Discard triangles with any vertex behind the near plane.
-    if v1.screen_pos.w < 0.0 || v2.screen_pos.w < 0.0 || v3.screen_pos.w < 0.0 || area == 0.0 {
+    if v1.screen_pos.w < 0.0 || v2.screen_pos.w < 0.0 || v3.screen_pos.w < 0.0 {
         triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(0u, 0u);
         return;
     }
@@ -97,6 +98,15 @@ fn compute_triangle_meta(triangle_index: u32) {
     // Quick cull: if the triangle’s bbox is completely outside the screen,
     // then discard it.
     if bbox.z < 0.0 || bbox.x >= screen_dims.width || bbox.w < 0.0 || bbox.y >= screen_dims.height {
+        triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(0u, 0u);
+        return;
+    }
+
+    // Back-face culling (unless the effect requires both sides).
+    let a = vec2<f32>(v2.screen_pos.x - v1.screen_pos.x, v2.screen_pos.y - v1.screen_pos.y);
+    let b = vec2<f32>(v3.screen_pos.x - v1.screen_pos.x, v3.screen_pos.y - v1.screen_pos.y);
+    let cross_z = a.x * b.y - a.y * b.x;
+    if effect.effect_type != 3u && cross_z >= 0.0 {
         triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(0u, 0u);
         return;
     }
@@ -121,17 +131,7 @@ fn compute_triangle_meta(triangle_index: u32) {
     triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(tile_range_x, tile_range_y);
 }
 
-const z_dispatches = 128u;
-
-// Maximum number of tiles we'll accumulate in local memory
-// before we fall back to a direct atomicAdd per tile.
-const LOCAL_MAX_TILES: u32 = 128u;
-
-// Shared arrays:
-//   local_tile_indices: store the absolute tile index
-//   local_tile_counts:  store how many times each tile is hit
-var<workgroup> local_tile_indices: array<u32, LOCAL_MAX_TILES>;
-var<workgroup> local_tile_counts:  array<u32, LOCAL_MAX_TILES>;
+const z_dispatches = 64u;
 
 @compute @workgroup_size(1, 1, z_dispatches)
 fn count_triangles(
@@ -141,6 +141,7 @@ fn count_triangles(
     @builtin(num_workgroups) num_workgroups: vec3<u32>
 ) {
     let triangle_index = wg.x + wg.y * num_workgroups.x;
+
     let num_triangles = arrayLength(&index_buffer) / 3u;
     if triangle_index >= num_triangles {
         return;
@@ -165,7 +166,7 @@ fn count_triangles(
     let thread_id = lid.z;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
 
-    for (var i: u32 = thread_id; i < num_tiles; i += z_dispatches) {
+    for (var i = thread_id; i < num_tiles; i += z_dispatches) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
@@ -294,24 +295,18 @@ fn store_triangles(
     let tile_range_y = triangle_meta.tile_range.y;
     let total_tiles = tile_range_x * tile_range_y;
 
-    // If there are no covered tiles, exit
-    if total_tiles == 0u {
-        return;
-    }
-
     // The base index of this triangle in index_buffer
-    // (ex: if each triangle = 3 indices, this is triangle_index * 3).
     let base_idx = triangle_index * 3u;
 
     // We'll again split the tile iteration among 64 threads (in z).
     let thread_id = lid.z;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    for (var i: u32 = thread_id; i < total_tiles; i += z_dispatches) {
+    for (var i = thread_id; i < total_tiles; i += z_dispatches) {
         let tile_x = start_tile_x + (i % tile_range_x);
         let tile_y = start_tile_y + (i / tile_range_x);
         let tile_index = tile_x + tile_y * num_tiles_x;
 
-        let count = tile_buffer[tile_index].count;
+        let count = atomicLoad(&tile_buffer[tile_index].count);
         let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
 
         if write_index < count {
