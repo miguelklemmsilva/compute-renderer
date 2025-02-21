@@ -221,4 +221,8 @@ fn raster_main(
         // Now rasterize the triangle into this tile.
         rasterize_triangle_in_tile(v1, v2, v3, tile_x, tile_y);
     }
+
+    tile_buffer[tile_idx].count = 0u;
+    tile_buffer[tile_idx].offset = 0u;
+    tile_buffer[tile_idx].write_index = 0u;
 }
