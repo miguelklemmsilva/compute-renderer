@@ -1,7 +1,7 @@
 use crate::scene;
 
 use super::{
-    binning_pass::BinningPass, util::dispatch_size, ClearPass, FragmentPass, GpuBuffers, RasterPass, VertexPass
+    binning_pass::BinningPass, raster_pass::TILE_SIZE, util::dispatch_size, FragmentPass, GpuBuffers, RasterPass, VertexPass
 };
 
 pub struct GPU {
@@ -10,7 +10,6 @@ pub struct GPU {
 
     pub buffers: GpuBuffers,
 
-    pub clear_pass: ClearPass,
     pub vertex_pass: VertexPass,
     pub raster_pass: RasterPass,
     pub fragment_pass: FragmentPass,
@@ -39,7 +38,6 @@ impl GPU {
 
         let buffers = GpuBuffers::new(&device, width as u32, height as u32, scene);
 
-        let clear_pass = ClearPass::new(&device, &buffers);
         let vertex_pass = VertexPass::new(&device, &buffers);
         let binning_pass = BinningPass::new(&device, &buffers);
         let raster_pass = RasterPass::new(&device, &buffers);
@@ -49,7 +47,6 @@ impl GPU {
             device,
             queue,
             buffers,
-            clear_pass,
             vertex_pass,
             raster_pass,
             fragment_pass,
@@ -83,15 +80,20 @@ impl GPU {
 
         let total_tris = total_indices / 3;
 
+        let num_tiles_x = (width + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
+        let num_tiles_y = (height + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
+
+        let total_tile_dispatch = dispatch_size((num_tiles_x * num_tiles_y) as u32);
+
         let total_pixel_dispatch = dispatch_size((width * height) as u32);
 
-        self.clear_pass.execute(&mut encoder, total_pixel_dispatch);
         self.vertex_pass.execute(&mut encoder, total_tris);
         self.binning_pass
-            .execute(&mut encoder, total_tris, total_pixel_dispatch);
+            .execute(&mut encoder, total_tris, total_tile_dispatch);
         self.raster_pass
             .execute(&mut encoder, width as u32, height as u32);
-        self.fragment_pass.execute(&mut encoder, total_pixel_dispatch);
+        self.fragment_pass
+            .execute(&mut encoder, total_pixel_dispatch);
 
         self.queue.submit(Some(encoder.finish()));
 
@@ -117,7 +119,6 @@ impl GPU {
         self.buffers = GpuBuffers::new(&self.device, width, height, scene);
 
         // Recreate passes with new buffers
-        self.clear_pass = ClearPass::new(&self.device, &self.buffers);
         self.vertex_pass = VertexPass::new(&self.device, &self.buffers);
         self.binning_pass = BinningPass::new(&self.device, &self.buffers);
         self.raster_pass = RasterPass::new(&self.device, &self.buffers);

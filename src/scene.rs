@@ -234,6 +234,19 @@ pub struct CameraConfig {
     pub position: [f32; 3],
 }
 
+impl CameraConfig {
+    pub fn new_first_person() -> Self {
+        Self {
+            distance: 0.0,
+            theta: 0.0,
+            phi: 0.0,
+            target: [0.0, 0.0, 0.0],
+            mode: crate::camera::CameraMode::FirstPerson,
+            position: [0.0, 0.0, 0.0],
+        }
+    }
+}
+
 impl Default for CameraConfig {
     fn default() -> Self {
         Self {
