@@ -89,13 +89,7 @@ impl WgpuRenderer {
             format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: surface_caps
-                .present_modes
-                .iter()
-                // prefer Mailbox (FifoRelaxed), else fallback to Fifo
-                .copied()
-                .find(|m| *m == wgpu::PresentMode::Mailbox || *m == wgpu::PresentMode::Immediate)
-                .unwrap_or(wgpu::PresentMode::Fifo),
+            present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 1,

@@ -235,6 +235,7 @@ pub struct CameraConfig {
 }
 
 impl CameraConfig {
+    #[allow(dead_code)]
     pub fn new_first_person() -> Self {
         Self {
             distance: 0.0,
