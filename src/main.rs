@@ -1,4 +1,4 @@
-use scene::{CameraConfig, SceneConfig};
+use scene::SceneConfig;
 use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -21,15 +21,15 @@ fn main() {
     let scenes = vec![
         SceneConfig {
             name: "test".to_string(),
-            model_path: String::from("sibenik/sibenik.obj"),
-            camera_config: CameraConfig::new_first_person(),
+            model_path: String::from("suzanne.obj"),
+            // camera_config: CameraConfig::new_first_person(),
             backend_type: BackendType::WgpuPipeline,
             ..Default::default()
         },
         SceneConfig {
             name: "test".to_string(),
             model_path: String::from("suzanne.obj"),
-            camera_config: CameraConfig::new_first_person(),
+            // camera_config: CameraConfig::new_first_person(),
             ..Default::default()
         },
     ];
