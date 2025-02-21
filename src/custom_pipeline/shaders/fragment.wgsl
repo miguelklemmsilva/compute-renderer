@@ -35,7 +35,7 @@ struct Fragment {
 
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
-@group(0) @binding(1) var <storage, read> depth_buffer: array<u32>;
+@group(0) @binding(1) var <storage, read_write> depth_buffer: array<u32>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
@@ -87,6 +87,7 @@ fn calculate_lighting(normal: vec3<f32>, position: vec3<f32>, uv: vec2<f32>) -> 
 @compute @workgroup_size(256)
 fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x + global_id.y * u32(screen_dims.width);
+    output_buffer[idx] = 0u;
 
     // Early-out if there's no valid fragment
     if idx >= arrayLength(&fragment_buffer) || depth_buffer[idx] >= 0xFFFFFFFFu {
@@ -109,4 +110,6 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let output_color = rgba(R, G, B, A);
     output_buffer[idx] = output_color;
+
+    depth_buffer[idx] = 0xFFFFFFFFu;
 }

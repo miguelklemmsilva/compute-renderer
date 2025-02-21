@@ -16,7 +16,7 @@ impl FragmentPass {
             label: Some("Fragment Pass: Group0 Layout (Output)"),
             entries: &[
                 create_buffer_bind_group_layout_entry(0, false),
-                create_buffer_bind_group_layout_entry(1, true),
+                create_buffer_bind_group_layout_entry(1, false),
             ],
         });
 
