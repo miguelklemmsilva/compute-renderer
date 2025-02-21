@@ -28,7 +28,7 @@ struct Fragment {
 };
 
 struct TileTriangles {
-    count: u32,
+    count: atomic<u32>,
     offset: u32,
     write_index: u32,
     padding: u32
@@ -222,6 +222,7 @@ fn raster_main(
         rasterize_triangle_in_tile(v1, v2, v3, tile_x, tile_y);
     }
 
+    storageBarrier();
     tile_buffer[tile_idx].count = 0u;
     tile_buffer[tile_idx].offset = 0u;
     tile_buffer[tile_idx].write_index = 0u;

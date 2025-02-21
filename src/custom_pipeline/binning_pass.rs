@@ -1,9 +1,6 @@
 use wgpu::PipelineCompilationOptions;
 
-use super::{
-    util::create_buffer_bind_group_layout_entry,
-    GpuBuffers,
-};
+use super::{util::create_buffer_bind_group_layout_entry, GpuBuffers};
 
 pub struct BinningPass {
     pub pipeline_count: wgpu::ComputePipeline,
