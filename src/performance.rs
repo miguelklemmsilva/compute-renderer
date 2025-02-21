@@ -55,7 +55,10 @@ impl PerformanceCollector {
         // Measure elapsed time
         let measured = self.last_frame_time.elapsed().as_secs_f64();
         // Clamp to a minimum frame time (e.g., 5ms)
-        let frame_time = if measured < 0.005 { 0.005 } else { measured };
+        if measured < 0.0001 {
+            println!("Measured: {}", measured);
+        }
+        let frame_time = if measured < 0.0001 { 0.0001 } else { measured };
 
         self.frame_times.push(frame_time);
         self.last_frame_time = std::time::Instant::now();

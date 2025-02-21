@@ -1,7 +1,7 @@
 use wgpu::PipelineCompilationOptions;
 
 use super::{
-    util::create_buffer_bind_group_layout_entry,
+    util::{create_buffer_bind_group_layout_entry, dispatch_size},
     GpuBuffers,
 };
 
@@ -26,6 +26,16 @@ impl BinningPass {
                 create_buffer_bind_group_layout_entry(1, false),
                 wgpu::BindGroupLayoutEntry {
                     binding: 2,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
                     visibility: wgpu::ShaderStages::COMPUTE,
                     ty: wgpu::BindingType::Buffer {
                         ty: wgpu::BufferBindingType::Uniform,
@@ -154,6 +164,10 @@ impl BinningPass {
                     binding: 2,
                     resource: buffers.screen_buffer.as_entire_binding(),
                 },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: buffers.effect_buffer.as_entire_binding(),
+                },
             ],
         });
 
@@ -206,7 +220,7 @@ impl BinningPass {
         &self,
         encoder: &mut wgpu::CommandEncoder,
         total_tris: u32,
-        total_pixel_dispatch: u32,
+        total_tile_dispatch: u32,
     ) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Binning::count_triangles"),
@@ -217,19 +231,19 @@ impl BinningPass {
         pass.set_bind_group(2, &self.bind_group_2, &[]);
         pass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        let total_threads_needed = (total_tris as f32).ceil();
+        let total_threads_needed = total_tris as f32;
 
-        let gx_tris = (total_threads_needed as f32).sqrt().ceil() as u32;
+        let gx_tris = total_threads_needed.sqrt().ceil() as u32;
         let gy_tris = ((total_threads_needed as f32) / (gx_tris as f32)).ceil() as u32;
 
         pass.set_pipeline(&self.pipeline_count);
         pass.dispatch_workgroups(gx_tris, gy_tris, 1);
 
         pass.set_pipeline(&self.pipeline_scan_first);
-        pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
+        pass.dispatch_workgroups(total_tile_dispatch, 1, 1);
 
         pass.set_pipeline(&self.pipeline_scan_second);
-        pass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
+        pass.dispatch_workgroups(total_tile_dispatch, 1, 1);
 
         pass.set_pipeline(&self.pipeline_store);
         pass.dispatch_workgroups(gx_tris, gy_tris, 1);

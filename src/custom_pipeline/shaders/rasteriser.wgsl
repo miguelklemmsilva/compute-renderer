@@ -1,10 +1,4 @@
-// ---------------------------------------------------------------------
-// This shader implements adaptive tile splitting for rasterization.
-// When a tile has many triangles (for example, when the camera is far away),
-// each tile’s triangle list is processed in parallel by a workgroup of 64 threads.
-// ---------------------------------------------------------------------
-
-const TILE_SIZE: u32 = 4u;
+const TILE_SIZE: u32 = 8u;
 
 struct UniformRaster {
     width: f32,
@@ -34,9 +28,9 @@ struct Fragment {
 };
 
 struct TileTriangles {
-    count: atomic<u32>,
+    count: u32,
     offset: u32,
-    write_index: atomic<u32>,
+    write_index: u32,
     padding: u32
 }
 
@@ -53,7 +47,7 @@ var<storage, read> projected_buffer: array<Vertex>;
 var<storage, read_write> fragment_buffer: array<Fragment>;
 
 @group(0) @binding(2)
-var<storage, read> tile_buffer: array<TileTriangles>;
+var<storage, read_write> tile_buffer: array<TileTriangles>;
 
 @group(0) @binding(3)
 var<storage, read> triangle_list_buffer: array<u32>;
@@ -63,6 +57,9 @@ var<storage, read> indices: array<u32>;
 
 @group(0) @binding(5)
 var <storage, read_write> depth_buffer: array<atomic<u32>>;
+
+@group(0) @binding(6)
+var<storage, read> tile_binning_data: array<TriangleBinningData>;
 
 @group(1) @binding(0)
 var<uniform> screen_dims: UniformRaster;
@@ -196,7 +193,7 @@ fn raster_main(
     }
 
     let tile_idx = tile_x + tile_y * num_tiles_x;
-    let triangle_count = atomicLoad(&tile_buffer[tile_idx].count);
+    let triangle_count = tile_buffer[tile_idx].count;
     let triangle_offset = tile_buffer[tile_idx].offset;
     
     // Use the third dimension of the local invocation to split work.
@@ -204,8 +201,14 @@ fn raster_main(
     for (var i = thread_index; i < triangle_count; i += 256u) {
         // Get the triangle's base index from the triangle list.
         let base_idx = triangle_list_buffer[triangle_offset + i];
+
         // Compute the triangle index from the base index.
         let triangle_index = base_idx / 3u;
+
+        let triangle_meta = tile_binning_data[triangle_index];
+        if (triangle_meta.tile_range.x * triangle_meta.tile_range.y) == 0u {
+            continue;
+        }
 
         // Retrieve the vertex indices.
         let idx1 = indices[base_idx];
@@ -214,14 +217,6 @@ fn raster_main(
         let v1 = projected_buffer[idx1];
         let v2 = projected_buffer[idx2];
         let v3 = projected_buffer[idx3];
-        
-        // Back-face culling (unless the effect requires both sides).
-        let a = vec2<f32>(v2.screen_pos.x - v1.screen_pos.x, v2.screen_pos.y - v1.screen_pos.y);
-        let b = vec2<f32>(v3.screen_pos.x - v1.screen_pos.x, v3.screen_pos.y - v1.screen_pos.y);
-        let cross_z = a.x * b.y - a.y * b.x;
-        if effect.effect_type != 3u && cross_z >= 0.0 {
-            continue;
-        }
 
         // Now rasterize the triangle into this tile.
         rasterize_triangle_in_tile(v1, v2, v3, tile_x, tile_y);

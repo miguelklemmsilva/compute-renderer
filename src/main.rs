@@ -1,7 +1,7 @@
 use std::time::Duration;
 
 use performance::PerformanceCollector;
-use scene::SceneConfig;
+use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
 
@@ -28,7 +28,8 @@ fn main() {
     },
     SceneConfig {
         name: "test".to_string(),
-        model_path: String::from("suzanne.obj"),
+        model_path: String::from("sibenik/sibenik.obj"),
+        camera_config: CameraConfig::new_first_person(),
         backend_type: BackendType::WgpuPipeline,
         ..Default::default()
     }];
