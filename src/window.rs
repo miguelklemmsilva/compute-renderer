@@ -186,6 +186,7 @@ impl ApplicationHandler for Window {
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
         // Update per frame
         let delta_time = self.collector.as_mut().unwrap().last_frame_time.elapsed();
+        self.collector.as_mut().unwrap().last_frame_time = std::time::Instant::now();
 
         // Async block to call `self.update(delta_time).await`
         if pollster::block_on(async {
