@@ -16,7 +16,6 @@ impl FragmentPass {
             label: Some("Fragment Pass: Group0 Layout (Output)"),
             entries: &[
                 create_buffer_bind_group_layout_entry(0, false),
-                create_buffer_bind_group_layout_entry(1, false),
             ],
         });
 
@@ -69,7 +68,7 @@ impl FragmentPass {
 
         let group5_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fragment Pass: Group5 Layout (Fragments)"),
-            entries: &[create_buffer_bind_group_layout_entry(0, true)],
+            entries: &[create_buffer_bind_group_layout_entry(0, false)],
         });
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
@@ -103,10 +102,6 @@ impl FragmentPass {
                 wgpu::BindGroupEntry {
                     binding: 0,
                     resource: buffers.output_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: buffers.depth_buffer.as_entire_binding(),
                 },
             ],
         });
