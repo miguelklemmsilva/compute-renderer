@@ -14,21 +14,21 @@ mod wgpu_pipeline;
 mod window;
 
 fn main() {
-    let height = 900;
-    let width = 1600;
+    let width = 1024;
+    let height = 768;
 
     // List of scenes to benchmark
     let scenes = vec![
         SceneConfig {
             name: "test".to_string(),
-            model_path: String::from("Exterior/exterior.obj"),
+            model_path: String::from("sportsCar/sportsCar.obj"),
             camera_config: CameraConfig::new_first_person(),
             ..Default::default()
         },
         SceneConfig {
             name: "test".to_string(),
-            model_path: String::from("suzanne.obj"),
-            camera_config: CameraConfig::new_first_person(),
+            model_path: String::from("dragon.obj"),
+            // camera_config: CameraConfig::new_first_person(),
             backend_type: BackendType::WgpuPipeline,
             ..Default::default()
         },
