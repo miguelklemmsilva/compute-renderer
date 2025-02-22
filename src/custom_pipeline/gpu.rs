@@ -1,7 +1,7 @@
 use crate::scene;
 
 use super::{
-    binning_pass::BinningPass, raster_pass::TILE_SIZE, util::dispatch_size, FragmentPass, GpuBuffers, RasterPass, VertexPass
+    binning_pass::BinningPass, raster_pass::TILE_SIZE, util::dispatch_size, FragmentPass, GpuBuffers, RasterPass
 };
 
 pub struct GPU {
@@ -10,7 +10,6 @@ pub struct GPU {
 
     pub buffers: GpuBuffers,
 
-    pub vertex_pass: VertexPass,
     pub raster_pass: RasterPass,
     pub fragment_pass: FragmentPass,
     pub binning_pass: BinningPass,
@@ -38,7 +37,6 @@ impl GPU {
 
         let buffers = GpuBuffers::new(&device, width as u32, height as u32, scene);
 
-        let vertex_pass = VertexPass::new(&device, &buffers);
         let binning_pass = BinningPass::new(&device, &buffers);
         let raster_pass = RasterPass::new(&device, &buffers);
         let fragment_pass = FragmentPass::new(&device, &buffers);
@@ -47,7 +45,6 @@ impl GPU {
             device,
             queue,
             buffers,
-            vertex_pass,
             raster_pass,
             fragment_pass,
             binning_pass,
@@ -87,7 +84,7 @@ impl GPU {
 
         let total_pixel_dispatch = dispatch_size((width * height) as u32);
 
-        self.vertex_pass.execute(&mut encoder, total_tris);
+        // self.vertex_pass.execute(&mut encoder, total_tris);
         self.binning_pass
             .execute(&mut encoder, total_tris, total_tile_dispatch);
         self.raster_pass
@@ -119,7 +116,6 @@ impl GPU {
         self.buffers = GpuBuffers::new(&self.device, width, height, scene);
 
         // Recreate passes with new buffers
-        self.vertex_pass = VertexPass::new(&self.device, &self.buffers);
         self.binning_pass = BinningPass::new(&self.device, &self.buffers);
         self.raster_pass = RasterPass::new(&self.device, &self.buffers);
         self.fragment_pass = FragmentPass::new(&self.device, &self.buffers);
