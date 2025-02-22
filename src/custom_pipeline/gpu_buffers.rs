@@ -23,7 +23,6 @@ pub struct GpuBuffers {
     pub triangle_list_buffer: wgpu::Buffer,
     pub partial_sums_buffer: wgpu::Buffer,
     pub triangle_meta_buffer: wgpu::Buffer,
-    pub depth_buffer: wgpu::Buffer,
 }
 
 impl GpuBuffers {
@@ -150,12 +149,6 @@ impl GpuBuffers {
                 label: Some("Triangle Meta Buffer"),
                 size: ((num_tiles * max_triangles_per_tile) as usize
                     * std::mem::size_of::<TriangleMeta>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE,
-                mapped_at_creation: false,
-            }),
-            depth_buffer: device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Depth Buffer"),
-                size: (width as usize * height as usize * std::mem::size_of::<u32>()) as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),

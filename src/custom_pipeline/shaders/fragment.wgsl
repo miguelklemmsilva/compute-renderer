@@ -31,11 +31,11 @@ struct Fragment {
     uv: vec2<f32>,
     normal: vec3<f32>,
     position: vec3<f32>,
+    flag: u32
 };
 
 
 @group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
-@group(0) @binding(1) var <storage, read_write> depth_buffer: array<u32>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
@@ -45,7 +45,7 @@ struct Fragment {
 @group(4) @binding(0) var<uniform> effect: EffectUniform;
 
 // The fragment data & count from the raster pass
-@group(5) @binding(0) var<storage, read> fragment_buffer: array<Fragment>;
+@group(5) @binding(0) var<storage, read_write> fragment_buffer: array<Fragment>;
 
 @compute @workgroup_size(256)
 fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
@@ -53,7 +53,7 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     output_buffer[idx] = 0u;
 
     // Early-out if there's no valid fragment
-    if idx >= arrayLength(&fragment_buffer) || depth_buffer[idx] >= 0xFFFFFFFFu {
+    if idx >= arrayLength(&fragment_buffer) || fragment_buffer[idx].flag == 0u {
         return;
     }
 
@@ -75,6 +75,8 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
         final_color += (diff + spec * 0.5) * light.color * light.intensity;
     }
 
+    fragment_buffer[idx].flag = 0u;
+
     final_color = clamp(final_color, vec3<f32>(0.0), vec3<f32>(1.0));
 
     let srgb_color = pow(final_color, vec3<f32>(1.0 / 2.2));
@@ -86,6 +88,4 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     let output_color = (255u << 24u) | (B << 16u) | (G << 8u) | R;
     output_buffer[idx] = output_color;
-
-    depth_buffer[idx] = 0xFFFFFFFFu;
 }
