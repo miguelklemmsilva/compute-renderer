@@ -16,6 +16,7 @@ struct EffectUniform {
 };
 
 struct Vertex {
+    world_pos: vec3<f32>,
     screen_pos: vec4<f32>,
     normal: vec3<f32>,
     uv: vec2<f32>,
@@ -24,11 +25,11 @@ struct Vertex {
 struct Fragment {
     uv: vec2<f32>,
     normal: vec3<f32>,
-    screen_pos: vec4<f32>,
+    position: vec3<f32>,
 };
 
 struct TileTriangles {
-    count: atomic<u32>,
+    count: u32,
     offset: u32,
     write_index: u32,
     padding: u32
@@ -102,8 +103,8 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let tile_end_y = min(tile_start_y + TILE_SIZE, u32(screen_dims.height));
 
     // Loop over the pixels in the tile.
-    for (var x: u32 = tile_start_x; x < tile_end_x; x++) {
-        for (var y: u32 = tile_start_y; y < tile_end_y; y++) {
+    for (var x = tile_start_x; x < tile_end_x; x++) {
+        for (var y = tile_start_y; y < tile_end_y; y++) {
             let bc = barycentric(
                 v1.screen_pos.xyz,
                 v2.screen_pos.xyz,
@@ -144,6 +145,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
 
             // Attempt an atomic update in a loop.
             var old = atomicLoad(pixel_ptr);
+
             loop {
                 if packed_depth >= old {
                     // Our computed depth is not closer.
@@ -157,15 +159,10 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
 
                 // Try to atomically update the depth.
                 if result.exchanged {
-                    // Interpolate UV coordinates (already divided by w)
-                    let interpolated_uv = bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv;
-                    let interpolated_screen_pos = bc.x * v1.screen_pos + bc.y * v2.screen_pos + bc.z * v3.screen_pos;
-                    let interpolated_normal = bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal;
-
                     // We won the race: update the fragment data.
-                    fragment_buffer[pixel_id].uv = interpolated_uv;
-                    fragment_buffer[pixel_id].normal = interpolated_normal;
-                    fragment_buffer[pixel_id].screen_pos = interpolated_screen_pos;
+                    fragment_buffer[pixel_id].position = bc.x * v1.world_pos + bc.y * v2.world_pos + bc.z * v3.world_pos;
+                    fragment_buffer[pixel_id].uv = bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv;
+                    fragment_buffer[pixel_id].normal = bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal;
                     break;
                 }
                 
