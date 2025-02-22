@@ -37,17 +37,17 @@ fn vs_main(in: VertexInput) -> VertexOutput {
     let world_pos = vec4<f32>(in.position, 1.0);
     out.clip_position = camera.view_proj * world_pos;
     out.position = world_pos.xyz;
-    out.normal = normalize(in.normal);
+    out.normal = in.normal;
     out.uv = in.uv;
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let normal = normalize(in.normal);
+    let normal = in.normal;
     
     // Start with the same ambient light as in your compute shader.
-    var final_color = vec3<f32>(0.0);
+    var final_color = vec3<f32>(0.3);
 
     let num_lights = arrayLength(&lights);
     for (var i = 0u; i < num_lights; i++) {
@@ -59,7 +59,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
         final_color += (diff + spec * 0.5) * light.color * light.intensity;
     }
-    
-    final_color = min(final_color, vec3<f32>(1.0));
+
     return vec4<f32>(final_color, 1.0);
 }

@@ -15,7 +15,8 @@ struct VertexIn {
 };
 
 struct Vertex {
-    world_pos: vec4<f32>,
+    world_pos: vec3<f32>,
+    screen_pos: vec4<f32>,
     normal: vec3<f32>,
     uv: vec2<f32>,
 };
@@ -58,22 +59,22 @@ fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
 @group(3) @binding(0) var<uniform> effect: EffectUniform;
 
 @compute @workgroup_size(256)
-fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>) {
+fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num_workgroups) num_workgroups: vec3<u32>, @builtin(workgroup_id) wg: vec3<u32>) {
     let idx = global_id.x;
     if idx >= arrayLength(&vertex_buffer) {
         return;
     }
 
     var v = vertex_buffer[idx];
-    var world_pos = vec4<f32>(v.world_pos, 1.0);
+    var world_pos = v.world_pos;
 
     // If there's an effect that modifies position, apply it:
     if effect.effect_type == 1u { // Wave
-        world_pos = vec4<f32>(apply_wave_effect(world_pos.xyz, effect), 1.0);
+        world_pos = apply_wave_effect(world_pos, effect);
     }
 
     // Multiply by the view-projection matrix.
-    let clip_pos = camera.view_proj * world_pos;
+    let clip_pos = camera.view_proj * vec4<f32>(world_pos, 1.0);
 
     let ndc_pos = clip_pos.xyz / clip_pos.w;
 
@@ -87,6 +88,7 @@ fn vertex_main(@builtin(global_invocation_id) global_id: vec3<u32>, @builtin(num
 
     // Keep the original normals and store world position separately
     projected_buffer[idx] = Vertex(
+        world_pos,
         screen_pos,
         v.normal,
         v.uv
