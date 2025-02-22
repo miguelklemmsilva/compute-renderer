@@ -72,6 +72,17 @@ impl BinningPass {
                     },
                     count: None,
                 },
+                create_buffer_bind_group_layout_entry(2, false),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 3,
+                    visibility: wgpu::ShaderStages::COMPUTE,
+                    ty: wgpu::BindingType::Buffer {
+                        ty: wgpu::BufferBindingType::Uniform,
+                        has_dynamic_offset: false,
+                        min_binding_size: None,
+                    },
+                    count: None,
+                },
             ],
         });
 
@@ -187,7 +198,15 @@ impl BinningPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 1,
+                    resource: buffers.vertex_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 2,
                     resource: buffers.projected_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 3,
+                    resource: buffers.camera_buffer.as_entire_binding(),
                 },
             ],
         });
