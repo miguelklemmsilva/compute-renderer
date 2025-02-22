@@ -26,6 +26,7 @@ struct Fragment {
     uv: vec2<f32>,
     normal: vec3<f32>,
     position: vec3<f32>,
+    flag: u32,
 };
 
 struct TileTriangles {
@@ -56,9 +57,6 @@ var<storage, read> triangle_list_buffer: array<u32>;
 var<storage, read> indices: array<u32>;
 
 @group(0) @binding(5)
-var <storage, read_write> depth_buffer: array<u32>;
-
-@group(0) @binding(6)
 var<storage, read> tile_binning_data: array<TriangleBinningData>;
 
 @group(1) @binding(0)
@@ -164,10 +162,12 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 // Try to atomically update the depth.
                 if result.exchanged {
                     // We won the race: update the fragment data.
-                    fragment_buffer[pixel_index].position = bc.x * v1.world_pos + bc.y * v2.world_pos + bc.z * v3.world_pos;
-                    fragment_buffer[pixel_index].uv = bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv;
-                    fragment_buffer[pixel_index].normal = bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal;
-                    depth_buffer[pixel_index] = packed_depth;
+                    fragment_buffer[pixel_index] = Fragment(
+                        bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv,
+                        bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal,
+                        bc.x * v1.world_pos + bc.y * v2.world_pos + bc.z * v3.world_pos,
+                        1u
+                    );
                     break;
                 }
                 
