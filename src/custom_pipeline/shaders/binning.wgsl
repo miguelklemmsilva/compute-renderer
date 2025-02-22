@@ -2,6 +2,7 @@
 const TILE_SIZE = 8u;
 
 struct Vertex {
+    world_pos: vec3<f32>,
     screen_pos: vec4<f32>,
     normal: vec3<f32>,
     uv: vec2<f32>,
