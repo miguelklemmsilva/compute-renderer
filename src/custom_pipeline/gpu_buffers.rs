@@ -109,7 +109,7 @@ impl GpuBuffers {
             }),
             projected_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Projected Buffer"),
-                size: (vertices.len() * std::mem::size_of::<[u32; 12]>()) as u64,
+                size: (vertices.len() * std::mem::size_of::<[u32; 16]>()) as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),

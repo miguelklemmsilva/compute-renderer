@@ -171,12 +171,14 @@ impl VertexPass {
             timestamp_writes: None,
         });
 
+        let total_threads_needed = dispatch_size(3 * num_tris);
+
         cpass.set_pipeline(&self.pipeline);
         cpass.set_bind_group(0, &self.bind_group_0, &[]);
         cpass.set_bind_group(1, &self.bind_group_1, &[]);
         cpass.set_bind_group(2, &self.bind_group_2, &[]);
         cpass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        cpass.dispatch_workgroups(dispatch_size(num_tris), 1, 1);
+        cpass.dispatch_workgroups(total_threads_needed, 1, 1);
     }
 }
