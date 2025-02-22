@@ -12,7 +12,6 @@ struct TileTriangles {
     count: atomic<u32>,
     offset: u32,
     write_index: atomic<u32>,
-    padding: u32
 };
 
 struct UniformBinning {
@@ -40,6 +39,17 @@ struct EffectUniform {
     _padding: vec2<f32>,
 };
 
+struct VertexIn {
+    world_pos: vec3<f32>,
+    normal: vec3<f32>,
+    uv: vec2<f32>,
+};
+
+struct Camera {
+    view_pos: vec4<f32>,
+    view_proj: mat4x4<f32>,
+};
+
 // universal buffers
 @group(0) @binding(0) var<storage, read_write> tile_buffer: array<TileTriangles>;
 @group(0) @binding(1) var<storage, read_write> triangle_binning_buffer: array<TriangleBinningData>;
@@ -49,7 +59,9 @@ struct EffectUniform {
 @group(1) @binding(0) var<storage, read_write> partial_sums: array<u32>;
 
 @group(2) @binding(0) var<storage, read> index_buffer: array<u32>;
-@group(2) @binding(1) var<storage, read> projected_buffer: array<Vertex>;
+@group(2) @binding(1) var<storage, read> vertex_buffer: array<VertexIn>;
+@group(2) @binding(2) var<storage, read_write> projected_buffer: array<Vertex>;
+@group(2) @binding(3) var<uniform> camera: Camera;
 
 @group(3) @binding(0) var<storage, read_write> triangle_list_buffer: array<u32>;
 
@@ -134,6 +146,39 @@ fn compute_triangle_meta(triangle_index: u32) {
 
 const z_dispatches = 64u;
 
+fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
+    var modified_pos = pos;
+    let amplitude = effect.param1;
+    let frequency = effect.param2;
+    let phase = effect.param3;
+    let direction = effect.param4;
+
+    if direction < 0.5 { // Vertical
+        modified_pos.y += amplitude * sin(frequency * pos.x + phase);
+    } else if direction < 1.5 { // Horizontal
+        modified_pos.x += amplitude * sin(frequency * pos.y + phase);
+    } else { // Radial
+        let dist = length(pos.xy);
+        modified_pos.z += amplitude * sin(frequency * dist + phase);
+    }
+
+    return modified_pos;
+}
+
+// Use workgroup shared memory for the transformed vertices.
+var<workgroup> shared_v: array<Vertex, 3>;
+
+fn compute_screen_pos(clip_pos: vec4<f32>) -> vec4<f32> {
+    let ndc_pos = clip_pos.xyz / clip_pos.w;
+
+    return vec4<f32>(
+        ((ndc_pos.x + 1.0) * 0.5) * screen_dims.width,
+        ((1.0 - ndc_pos.y) * 0.5) * screen_dims.height,
+        clip_pos.z,
+        clip_pos.w
+    );
+}
+
 @compute @workgroup_size(1, 1, z_dispatches)
 fn count_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
@@ -147,6 +192,50 @@ fn count_triangles(
     if triangle_index >= num_triangles {
         return;
     }
+
+    let thread_id = lid.z;
+
+    // Each workgroup handles one triangle.
+    let base_idx = triangle_index * 3u;
+
+    let idx1 = index_buffer[base_idx];
+    let idx2 = index_buffer[base_idx + 1u];
+    let idx3 = index_buffer[base_idx + 2u];
+        
+    // Have one thread (say, thread 0) load and transform the vertices.
+    if thread_id == 0u {
+        // Load original vertex data.
+        let v1_in = vertex_buffer[idx1];
+        let v2_in = vertex_buffer[idx2];
+        let v3_in = vertex_buffer[idx3];
+
+        // Apply any effects if needed.
+        var world_pos1 = v1_in.world_pos;
+        var world_pos2 = v2_in.world_pos;
+        var world_pos3 = v3_in.world_pos;
+        if effect.effect_type == 1u {
+            world_pos1 = apply_wave_effect(world_pos1, effect);
+            world_pos2 = apply_wave_effect(world_pos2, effect);
+            world_pos3 = apply_wave_effect(world_pos3, effect);
+        }
+        
+        // Transform to clip space and then compute screen positions.
+        let clip1 = camera.view_proj * vec4<f32>(world_pos1, 1.0);
+        let clip2 = camera.view_proj * vec4<f32>(world_pos2, 1.0);
+        let clip3 = camera.view_proj * vec4<f32>(world_pos3, 1.0);
+        let screen1 = compute_screen_pos(clip1);
+        let screen2 = compute_screen_pos(clip2);
+        let screen3 = compute_screen_pos(clip3);
+
+        shared_v[0] = Vertex(world_pos1, screen1, v1_in.normal, v1_in.uv);
+        shared_v[1] = Vertex(world_pos2, screen2, v2_in.normal, v2_in.uv);
+        shared_v[2] = Vertex(world_pos3, screen3, v3_in.normal, v3_in.uv);
+    }
+    workgroupBarrier();
+
+    projected_buffer[idx1] = shared_v[0];
+    projected_buffer[idx2] = shared_v[1];
+    projected_buffer[idx3] = shared_v[2];
 
     // 1) Compute metadata for this triangle
     compute_triangle_meta(triangle_index);
@@ -164,7 +253,6 @@ fn count_triangles(
     }
 
     // 2) Each thread will loop over some subset of tiles
-    let thread_id = lid.z;
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
 
     for (var ty = 0u; ty < tile_range_y; ty++) {

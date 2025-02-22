@@ -32,7 +32,6 @@ struct TileTriangles {
     count: u32,
     offset: u32,
     write_index: u32,
-    padding: u32
 }
 
 struct TriangleBinningData {
@@ -57,7 +56,7 @@ var<storage, read> triangle_list_buffer: array<u32>;
 var<storage, read> indices: array<u32>;
 
 @group(0) @binding(5)
-var <storage, read_write> depth_buffer: array<atomic<u32>>;
+var <storage, read_write> depth_buffer: array<u32>;
 
 @group(0) @binding(6)
 var<storage, read> tile_binning_data: array<TriangleBinningData>;
@@ -90,6 +89,10 @@ fn unpack_u32_to_float(bits: u32) -> f32 {
     return bitcast<f32>(bits);
 }
 
+const MAX_TILES: u32 = TILE_SIZE * TILE_SIZE;
+var<workgroup> local_depth: array<atomic<u32>, MAX_TILES>;
+var<workgroup> local_frag: array<Fragment, MAX_TILES>;
+
 // ---------------------------------------------------------------------
 // Rasterization function: rasterize a triangle into one tile.
 // The triangle’s vertices are in screen space and already have their
@@ -103,8 +106,8 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     let tile_end_y = min(tile_start_y + TILE_SIZE, u32(screen_dims.height));
 
     // Loop over the pixels in the tile.
-    for (var x = tile_start_x; x < tile_end_x; x++) {
-        for (var y = tile_start_y; y < tile_end_y; y++) {
+    for (var y = tile_start_y; y < tile_end_y; y++) {
+        for (var x = tile_start_x; x < tile_end_x; x++) {
             let bc = barycentric(
                 v1.screen_pos.xyz,
                 v2.screen_pos.xyz,
@@ -137,11 +140,12 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             
             // Convert to [0,1] range for depth buffer
             let depth = interpolated_z * 0.5 + 0.5;
-            let pixel_id = x + y * u32(screen_dims.width);
+            let local_index = (x - tile_start_x) + (y - tile_start_y) * TILE_SIZE;
+            let pixel_index = x + y * u32(screen_dims.width);
             // Convert our computed depth to a packed u32.
             let packed_depth = pack_float_to_u32(depth);
             // Get the pointer for the current pixel.
-            let pixel_ptr = &depth_buffer[pixel_id];
+            let pixel_ptr = &local_depth[local_index];
 
             // Attempt an atomic update in a loop.
             var old = atomicLoad(pixel_ptr);
@@ -160,9 +164,10 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
                 // Try to atomically update the depth.
                 if result.exchanged {
                     // We won the race: update the fragment data.
-                    fragment_buffer[pixel_id].position = bc.x * v1.world_pos + bc.y * v2.world_pos + bc.z * v3.world_pos;
-                    fragment_buffer[pixel_id].uv = bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv;
-                    fragment_buffer[pixel_id].normal = bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal;
+                    fragment_buffer[pixel_index].position = bc.x * v1.world_pos + bc.y * v2.world_pos + bc.z * v3.world_pos;
+                    fragment_buffer[pixel_index].uv = bc.x * v1.uv + bc.y * v2.uv + bc.z * v3.uv;
+                    fragment_buffer[pixel_index].normal = bc.x * v1.normal + bc.y * v2.normal + bc.z * v3.normal;
+                    depth_buffer[pixel_index] = packed_depth;
                     break;
                 }
                 
@@ -184,6 +189,9 @@ fn raster_main(
     let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
     let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
 
+    local_depth[lid.z] = 0xFFFFFFFFu;
+    workgroupBarrier(); // ensure all threads have loaded the data
+
     // Early exit if this tile is out of range.
     if tile_x >= num_tiles_x || tile_y >= num_tiles_y {
         return;
@@ -194,8 +202,7 @@ fn raster_main(
     let triangle_offset = tile_buffer[tile_idx].offset;
     
     // Use the third dimension of the local invocation to split work.
-    let thread_index = lid.z;
-    for (var i = thread_index; i < triangle_count; i += 256u) {
+    for (var i = lid.z; i < triangle_count; i += 256u) {
         // Get the triangle's base index from the triangle list.
         let base_idx = triangle_list_buffer[triangle_offset + i];
 
