@@ -89,14 +89,9 @@ fn clip_bbox_to_screen(bbox: vec4<f32>) -> vec4<f32> {
 }
 
 fn compute_triangle_meta(triangle_index: u32) {
-    let base_idx = triangle_index * 3u;
-    let idx1 = index_buffer[base_idx];
-    let idx2 = index_buffer[base_idx + 1u];
-    let idx3 = index_buffer[base_idx + 2u];
-
-    let v1 = projected_buffer[idx1];
-    let v2 = projected_buffer[idx2];
-    let v3 = projected_buffer[idx3];
+    let v1 = shared_v[0];
+    let v2 = shared_v[1];
+    let v3 = shared_v[2];
     
     // First, perform a simple clip test in clip/screen space:
     // Discard triangles with any vertex behind the near plane.
@@ -179,6 +174,23 @@ fn compute_screen_pos(clip_pos: vec4<f32>) -> vec4<f32> {
     );
 }
 
+fn geometry_pipeline(idx: u32) -> Vertex {
+        // Load original vertex data.
+    let v_in = vertex_buffer[idx];
+
+        // Apply any effects if needed.
+    var world_pos = v_in.world_pos;
+    if effect.effect_type == 1u {
+        world_pos = apply_wave_effect(world_pos, effect);
+    }
+        
+        // Transform to clip space and then compute screen positions.
+    let clip = camera.view_proj * vec4<f32>(world_pos, 1.0);
+    let screen_pos = compute_screen_pos(clip);
+
+    return Vertex(world_pos, screen_pos, v_in.normal, v_in.uv);
+}
+
 @compute @workgroup_size(1, 1, z_dispatches)
 fn count_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
@@ -198,44 +210,23 @@ fn count_triangles(
     // Each workgroup handles one triangle.
     let base_idx = triangle_index * 3u;
 
+    let indices = array<u32, 3u>(index_buffer[base_idx], index_buffer[base_idx + 1u], index_buffer[base_idx + 2u]);
+
     let idx1 = index_buffer[base_idx];
     let idx2 = index_buffer[base_idx + 1u];
     let idx3 = index_buffer[base_idx + 2u];
         
     // Have one thread (say, thread 0) load and transform the vertices.
-    if thread_id == 0u {
-        // Load original vertex data.
-        let v1_in = vertex_buffer[idx1];
-        let v2_in = vertex_buffer[idx2];
-        let v3_in = vertex_buffer[idx3];
-
-        // Apply any effects if needed.
-        var world_pos1 = v1_in.world_pos;
-        var world_pos2 = v2_in.world_pos;
-        var world_pos3 = v3_in.world_pos;
-        if effect.effect_type == 1u {
-            world_pos1 = apply_wave_effect(world_pos1, effect);
-            world_pos2 = apply_wave_effect(world_pos2, effect);
-            world_pos3 = apply_wave_effect(world_pos3, effect);
-        }
-        
-        // Transform to clip space and then compute screen positions.
-        let clip1 = camera.view_proj * vec4<f32>(world_pos1, 1.0);
-        let clip2 = camera.view_proj * vec4<f32>(world_pos2, 1.0);
-        let clip3 = camera.view_proj * vec4<f32>(world_pos3, 1.0);
-        let screen1 = compute_screen_pos(clip1);
-        let screen2 = compute_screen_pos(clip2);
-        let screen3 = compute_screen_pos(clip3);
-
-        shared_v[0] = Vertex(world_pos1, screen1, v1_in.normal, v1_in.uv);
-        shared_v[1] = Vertex(world_pos2, screen2, v2_in.normal, v2_in.uv);
-        shared_v[2] = Vertex(world_pos3, screen3, v3_in.normal, v3_in.uv);
+    if lid.z < 3u {
+        let vertex = geometry_pipeline(indices[lid.z]);
+        shared_v[lid.z] = vertex;
     }
+
     workgroupBarrier();
 
-    projected_buffer[idx1] = shared_v[0];
-    projected_buffer[idx2] = shared_v[1];
-    projected_buffer[idx3] = shared_v[2];
+    if lid.z < 3u {
+        projected_buffer[indices[lid.z]] = shared_v[lid.z];
+    }
 
     // 1) Compute metadata for this triangle
     compute_triangle_meta(triangle_index);
