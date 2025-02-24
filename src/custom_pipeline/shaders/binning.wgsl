@@ -144,7 +144,7 @@ fn compute_triangle_meta(triangle_index: u32) {
     triangle_binning_buffer[triangle_index].tile_range = vec2<u32>(tile_range_x, tile_range_y);
 }
 
-const z_dispatches = 64u;
+const z_dispatches = 16u;
 
 fn apply_wave_effect(pos: vec3<f32>, effect: EffectUniform) -> vec3<f32> {
     var modified_pos = pos;
@@ -398,7 +398,7 @@ fn store_triangles(
             let tile_x = start_tile_x + tx;
             let tile_index = tile_x + tile_y * num_tiles_x;
 
-            let count = atomicLoad(&tile_buffer[tile_index].count);
+            let count = tile_buffer[tile_index].count;
             let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
 
             if write_index < count {

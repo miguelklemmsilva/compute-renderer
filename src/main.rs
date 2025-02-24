@@ -21,14 +21,15 @@ fn main() {
     let scenes = vec![
         SceneConfig {
             name: "test".to_string(),
-            model_path: String::from("sportsCar/sportsCar.obj"),
+            model_path: String::from("test.obj"),
             camera_config: CameraConfig::new_first_person(),
+            backend_type: BackendType::WgpuPipeline,
             ..Default::default()
         },
         SceneConfig {
             name: "test".to_string(),
-            model_path: String::from("dragon.obj"),
-            // camera_config: CameraConfig::new_first_person(),
+            model_path: String::from("test.obj.obj"),
+            camera_config: CameraConfig::new_first_person(),
             backend_type: BackendType::WgpuPipeline,
             ..Default::default()
         },
