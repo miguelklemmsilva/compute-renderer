@@ -1,6 +1,8 @@
+use crate::camera::{Camera, CameraMode};
+use crate::effect::Effect;
 use crate::model::Model;
 use crate::window::BackendType;
-use crate::{camera, custom_pipeline, effect::Effect};
+use crate::{camera, custom_pipeline};
 use std::time::Duration;
 use std::u64;
 
@@ -33,7 +35,7 @@ pub struct Scene {
     cameras: Vec<camera::Camera>,
     active_camera: Option<usize>,
     pub lights: Vec<Light>,
-    pub effects: Vec<Effect>,
+    pub effect: Option<Effect>,
     pub time: f32,
 }
 
@@ -44,7 +46,7 @@ impl Scene {
             cameras: vec![],
             active_camera: None,
             lights: vec![],
-            effects: vec![],
+            effect: None,
             time: 0.0,
         }
     }
@@ -62,20 +64,17 @@ impl Scene {
             scene.add_light(*position, *color, *intensity);
         }
 
-        // Add effects if specified
-        if let Some(effects) = &scene_config.effects {
-            for effect in effects {
-                scene.add_effect(effect.clone());
-            }
+        if let Some(effect) = &scene_config.effect {
+            scene.effect = Some(effect.clone());
         }
 
         // Add camera and set active
         let camera = match scene_config.camera_config.mode {
-            camera::CameraMode::FirstPerson => camera::Camera::new_first_person(
+            CameraMode::FirstPerson => Camera::new_first_person(
                 glam::Vec3::from(scene_config.camera_config.position),
                 width as f32 / height as f32,
             ),
-            camera::CameraMode::Orbit => camera::Camera::new(
+            CameraMode::Orbit => Camera::new(
                 scene_config.camera_config.distance,
                 scene_config.camera_config.theta,
                 scene_config.camera_config.phi,
@@ -118,11 +117,8 @@ impl Scene {
     pub fn update(&mut self, gpu: &mut custom_pipeline::gpu::GPU, delta_time: Duration) {
         self.time += delta_time.as_secs_f32();
 
-        // Update effects only if there are any
-        if !self.effects.is_empty() {
-            for effect in &mut self.effects {
-                effect.update(delta_time);
-            }
+        if let Some(effect) = &mut self.effect {
+            effect.update(delta_time);
         }
 
         // Update camera and get view matrix
@@ -153,7 +149,7 @@ impl Scene {
         );
 
         // Update effects only if there are any
-        if let Some(effect) = self.effects.first() {
+        if let Some(effect) = &self.effect {
             let mut effect_uniform = crate::effect::EffectUniform::default();
             effect_uniform.update(effect, self.time);
             gpu.queue.write_buffer(
@@ -184,11 +180,6 @@ impl Scene {
         self.lights.push(light);
         self.lights.len() - 1
     }
-
-    pub fn add_effect(&mut self, effect: Effect) -> usize {
-        self.effects.push(effect);
-        self.effects.len() - 1
-    }
 }
 
 pub struct SceneConfig {
@@ -199,7 +190,7 @@ pub struct SceneConfig {
         /* color */ [f32; 3],
         /* intensity */ f32,
     )>,
-    pub effects: Option<Vec<Effect>>,
+    pub effect: Option<Effect>,
     // Camera configuration
     pub camera_config: CameraConfig,
     // Benchmark duration in seconds
@@ -217,7 +208,7 @@ impl Default for SceneConfig {
                 // Fill light
                 ([-5.0, 3.0, 0.0], [0.3, 0.4, 0.5], 0.5),
             ],
-            effects: None,
+            effect: None,
             camera_config: CameraConfig::default(),
             benchmark_duration_secs: u64::MAX,
             backend_type: BackendType::CustomPipeline,
@@ -239,11 +230,9 @@ impl CameraConfig {
     pub fn new_first_person() -> Self {
         Self {
             distance: 0.0,
-            theta: 0.0,
-            phi: 0.0,
-            target: [0.0, 0.0, 0.0],
             mode: crate::camera::CameraMode::FirstPerson,
             position: [0.0, 0.0, 0.0],
+            ..Default::default()
         }
     }
 }
