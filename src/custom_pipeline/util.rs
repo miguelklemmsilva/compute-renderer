@@ -1,5 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 
+use super::raster_pass::TILE_SIZE;
+
 pub(crate) const WORKGROUP_SIZE: u32 = 256;
 pub(crate) const fn dispatch_size(len: u32) -> u32 {
     let subgroup_size = WORKGROUP_SIZE;
@@ -11,6 +13,8 @@ pub(crate) const fn dispatch_size(len: u32) -> u32 {
 pub(crate) struct ScreenUniform {
     screen_width: f32,
     screen_height: f32,
+    num_tiles_x: u32,
+    num_tiles_y: u32,
 }
 
 impl ScreenUniform {
@@ -18,6 +22,8 @@ impl ScreenUniform {
         Self {
             screen_width,
             screen_height,
+            num_tiles_x: (screen_width as u32 + TILE_SIZE - 1) / TILE_SIZE,
+            num_tiles_y: (screen_height as u32 + TILE_SIZE - 1) / TILE_SIZE,
         }
     }
 }
