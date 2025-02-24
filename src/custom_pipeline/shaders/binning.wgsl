@@ -218,15 +218,15 @@ fn count_triangles(
     let idx2 = index_buffer[base_idx + 1u];
     let idx3 = index_buffer[base_idx + 2u];
         
-    // Have one thread (say, thread 0) load and transform the vertices.
     if lid.z < 3u {
-        let vertex = geometry_pipeline(indices[lid.z]);
-        shared_v[lid.z] = vertex;
+        shared_v[lid.z] = geometry_pipeline(indices[lid.z]);
     }
 
     workgroupBarrier();
 
     if lid.z < 3u {
+        // defer calculations to here
+        // no threads need this information yet so prevent all other threads from needing to wait for write to finish
         projected_buffer[indices[lid.z]] = shared_v[lid.z];
     }
 
@@ -312,9 +312,8 @@ fn scan_first_pass(
     let tid = local_id.x;
     shared_data[tid] = 0u;
     if tile_index < total_tiles {
-        shared_data[tid] = atomicLoad(&tile_buffer[tile_index].count);
+        shared_data[tid] = tile_buffer[tile_index].count;
     }
-    workgroupBarrier();
 
     let scan_result = workgroup_scan_exclusive(tid, 256u);
 
@@ -346,7 +345,7 @@ fn scan_second_pass(
 
     var workgroup_offset = 0u;
     let current_group = workgroup_id.x;
-    for (var i = 0u; i < current_group; i = i + 1u) {
+    for (var i = 0u; i < current_group; i++) {
         workgroup_offset += partial_sums[i];
     }
     tile_buffer[tile_index].offset += workgroup_offset;
@@ -384,7 +383,7 @@ fn store_triangles(
 
     // We'll again split the tile iteration among 64 threads (in z).
     let thread_id = lid.z;
-    let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
+    let num_tiles_x = screen_dims.num_tiles_x;
     for (var ty = 0u; ty < tile_range_y; ty ++) {
         let tile_y = start_tile_y + ty;
         for (var tx = thread_id; tx < tile_range_x; tx += z_dispatches) {
