@@ -17,6 +17,8 @@ struct TileTriangles {
 struct UniformBinning {
     width: f32,
     height: f32,
+    num_tiles_x: u32,
+    num_tiles_y: u32,
 };
 
 // Precomputed metadata for each triangle.
@@ -302,8 +304,8 @@ fn scan_first_pass(
     @builtin(local_invocation_id) local_id: vec3<u32>,
     @builtin(workgroup_id) workgroup_id: vec3<u32>
 ) {
-    let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
+    let num_tiles_x = screen_dims.num_tiles_x;
+    let num_tiles_y = screen_dims.num_tiles_y;
     let total_tiles = num_tiles_x * num_tiles_y;
 
     let tile_index = global_id.x;
@@ -334,8 +336,8 @@ fn scan_second_pass(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) workgroup_id: vec3<u32>
 ) {
-    let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
+    let num_tiles_x = screen_dims.num_tiles_x;
+    let num_tiles_y = screen_dims.num_tiles_y;
     let total_tiles = num_tiles_x * num_tiles_y;
     let tile_index = global_id.x;
     if tile_index >= total_tiles {
