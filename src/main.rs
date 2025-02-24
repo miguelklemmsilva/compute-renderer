@@ -1,3 +1,4 @@
+use clap::Parser;
 use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -13,27 +14,82 @@ mod vertex;
 mod wgpu_pipeline;
 mod window;
 
-fn main() {
-    let width = 1024;
-    let height = 768;
+#[derive(Parser, Debug)]
+#[command(
+    name = "Compute Renderer",
+    version,
+    about = "Runs a 3D scene with configurable parameters.",
+    long_about = None
+)]
+struct Cli {
+    /// Window width in pixels
+    #[arg(long, default_value_t = 1024, help = "Window width in pixels")]
+    width: u32,
 
-    // List of scenes to benchmark
-    let scenes = vec![
-        SceneConfig {
-            name: "test".to_string(),
-            model_path: String::from("test.obj"),
-            camera_config: CameraConfig::new_first_person(),
-            backend_type: BackendType::WgpuPipeline,
-            ..Default::default()
-        },
-        SceneConfig {
-            name: "test".to_string(),
-            model_path: String::from("test.obj.obj"),
-            camera_config: CameraConfig::new_first_person(),
-            backend_type: BackendType::WgpuPipeline,
-            ..Default::default()
-        },
-    ];
+    /// Window height in pixels
+    #[arg(long, default_value_t = 768, help = "Window height in pixels")]
+    height: u32,
+
+    /// Name of the scene
+    #[arg(long, default_value = "test_scene", help = "Name of the scene")]
+    scene_name: String,
+
+    /// Path to the 3D model (OBJ)
+    #[arg(long, default_value = "suzanne.obj", help = "Path to the .obj file")]
+    model_path: String,
+
+    /// Camera mode: 'first-person' or 'orbit'
+    #[arg(long, default_value = "first-person", help = "Camera mode")]
+    camera_mode: String,
+
+    /// Backend type: 'wgpu' or 'custom'
+    #[arg(long, default_value = "wgpu", help = "Render backend type")]
+    backend_type: String,
+
+    /// Benchmark duration in seconds (if needed for performance testing)
+    #[arg(long, default_value_t = u64::MAX, help = "Benchmark duration in seconds")]
+    benchmark_duration_secs: u64,
+}
+
+fn main() {
+    // Parse command line arguments
+    let cli = Cli::parse();
+
+    let width = cli.width as usize;
+    let height = cli.height as usize;
+
+    // Determine the camera configuration based on user input
+    let camera_config = match cli.camera_mode.as_str() {
+        "first-person" => CameraConfig::new_first_person(),
+        "orbit" => CameraConfig::default(), // or tweak as desired
+        other => {
+            eprintln!(
+                "Invalid camera mode '{}'. Use 'first-person' or 'orbit'.",
+                other
+            );
+            std::process::exit(1);
+        }
+    };
+
+    // Determine the backend type (WGPU or Custom)
+    let backend_type = match cli.backend_type.as_str() {
+        "wgpu" => BackendType::WgpuPipeline,
+        "custom" => BackendType::CustomPipeline,
+        other => {
+            eprintln!("Invalid backend type '{}'. Use 'wgpu' or 'custom'.", other);
+            std::process::exit(1);
+        }
+    };
+
+    // Construct a single SceneConfig based on CLI parameters
+    let scenes = vec![SceneConfig {
+        name: cli.scene_name,
+        model_path: cli.model_path,
+        camera_config,
+        backend_type,
+        benchmark_duration_secs: cli.benchmark_duration_secs,
+        ..Default::default()
+    }];
 
     // Create a single event loop for all scenes
     let event_loop = EventLoop::new().expect("Failed to create event loop");
