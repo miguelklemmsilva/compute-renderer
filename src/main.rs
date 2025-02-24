@@ -1,5 +1,4 @@
 use clap::Parser;
-use effect::{Effect, WaveDirection};
 use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -89,7 +88,7 @@ fn main() {
         camera_config,
         backend_type,
         benchmark_duration_secs: cli.benchmark_duration_secs,
-        effect: Some(Effect::voxelize(0.5, 1.0)),
+        // effect: Some(Effect::voxelize(0.5, 1.0)),
         ..Default::default()
     }];
 
