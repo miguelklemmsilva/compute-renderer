@@ -1,4 +1,5 @@
 use clap::Parser;
+use effect::{Effect, WaveDirection};
 use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -43,7 +44,7 @@ struct Cli {
     camera_mode: String,
 
     /// Backend type: 'wgpu' or 'custom'
-    #[arg(long, default_value = "wgpu", help = "Render backend type")]
+    #[arg(long, default_value = "custom", help = "Render backend type")]
     backend_type: String,
 
     /// Benchmark duration in seconds (if needed for performance testing)
@@ -61,7 +62,7 @@ fn main() {
     // Determine the camera configuration based on user input
     let camera_config = match cli.camera_mode.as_str() {
         "first-person" => CameraConfig::new_first_person(),
-        "orbit" => CameraConfig::default(), // or tweak as desired
+        "orbit" => CameraConfig::default(),
         other => {
             eprintln!(
                 "Invalid camera mode '{}'. Use 'first-person' or 'orbit'.",
@@ -88,6 +89,7 @@ fn main() {
         camera_config,
         backend_type,
         benchmark_duration_secs: cli.benchmark_duration_secs,
+        effect: Some(Effect::voxelize(0.5, 1.0)),
         ..Default::default()
     }];
 

@@ -135,12 +135,10 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             // Interpolate depth.
             let interpolated_z = bc.x * v1.screen_pos.z + bc.y * v2.screen_pos.z + bc.z * v3.screen_pos.z;
             
-            // Convert to [0,1] range for depth buffer
-            let depth = interpolated_z * 0.5 + 0.5;
             let local_index = (x - tile_start_x) + (y - tile_start_y) * TILE_SIZE;
             let pixel_index = x + y * u32(screen_dims.width);
             // Convert our computed depth to a packed u32.
-            let packed_depth = pack_float_to_u32(depth);
+            let packed_depth = pack_float_to_u32(interpolated_z);
             // Get the pointer for the current pixel.
             let pixel_ptr = &local_depth[local_index];
 
