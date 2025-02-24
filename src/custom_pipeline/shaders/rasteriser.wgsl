@@ -89,7 +89,6 @@ fn unpack_u32_to_float(bits: u32) -> f32 {
 
 const MAX_TILES: u32 = TILE_SIZE * TILE_SIZE;
 var<workgroup> local_depth: array<atomic<u32>, MAX_TILES>;
-var<workgroup> local_frag: array<Fragment, MAX_TILES>;
 
 // ---------------------------------------------------------------------
 // Rasterization function: rasterize a triangle into one tile.
@@ -178,7 +177,9 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     }
 }
 
-@compute @workgroup_size(1, 1, 256)
+const Z_DISPATCHES = 64u;
+
+@compute @workgroup_size(1, 1, Z_DISPATCHES)
 fn raster_main(
     @builtin(workgroup_id) wg: vec3<u32>,
     @builtin(local_invocation_id) lid: vec3<u32>
@@ -202,7 +203,7 @@ fn raster_main(
     let triangle_offset = tile_buffer[tile_idx].offset;
     
     // Use the third dimension of the local invocation to split work.
-    for (var i = lid.z; i < triangle_count; i += 256u) {
+    for (var i = lid.z; i < triangle_count; i += Z_DISPATCHES) {
         // Get the triangle's base index from the triangle list.
         let base_idx = triangle_list_buffer[triangle_offset + i];
 
