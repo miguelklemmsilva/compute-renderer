@@ -3,6 +3,8 @@ const TILE_SIZE: u32 = 8u;
 struct UniformRaster {
     width: f32,
     height: f32,
+    num_tiles_x: u32,
+    num_tiles_y: u32,
 };
 
 struct EffectUniform {
@@ -134,7 +136,7 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
             
             // Interpolate depth.
             let interpolated_z = bc.x * v1.screen_pos.z + bc.y * v2.screen_pos.z + bc.z * v3.screen_pos.z;
-            
+
             let local_index = (x - tile_start_x) + (y - tile_start_y) * TILE_SIZE;
             let pixel_index = x + y * u32(screen_dims.width);
             // Convert our computed depth to a packed u32.
@@ -185,8 +187,8 @@ fn raster_main(
     // Determine the tile for this workgroup.
     let tile_x = wg.x;
     let tile_y = wg.y;
-    let num_tiles_x = (u32(screen_dims.width) + TILE_SIZE - 1u) / TILE_SIZE;
-    let num_tiles_y = (u32(screen_dims.height) + TILE_SIZE - 1u) / TILE_SIZE;
+    let num_tiles_x = screen_dims.num_tiles_x;
+    let num_tiles_y = screen_dims.num_tiles_y;
 
     local_depth[lid.z] = 0xFFFFFFFFu;
     workgroupBarrier(); // ensure all threads have loaded the data
