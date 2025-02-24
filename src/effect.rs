@@ -16,7 +16,6 @@ pub struct WaveEffect {
     pub speed: f32,
 }
 
-#[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub struct EdgeMeltEffect {
     pub amplitude: f32, // Should be clamped between 0.0 and 0.33
