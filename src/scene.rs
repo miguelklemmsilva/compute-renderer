@@ -71,16 +71,16 @@ impl Scene {
 
         // Add camera and set active
         let camera = match scene_config.camera_config.mode {
-            crate::camera::CameraMode::FirstPerson => crate::camera::Camera::new_first_person(
+            camera::CameraMode::FirstPerson => camera::Camera::new_first_person(
                 glam::Vec3::from(scene_config.camera_config.position),
-                (width as f32) / (height as f32),
+                width as f32 / height as f32,
             ),
-            crate::camera::CameraMode::Orbit => crate::camera::Camera::new(
+            camera::CameraMode::Orbit => camera::Camera::new(
                 scene_config.camera_config.distance,
                 scene_config.camera_config.theta,
                 scene_config.camera_config.phi,
                 glam::Vec3::from(scene_config.camera_config.target),
-                (width as f32) / (height as f32),
+                width as f32 / height as f32,
             ),
         };
         scene.add_camera(camera);
