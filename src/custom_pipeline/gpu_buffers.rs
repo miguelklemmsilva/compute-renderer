@@ -38,8 +38,6 @@ impl GpuBuffers {
             indices.extend_from_slice(&model.processed_indices);
         }
 
-        let index_length = indices.len();
-
         let max_fragments = (width * height) as u64;
 
         let camera_uniform = camera::CameraUniform::default();
@@ -48,19 +46,10 @@ impl GpuBuffers {
 
         let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
         let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
-        let num_tiles = num_tiles_x * num_tiles_y;
-
-        let total_triangles = (index_length / 3) as u32;
-
-        // Calculate max triangles per tile based on screen coverage
-        let avg_triangle_area = (width * height) as f32 / total_triangles as f32;
-        let tile_area = (TILE_SIZE * TILE_SIZE) as f32;
-
-        // Base estimate: how many triangles could fit in a tile
-        let base_triangles_per_tile = (tile_area / avg_triangle_area * 2.0) as u32;
+        let num_tiles = (num_tiles_x * num_tiles_y) as u64;
 
         // Add safety margin for overlapping triangles and uneven distribution
-        let max_triangles_per_tile = std::cmp::max(base_triangles_per_tile, 128);
+        let max_triangles_per_tile = 128u64;
 
         #[repr(C)]
         #[derive(Copy, Clone)]
@@ -69,11 +58,6 @@ impl GpuBuffers {
             start_tile: [u32; 2],
             tile_range: [u32; 2],
         }
-
-        // Calculate number of workgroups needed for parallel scan
-        let num_tiles_x = (width + TILE_SIZE - 1) / TILE_SIZE;
-        let num_tiles_y = (height + TILE_SIZE - 1) / TILE_SIZE;
-        let total_workgroups = num_tiles_x * num_tiles_y;
 
         Self {
             camera_buffer: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
@@ -120,35 +104,33 @@ impl GpuBuffers {
             }),
             output_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Output Buffer"),
-                size: (width as usize * height as usize * std::mem::size_of::<u32>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE
-                    | wgpu::BufferUsages::MAP_READ,
+                size: max_fragments * std::mem::size_of::<u32>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             }),
             tile_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Tile Buffer"),
-                size: (num_tiles as usize * std::mem::size_of::<[u32; 4]>()) as u64,
+                size: num_tiles * std::mem::size_of::<[u32; 4]>() as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
             triangle_list_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Triangle List Buffer"),
-                size: (num_tiles as u64)
-                    * (max_triangles_per_tile as u64)
-                    * (std::mem::size_of::<u64>() as u64),
+                size: num_tiles * max_triangles_per_tile * std::mem::size_of::<u32>() as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
             partial_sums_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Partial Sums Buffer"),
-                size: (total_workgroups as usize * std::mem::size_of::<u32>()) as u64,
+                size: num_tiles * std::mem::size_of::<u32>() as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
             triangle_meta_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Triangle Meta Buffer"),
-                size: ((num_tiles * max_triangles_per_tile) as usize
-                    * std::mem::size_of::<TriangleMeta>()) as u64,
+                size: num_tiles
+                    * max_triangles_per_tile
+                    * std::mem::size_of::<TriangleMeta>() as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),

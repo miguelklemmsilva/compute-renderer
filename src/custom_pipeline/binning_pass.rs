@@ -247,7 +247,7 @@ impl BinningPass {
         pass.set_bind_group(2, &self.bind_group_2, &[]);
         pass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        let gx_tris = total_tris.sqrt().ceil() as u32;
+        let gx_tris = (total_tris).sqrt().ceil() as u32;
         let gy_tris = ((total_tris as f32) / (gx_tris as f32)).ceil() as u32;
 
         pass.set_pipeline(&self.pipeline_count);
