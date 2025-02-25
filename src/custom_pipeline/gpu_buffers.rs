@@ -23,6 +23,9 @@ pub struct GpuBuffers {
     pub triangle_list_buffer: wgpu::Buffer,
     pub partial_sums_buffer: wgpu::Buffer,
     pub triangle_meta_buffer: wgpu::Buffer,
+    pub temp_pair_buffer: wgpu::Buffer,
+    pub per_triangle_pair_counts_buffer: wgpu::Buffer,
+    pub per_triangle_offsets_buffer: wgpu::Buffer,
 }
 
 impl GpuBuffers {
@@ -121,8 +124,7 @@ impl GpuBuffers {
             output_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Output Buffer"),
                 size: (width as usize * height as usize * std::mem::size_of::<u32>()) as u64,
-                usage: wgpu::BufferUsages::STORAGE
-                    | wgpu::BufferUsages::MAP_READ,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             }),
             tile_buffer: device.create_buffer(&wgpu::BufferDescriptor {
@@ -149,6 +151,24 @@ impl GpuBuffers {
                 label: Some("Triangle Meta Buffer"),
                 size: ((num_tiles * max_triangles_per_tile) as usize
                     * std::mem::size_of::<TriangleMeta>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }),
+            temp_pair_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Temp Pair Buffer"),
+                size: (total_triangles as usize * std::mem::size_of::<[u32; 2]>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }),
+            per_triangle_pair_counts_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Per Triangle Pair Counts Buffer"),
+                size: (total_triangles as usize * std::mem::size_of::<u32>()) as u64,
+                usage: wgpu::BufferUsages::STORAGE,
+                mapped_at_creation: false,
+            }),
+            per_triangle_offsets_buffer: device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("Per Triangle Offsets Buffer"),
+                size: (total_triangles as usize * std::mem::size_of::<u32>()) as u64,
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),

@@ -52,11 +52,19 @@ struct Camera {
     view_proj: mat4x4<f32>,
 };
 
+struct TileTrianglePair {
+    tile_index: u32,
+    triangle_index: u32,
+};
+
 // universal buffers
 @group(0) @binding(0) var<storage, read_write> tile_buffer: array<TileTriangles>;
 @group(0) @binding(1) var<storage, read_write> triangle_binning_buffer: array<TriangleBinningData>;
 @group(0) @binding(2) var<uniform> screen_dims: UniformBinning;
 @group(0) @binding(3) var<uniform> effect: EffectUniform;
+@group(0) @binding(4) var<storage, read_write> temp_pair_buffer: array<TileTrianglePair>;
+@group(0) @binding(5) var<storage, read_write> per_triangle_pair_counts: array<u32>;
+@group(0) @binding(6) var<storage, read_write> per_triangle_offsets: array<u32>;
 
 @group(1) @binding(0) var<storage, read_write> partial_sums: array<u32>;
 
@@ -236,18 +244,10 @@ fn count_triangles(
         return;
     }
 
-    // 2) Each thread will loop over some subset of tiles
-    let num_tiles_x = screen_dims.num_tiles_x;
-
-    for (var ty = 0u; ty < tile_range_y; ty++) {
-        let tile_y = start_tile_y + ty;
-        for (var tx = thread_id; tx < tile_range_x; tx += z_dispatches) {
-            let tile_x = start_tile_x + tx;
-            let tile_index = tile_x + tile_y * num_tiles_x;
-            atomicAdd(&tile_buffer[tile_index].count, 1u);
-        }
-    }
+    per_triangle_pair_counts[triangle_index] = num_tiles;
 }
+
+var<workgroup> shared_counts: array<u32, 256>;
 
 //---------------------------------------------------------------------
 // Workgroup-based exclusive scan routine.
@@ -295,15 +295,14 @@ fn scan_first_pass(
     @builtin(local_invocation_id) local_id: vec3<u32>,
     @builtin(workgroup_id) workgroup_id: vec3<u32>
 ) {
-    let num_tiles_x = screen_dims.num_tiles_x;
-    let num_tiles_y = screen_dims.num_tiles_y;
-    let total_tiles = num_tiles_x * num_tiles_y;
+    let total_tris = arrayLength(&index_buffer) / 3u;
 
-    let tile_index = global_id.x;
+    let triangle_index = global_id.x;
     let tid = local_id.x;
+
     shared_data[tid] = 0u;
-    if tile_index < total_tiles {
-        shared_data[tid] = tile_buffer[tile_index].count;
+    if triangle_index < total_tris {
+        shared_data[tid] = per_triangle_pair_counts[triangle_index];
     }
 
     let scan_result = workgroup_scan_exclusive(tid, 256u);
@@ -313,8 +312,8 @@ fn scan_first_pass(
         partial_sums[workgroup_id.x] = workgroup_sum;
     }
 
-    if tile_index < total_tiles {
-        tile_buffer[tile_index].offset = scan_result;
+    if triangle_index < total_tris {
+        per_triangle_offsets[triangle_index] = scan_result;
     }
 }
 
@@ -326,11 +325,11 @@ fn scan_second_pass(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) workgroup_id: vec3<u32>
 ) {
-    let num_tiles_x = screen_dims.num_tiles_x;
-    let num_tiles_y = screen_dims.num_tiles_y;
-    let total_tiles = num_tiles_x * num_tiles_y;
-    let tile_index = global_id.x;
-    if tile_index >= total_tiles {
+    let total_tris = arrayLength(&index_buffer) / 3u;
+
+    let triangle_index = global_id.x;
+
+    if triangle_index >= total_tris {
         return;
     }
 
@@ -339,55 +338,134 @@ fn scan_second_pass(
     for (var i = 0u; i < current_group; i++) {
         workgroup_offset += partial_sums[i];
     }
-    tile_buffer[tile_index].offset += workgroup_offset;
+    per_triangle_offsets[triangle_index] += workgroup_offset;
 }
 
-//---------------------------------------------------------------------
-// Kernel 3: Store triangle indices into the triangle list buffer.
-// Each thread processes one triangle and inlines the triangle logic.
-@compute @workgroup_size(1, 1, z_dispatches)
-fn store_triangles(
-    @builtin(global_invocation_id) global_id: vec3<u32>,
-    @builtin(workgroup_id) wg: vec3<u32>,
-    @builtin(local_invocation_id) lid: vec3<u32>,
-    @builtin(num_workgroups) num_workgroups: vec3<u32>
-) {
-    // Identify which triangle this workgroup processes.
-    let triangle_index = wg.x + wg.y * num_workgroups.x;
-    let num_triangles = arrayLength(&index_buffer) / 3u;
-
-    // Early out: nothing to do if out of range.
-    if triangle_index >= num_triangles {
+@compute @workgroup_size(256)
+fn generate_tile_triangle_pairs(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let triangle_index = gid.x;
+    if triangle_index >= arrayLength(&triangle_binning_buffer) {
         return;
     }
 
-    // Pull precomputed metadata:
     let triangle_meta = triangle_binning_buffer[triangle_index];
-    let start_tile_x = triangle_meta.start_tile.x;
-    let start_tile_y = triangle_meta.start_tile.y;
+    let base_offset = per_triangle_offsets[triangle_index];
     let tile_range_x = triangle_meta.tile_range.x;
     let tile_range_y = triangle_meta.tile_range.y;
-    let total_tiles = tile_range_x * tile_range_y;
+    if tile_range_x == 0u || tile_range_y == 0u {
+        return;
+    }
 
-    // The base index of this triangle in index_buffer
-    let base_idx = triangle_index * 3u;
-
-    // We'll again split the tile iteration among 64 threads (in z).
-    let thread_id = lid.z;
+    var pair_index = 0u;
+    let start_x = triangle_meta.start_tile.x;
+    let start_y = triangle_meta.start_tile.y;
     let num_tiles_x = screen_dims.num_tiles_x;
-    for (var ty = 0u; ty < tile_range_y; ty ++) {
-        let tile_y = start_tile_y + ty;
-        for (var tx = thread_id; tx < tile_range_x; tx += z_dispatches) {
-            let tile_x = start_tile_x + tx;
-            let tile_index = tile_x + tile_y * num_tiles_x;
 
-            let count = tile_buffer[tile_index].count;
-            let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
+    for (var ty = 0u; ty < tile_range_y; ty++) {
+        let tile_y = start_y + ty;
+        for (var tx = 0u; tx < tile_range_x; tx++) {
+            let tile_x = start_x + tx;
+            let tile_id = tile_x + tile_y * num_tiles_x;
 
-            if write_index < count {
-                let offset = tile_buffer[tile_index].offset;
-                triangle_list_buffer[offset + write_index] = base_idx;
-            }
+            let out_idx = base_offset + pair_index;
+            temp_pair_buffer[out_idx] = TileTrianglePair(tile_id, triangle_index);
+            pair_index++;
         }
     }
+}
+
+var<workgroup> shared_bitonic: array<TileTrianglePair, 256>;
+const MAX_PAIRS = 1024u;
+
+fn compare_and_swap(i: u32, j: u32, dir: bool) {
+    let pi = shared_bitonic[i];
+    let pj = shared_bitonic[j];
+    // "dir" = true => ascending sort
+    let swap = (pi.tile_index > pj.tile_index) == dir;
+    if swap {
+        // swap them
+        shared_bitonic[i] = pj;
+        shared_bitonic[j] = pi;
+    }
+}
+
+@compute @workgroup_size(256)
+fn bitonic_sort_pass(@builtin(global_invocation_id) gid: vec3<u32>,
+    @builtin(local_invocation_id) lid: vec3<u32>,
+    @builtin(num_workgroups) num_wg: vec3<u32>) {
+    // We assume global_invocation_id.x * 256 covers the entire range up to MAX_PAIRS
+    let blockStart = gid.x * 256u;
+    // Load into shared memory
+    if blockStart + lid.x < MAX_PAIRS {
+        shared_bitonic[lid.x] = temp_pair_buffer[blockStart + lid.x];
+    }
+    workgroupBarrier();
+
+    // Perform bitonic sort on these 256 items in shared memory
+    var k = 2u;
+    // Outer loop: build bitonic sequences
+    while k <= 256u {
+        var j = k >> 1u;
+        while j > 0u {
+            workgroupBarrier();
+            let tid = lid.x;
+            let ix = tid ^ j;
+            if ix > tid {
+                // "direction" depends on whether we're in the upper half or lower half of the sequence
+                let dir = bool(((tid & k) == 0u));
+                compare_and_swap(tid, ix, dir);
+            }
+            j >>= 1u;
+        }
+        k <<= 1u;
+    }
+    workgroupBarrier();
+
+    // Store back
+    if blockStart + lid.x < MAX_PAIRS {
+        temp_pair_buffer[blockStart + lid.x] = shared_bitonic[lid.x];
+    }
+}
+
+@compute @workgroup_size(256)
+fn build_tile_offsets(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let i = gid.x;
+    // We'll assume the total number of pairs is "total_pairs" (which you can compute as
+    // the sum of per_triangle_pair_counts or the last element of the exclusive scan).
+    if i >= MAX_PAIRS {
+        return;
+    }
+
+    // We read the current pair
+    let curr_pair = temp_pair_buffer[i];
+
+    if i == 0u {
+        // The first pair starts a new tile's run
+        tile_buffer[curr_pair.tile_index].offset = 0u;
+    } else {
+        // Compare with the previous pair
+        let prev_pair = temp_pair_buffer[i - 1u];
+        if curr_pair.tile_index != prev_pair.tile_index {
+            // A new tile's run starts here
+            tile_buffer[curr_pair.tile_index].offset = i;
+        }
+    }
+}
+
+@compute @workgroup_size(256)
+fn write_final_triangle_list(@builtin(global_invocation_id) gid: vec3<u32>) {
+    let i = gid.x;
+    if i >= MAX_PAIRS {
+        return;
+    }
+
+    let pair = temp_pair_buffer[i];
+    let tile = pair.tile_index;
+
+    // local offset of this pair within the tile's run
+    let local_idx = i - tile_buffer[tile].offset;
+
+    // The final address in triangle_list_buffer:
+    let dst_idx = tile_buffer[tile].offset + local_idx;
+    triangle_list_buffer[dst_idx] = pair.triangle_index;
 }

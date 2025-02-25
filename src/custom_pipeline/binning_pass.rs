@@ -1,12 +1,18 @@
 use wgpu::PipelineCompilationOptions;
 
-use super::{util::create_buffer_bind_group_layout_entry, GpuBuffers};
+use super::{
+    util::{create_buffer_bind_group_layout_entry, dispatch_size},
+    GpuBuffers,
+};
 
 pub struct BinningPass {
     pub pipeline_count: wgpu::ComputePipeline,
     pub pipeline_scan_first: wgpu::ComputePipeline,
     pub pipeline_scan_second: wgpu::ComputePipeline,
-    pub pipeline_store: wgpu::ComputePipeline,
+    pub pipeline_pairs: wgpu::ComputePipeline,
+    pub pipeline_sort_pass: wgpu::ComputePipeline,
+    pub pipeline_build_offsets: wgpu::ComputePipeline,
+    pub pipeline_store_triangle_list: wgpu::ComputePipeline,
     pub bind_group_0: wgpu::BindGroup,
     pub bind_group_1: wgpu::BindGroup,
     pub bind_group_2: wgpu::BindGroup,
@@ -41,6 +47,9 @@ impl BinningPass {
                     },
                     count: None,
                 },
+                create_buffer_bind_group_layout_entry(4, false),
+                create_buffer_bind_group_layout_entry(5, false),
+                create_buffer_bind_group_layout_entry(6, false),
             ],
         });
 
@@ -91,36 +100,22 @@ impl BinningPass {
             entries: &[create_buffer_bind_group_layout_entry(0, false)],
         });
 
-        let count_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Count Pipeline layout"),
-                bind_group_layouts: &[&group0_layout, &group1_layout, &group2_layout],
-                push_constant_ranges: &[],
-            });
-
-        let scan_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("Scan Pipeline layout"),
-            bind_group_layouts: &[&group0_layout, &group1_layout],
+        let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("Count Pipeline layout"),
+            bind_group_layouts: &[
+                &group0_layout,
+                &group1_layout,
+                &group2_layout,
+                &group3_layout,
+            ],
             push_constant_ranges: &[],
         });
-
-        let store_pipeline_layout =
-            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-                label: Some("Store Pipeline layout"),
-                bind_group_layouts: &[
-                    &group0_layout,
-                    &group1_layout,
-                    &group2_layout,
-                    &group3_layout,
-                ],
-                push_constant_ranges: &[],
-            });
 
         let shader = device.create_shader_module(wgpu::include_wgsl!("shaders/binning.wgsl"));
 
         let pipeline_count = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
             label: Some("Count Triangles"),
-            layout: Some(&count_pipeline_layout),
+            layout: Some(&pipeline_layout),
             module: &shader,
             entry_point: Some("count_triangles"),
             cache: None,
@@ -130,7 +125,7 @@ impl BinningPass {
         let pipeline_scan_first =
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some("Scan First Pass"),
-                layout: Some(&scan_pipeline_layout),
+                layout: Some(&pipeline_layout),
                 module: &shader,
                 entry_point: Some("scan_first_pass"),
                 cache: None,
@@ -140,21 +135,49 @@ impl BinningPass {
         let pipeline_scan_second =
             device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
                 label: Some("Scan Second Pass"),
-                layout: Some(&scan_pipeline_layout),
+                layout: Some(&pipeline_layout),
                 module: &shader,
                 entry_point: Some("scan_second_pass"),
                 cache: None,
                 compilation_options: PipelineCompilationOptions::default(),
             });
 
-        let pipeline_store = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("Store Triangles"),
-            layout: Some(&store_pipeline_layout),
+        let pipeline_pairs = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Generate Tile Triangle Pairs"),
+            layout: Some(&pipeline_layout),
             module: &shader,
-            entry_point: Some("store_triangles"),
+            entry_point: Some("generate_tile_triangle_pairs"),
             cache: None,
             compilation_options: PipelineCompilationOptions::default(),
         });
+
+        let pipeline_sort_pass = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Sort Tile Triangle Pairs"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("bitonic_sort_pass"),
+            cache: None,
+            compilation_options: PipelineCompilationOptions::default(),
+        });
+
+        let pipeline_build_offsets = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+            label: Some("Build Offsets"),
+            layout: Some(&pipeline_layout),
+            module: &shader,
+            entry_point: Some("build_tile_offsets"),
+            cache: None,
+            compilation_options: PipelineCompilationOptions::default(),
+        });
+
+        let pipeline_store_triangle_list =
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some("Store Triangle List"),
+                layout: Some(&pipeline_layout),
+                module: &shader,
+                entry_point: Some("write_final_triangle_list"),
+                cache: None,
+                compilation_options: PipelineCompilationOptions::default(),
+            });
 
         let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Binning Pass: Group0"),
@@ -175,6 +198,18 @@ impl BinningPass {
                 wgpu::BindGroupEntry {
                     binding: 3,
                     resource: buffers.effect_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 4,
+                    resource: buffers.temp_pair_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: buffers.per_triangle_pair_counts_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 6,
+                    resource: buffers.per_triangle_offsets_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -224,7 +259,10 @@ impl BinningPass {
             pipeline_count,
             pipeline_scan_first,
             pipeline_scan_second,
-            pipeline_store,
+            pipeline_pairs,
+            pipeline_sort_pass,
+            pipeline_build_offsets,
+            pipeline_store_triangle_list,
             bind_group_0,
             bind_group_1,
             bind_group_2,
@@ -254,12 +292,21 @@ impl BinningPass {
         pass.dispatch_workgroups(gx_tris, gy_tris, 1);
 
         pass.set_pipeline(&self.pipeline_scan_first);
-        pass.dispatch_workgroups(total_tile_dispatch, 1, 1);
+        pass.dispatch_workgroups(dispatch_size(total_tris as u32), 1, 1);
 
         pass.set_pipeline(&self.pipeline_scan_second);
+        pass.dispatch_workgroups(dispatch_size(total_tris as u32), 1, 1);
+
+        pass.set_pipeline(&self.pipeline_pairs);
         pass.dispatch_workgroups(total_tile_dispatch, 1, 1);
 
-        pass.set_pipeline(&self.pipeline_store);
-        pass.dispatch_workgroups(gx_tris, gy_tris, 1);
+        pass.set_pipeline(&self.pipeline_sort_pass);
+        pass.dispatch_workgroups(total_tile_dispatch, 1, 1);
+
+        pass.set_pipeline(&self.pipeline_build_offsets);
+        pass.dispatch_workgroups(total_tile_dispatch, 1, 1);
+
+        pass.set_pipeline(&self.pipeline_store_triangle_list);
+        pass.dispatch_workgroups(dispatch_size(total_tris as u32), 1, 1);
     }
 }
