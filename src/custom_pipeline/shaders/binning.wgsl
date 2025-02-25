@@ -201,7 +201,7 @@ fn count_triangles(
 ) {
     let triangle_index = wg.x + wg.y * num_workgroups.x;
 
-    let num_triangles = arrayLength(&index_buffer) / 3u;
+    let num_triangles = arrayLength(&triangle_binning_buffer);
     if triangle_index >= num_triangles {
         return;
     }
@@ -263,14 +263,14 @@ fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
             shared_data[bi] += shared_data[ai];
         }
         offset *= 2u;
-        d = d >> 1u;
+        d >>= 1u;
     }
     if tid == workgroup_size - 1u {
         shared_data[tid] = 0u;
     }
     d = 1u;
     while d < workgroup_size {
-        offset = offset >> 1u;
+        offset >>= 1u;
         workgroupBarrier();
         if tid < d {
             let ai = offset * (2u * tid + 1u) - 1u;
@@ -279,7 +279,7 @@ fn workgroup_scan_exclusive(tid: u32, workgroup_size: u32) -> u32 {
             shared_data[ai] = shared_data[bi];
             shared_data[bi] += temp;
         }
-        d = d << 1u;
+        d <<= 1u;
     }
     workgroupBarrier();
     return shared_data[tid];
@@ -301,10 +301,8 @@ fn scan_first_pass(
 
     let tile_index = global_id.x;
     let tid = local_id.x;
-    shared_data[tid] = 0u;
-    if tile_index < total_tiles {
-        shared_data[tid] = tile_buffer[tile_index].count;
-    }
+
+    shared_data[tid] = tile_buffer[tile_index].count;
 
     let scan_result = workgroup_scan_exclusive(tid, 256u);
 
@@ -313,9 +311,7 @@ fn scan_first_pass(
         partial_sums[workgroup_id.x] = workgroup_sum;
     }
 
-    if tile_index < total_tiles {
-        tile_buffer[tile_index].offset = scan_result;
-    }
+    tile_buffer[tile_index].offset = scan_result;
 }
 
 //---------------------------------------------------------------------
@@ -354,7 +350,7 @@ fn store_triangles(
 ) {
     // Identify which triangle this workgroup processes.
     let triangle_index = wg.x + wg.y * num_workgroups.x;
-    let num_triangles = arrayLength(&index_buffer) / 3u;
+    let num_triangles = arrayLength(&triangle_binning_buffer);
 
     // Early out: nothing to do if out of range.
     if triangle_index >= num_triangles {
@@ -384,10 +380,7 @@ fn store_triangles(
             let count = tile_buffer[tile_index].count;
             let write_index = atomicAdd(&tile_buffer[tile_index].write_index, 1u);
 
-            if write_index < count {
-                let offset = tile_buffer[tile_index].offset;
-                triangle_list_buffer[offset + write_index] = base_idx;
-            }
+            triangle_list_buffer[tile_buffer[tile_index].offset + write_index] = base_idx;
         }
     }
 }
