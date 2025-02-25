@@ -166,7 +166,7 @@ fn compute_screen_pos(clip_pos: vec4<f32>) -> vec4<f32> {
     return vec4<f32>(
         ((ndc_pos.x + 1.0) * 0.5) * screen_dims.width,
         ((1.0 - ndc_pos.y) * 0.5) * screen_dims.height,
-        clip_pos.z,
+        clip_pos.z / clip_pos.w,
         clip_pos.w
     );
 }
@@ -191,8 +191,8 @@ fn geometry_pipeline(idx: u32) -> Vertex {
 // Use workgroup shared memory for the transformed vertices.
 var<workgroup> shared_v: array<Vertex, 3>;
 
-const z_dispatches = 3u;
-@compute @workgroup_size(1, 1, z_dispatches)
+const Z_DISPATCHES = 3u;
+@compute @workgroup_size(1, 1, Z_DISPATCHES)
 fn count_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
@@ -215,11 +215,10 @@ fn count_triangles(
     let idx2 = index_buffer[base_idx + 1u];
     let idx3 = index_buffer[base_idx + 2u];
 
-    shared_v[lid.z] = geometry_pipeline(index_buffer[base_idx + lid.z]);
+    var vertex = geometry_pipeline(index_buffer[base_idx + lid.z]);
 
-    // defer calculations to here
-    // no threads need this information yet so prevent all other threads from needing to wait for write to finish
-    projected_buffer[index_buffer[base_idx + lid.z]] = shared_v[lid.z];
+    shared_v[lid.z] = vertex;
+    projected_buffer[index_buffer[base_idx + lid.z]] = vertex;
 
     // 1) Compute metadata for this triangle
     compute_triangle_meta(triangle_index);
@@ -241,7 +240,7 @@ fn count_triangles(
 
     for (var ty = 0u; ty < tile_range_y; ty++) {
         let tile_y = start_tile_y + ty;
-        for (var tx = thread_id; tx < tile_range_x; tx += z_dispatches) {
+        for (var tx = thread_id; tx < tile_range_x; tx += Z_DISPATCHES) {
             let tile_x = start_tile_x + tx;
             let tile_index = tile_x + tile_y * num_tiles_x;
             atomicAdd(&tile_buffer[tile_index].count, 1u);
@@ -300,6 +299,11 @@ fn scan_first_pass(
     let total_tiles = num_tiles_x * num_tiles_y;
 
     let tile_index = global_id.x;
+
+    if tile_index >= total_tiles {
+        return;
+    }
+
     let tid = local_id.x;
 
     shared_data[tid] = tile_buffer[tile_index].count;
@@ -341,7 +345,7 @@ fn scan_second_pass(
 //---------------------------------------------------------------------
 // Kernel 3: Store triangle indices into the triangle list buffer.
 // Each thread processes one triangle and inlines the triangle logic.
-@compute @workgroup_size(1, 1, z_dispatches)
+@compute @workgroup_size(1, 1, Z_DISPATCHES)
 fn store_triangles(
     @builtin(global_invocation_id) global_id: vec3<u32>,
     @builtin(workgroup_id) wg: vec3<u32>,
@@ -373,7 +377,7 @@ fn store_triangles(
     let num_tiles_x = screen_dims.num_tiles_x;
     for (var ty = 0u; ty < tile_range_y; ty ++) {
         let tile_y = start_tile_y + ty;
-        for (var tx = thread_id; tx < tile_range_x; tx += z_dispatches) {
+        for (var tx = thread_id; tx < tile_range_x; tx += Z_DISPATCHES) {
             let tile_x = start_tile_x + tx;
             let tile_index = tile_x + tile_y * num_tiles_x;
 
