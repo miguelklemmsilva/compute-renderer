@@ -235,7 +235,7 @@ impl BinningPass {
     pub fn execute(
         &self,
         encoder: &mut wgpu::CommandEncoder,
-        total_tris: u32,
+        total_tris: f32,
         total_tile_dispatch: u32,
     ) {
         let mut pass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
@@ -247,10 +247,8 @@ impl BinningPass {
         pass.set_bind_group(2, &self.bind_group_2, &[]);
         pass.set_bind_group(3, &self.bind_group_3, &[]);
 
-        let total_threads_needed = total_tris as f32;
-
-        let gx_tris = total_threads_needed.sqrt().ceil() as u32;
-        let gy_tris = ((total_threads_needed as f32) / (gx_tris as f32)).ceil() as u32;
+        let gx_tris = total_tris.sqrt().ceil() as u32;
+        let gy_tris = ((total_tris as f32) / (gx_tris as f32)).ceil() as u32;
 
         pass.set_pipeline(&self.pipeline_count);
         pass.dispatch_workgroups(gx_tris, gy_tris, 1);
