@@ -31,25 +31,31 @@ The project aims to demonstrate scenarios where a custom shader-based approach m
 ## Building
 
 1. Clone the repository:
+
 ```bash
 git clone [repository-url]
 cd compute-renderer
 ```
 
 2. Build the project:
+
 ```bash
 cargo build --release
 ```
 
 3. Run the project:
+
 ```bash
 cargo run --release
 ```
 
 ## Controls
-WASD to move around
 
-Hold left click to pan the camera
+- WASD to move around
+- Hold left click to pan the camera
+- SPACE/C to ascend/descend
+- Shift to temporarily increase velocity
+- [/] to permanently increase/decrease velocity
 
 ## Usage
 
@@ -62,6 +68,7 @@ The renderer supports various configurations through the `SceneConfig` struct, a
 - Choose free camera mode or orbital camera
 
 Example configuration:
+
 ```rust
 let config = SceneConfig {
     model_path: "path/to/model.obj",
@@ -77,6 +84,7 @@ let config = SceneConfig {
 You can find the latest releases on the [GitHub Releases page](https://github.com/miguel4521/compute-renderer/releases).
 
 To use the latest release:
+
 1. Download the appropriate binary for your platform from the releases page
 2. Extract the archive
 3. Run the executable from the terminal/command prompt

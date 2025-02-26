@@ -1,4 +1,7 @@
+use std::collections::HashSet;
+
 use glam::{Mat4, Vec3};
+use winit::keyboard::KeyCode;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
@@ -91,39 +94,46 @@ impl Camera {
         proj * view
     }
 
-    pub fn process_keyboard(
-        &mut self,
-        forward: bool,
-        backward: bool,
-        left: bool,
-        right: bool,
-        up: bool,
-        down: bool,
-        shift: bool,
-        delta_time: f32,
-    ) {
+    pub fn process_keyboard(&mut self, keys_down: &HashSet<KeyCode>, delta_time: f32) {
         if let CameraMode::FirstPerson = self.mode {
-            let velocity = self.movement_speed * delta_time * if shift { 10.0 } else { 1.0 };
+            let speed_increment = 5.0 * delta_time;
+
+            if keys_down.contains(&KeyCode::BracketRight) {
+                self.movement_speed += speed_increment;
+            }
+            if keys_down.contains(&KeyCode::BracketLeft) {
+                self.movement_speed -= speed_increment;
+                self.movement_speed = self.movement_speed.max(0.0);
+            }
+
+            let velocity = self.movement_speed
+                * delta_time
+                * if keys_down.contains(&KeyCode::ShiftLeft) {
+                    10.0
+                } else {
+                    1.0
+                };
             let front = (self.target - self.eye).normalize();
             let right_vec = front.cross(self.up).normalize();
 
             let mut movement = Vec3::ZERO;
-            if forward {
+
+            if keys_down.contains(&KeyCode::KeyW) {
                 movement += front;
             }
-            if backward {
+            if keys_down.contains(&KeyCode::KeyS) {
                 movement -= front;
             }
-            if right {
+            if keys_down.contains(&KeyCode::KeyD) {
                 movement += right_vec;
             }
-            if left {
+            if keys_down.contains(&KeyCode::KeyA) {
                 movement -= right_vec;
             }
-            if up {
+            if keys_down.contains(&KeyCode::Space) {
                 movement += Vec3::Y;
             }
-            if down {
+            if keys_down.contains(&KeyCode::KeyC) {
                 movement -= Vec3::Y;
             }
 
