@@ -8,7 +8,6 @@ use crate::{
 };
 
 pub struct Model {
-    pub meshes: Vec<Mesh>,
     pub processed_vertices_custom: Vec<GpuVertex>,
     pub processed_vertices_wgpu: Vec<WgpuVertex>,
     pub processed_indices: Vec<Index>,
@@ -44,7 +43,6 @@ impl Model {
         let mut processed_vertices_gpu = Vec::new();
         let mut processed_vertices_wgpu = Vec::new();
         let mut processed_indices = Vec::new();
-        let mut meshes = Vec::new();
 
         // Keep track of vertex count for index offsetting
         let mut current_vertex_count = 0;
@@ -115,11 +113,6 @@ impl Model {
                 .map(|&i| Index(i + current_vertex_count))
                 .collect();
 
-            // Store the mesh
-            meshes.push(Mesh {
-                indices: indices.clone(),
-            });
-
             // Update processed data
             processed_indices.extend(indices);
             current_vertex_count = match backend_type {
@@ -129,14 +122,9 @@ impl Model {
         }
 
         Model {
-            meshes,
             processed_vertices_custom: processed_vertices_gpu,
             processed_vertices_wgpu,
             processed_indices,
         }
     }
-}
-
-pub struct Mesh {
-    pub indices: Vec<Index>,
 }

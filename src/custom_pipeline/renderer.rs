@@ -1,10 +1,11 @@
 use crate::scene;
 
 use super::{
-    binning_pass::BinningPass, raster_pass::TILE_SIZE, util::dispatch_size, FragmentPass, GpuBuffers, RasterPass
+    binning_pass::BinningPass, raster_pass::TILE_SIZE, util::dispatch_size, FragmentPass,
+    GpuBuffers, RasterPass,
 };
 
-pub struct GPU {
+pub struct CustomRenderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 
@@ -15,7 +16,7 @@ pub struct GPU {
     pub binning_pass: BinningPass,
 }
 
-impl GPU {
+impl CustomRenderer {
     pub async fn new(width: usize, height: usize, scene: &scene::Scene) -> Self {
         let instance = wgpu::Instance::default();
         let adapter = instance
@@ -63,20 +64,6 @@ impl GPU {
                 label: Some("Command Encoder"),
             });
 
-        // Calculate total number of indices
-        let total_indices = scene
-            .models
-            .iter()
-            .map(|m| {
-                m.meshes
-                    .iter()
-                    .map(|mesh| mesh.indices.len())
-                    .sum::<usize>()
-            })
-            .sum::<usize>() as u32;
-
-        let total_tris = total_indices / 3;
-
         let num_tiles_x = (width + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
         let num_tiles_y = (height + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
 
@@ -85,7 +72,7 @@ impl GPU {
         let total_pixel_dispatch = dispatch_size((width * height) as u32);
 
         self.binning_pass
-            .execute(&mut encoder, total_tris as f32, total_tile_dispatch);
+            .execute(&mut encoder, scene.gx_tris, scene.gy_tris, total_tile_dispatch);
         self.raster_pass
             .execute(&mut encoder, width as u32, height as u32);
         self.fragment_pass
