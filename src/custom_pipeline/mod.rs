@@ -1,6 +1,6 @@
 mod binning_pass;
 mod fragment_pass;
-pub mod gpu;
+pub mod renderer;
 mod gpu_buffers;
 mod raster_pass;
 pub mod util;
