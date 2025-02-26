@@ -116,9 +116,12 @@ impl ApplicationHandler for Window {
                         ElementState::Pressed => {
                             self.keys_down.insert(keycode);
                             // user switches scene with escape
-                            if keycode == KeyCode::Escape {
-                                self.collector.as_mut().unwrap().finalise();
-                                pollster::block_on(self.load_next_scene(event_loop));
+                            match keycode {
+                                KeyCode::Escape => {
+                                    self.collector.as_mut().unwrap().finalise();
+                                    pollster::block_on(self.load_next_scene(event_loop));
+                                },
+                                _ => {}
                             }
                         }
                         ElementState::Released => {
@@ -333,13 +336,7 @@ impl Window {
         if let Some(camera) = self.scene.get_active_camera_mut() {
             camera.update_over_time(delta_time.as_secs_f32());
             camera.process_keyboard(
-                self.keys_down.contains(&KeyCode::KeyW),
-                self.keys_down.contains(&KeyCode::KeyS),
-                self.keys_down.contains(&KeyCode::KeyA),
-                self.keys_down.contains(&KeyCode::KeyD),
-                self.keys_down.contains(&KeyCode::Space),
-                self.keys_down.contains(&KeyCode::KeyC),
-                self.keys_down.contains(&KeyCode::ShiftLeft),
+                &self.keys_down,
                 delta_time.as_secs_f32(),
             );
         }
