@@ -42,6 +42,7 @@ pub struct Window {
 
 impl ApplicationHandler for Window {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
+        // create performance collector for this scene
         self.collector = Some(PerformanceCollector::new(
             self.scene_configs[self.current_scene_index].name.clone(),
             self.current_scene_index,
@@ -63,6 +64,7 @@ impl ApplicationHandler for Window {
 
         match self.backend_type {
             BackendType::WgpuPipeline => {
+                // wgpu uses its own surface struct
                 let instance = wgpu::Instance::default();
                 // SAFETY: The window is stored in self.winit_window and will live as long as the surface
                 let surface = unsafe {
@@ -81,6 +83,7 @@ impl ApplicationHandler for Window {
                 self.backend = Some(RenderBackend::WgpuPipeline { surface, renderer });
             }
             BackendType::CustomPipeline => {
+                // custom renderer uses pixels
                 let surface_texture =
                     SurfaceTexture::new(self.width as u32, self.height as u32, window);
                 let pixels = unsafe {
@@ -112,6 +115,7 @@ impl ApplicationHandler for Window {
                     match event.state {
                         ElementState::Pressed => {
                             self.keys_down.insert(keycode);
+                            // user switches scene with escape
                             if keycode == KeyCode::Escape {
                                 self.collector.as_mut().unwrap().finalise();
                                 pollster::block_on(self.load_next_scene(event_loop));
@@ -173,6 +177,7 @@ impl ApplicationHandler for Window {
     ) {
         match event {
             DeviceEvent::MouseMotion { delta } => {
+                // pan camera if user presses left click
                 if self.mouse_pressed {
                     if let Some(camera) = self.scene.get_active_camera_mut() {
                         camera.process_mouse(delta.0 as f32, -delta.1 as f32);
@@ -358,7 +363,9 @@ impl Window {
                     }
                 }
                 RenderBackend::CustomPipeline { pixels, gpu } => {
+                    // update scene info
                     self.scene.update(gpu, delta_time);
+                    // run the pipeline here
                     let buffer = gpu
                         .execute_pipeline(self.width, self.height, &self.scene)
                         .await;
