@@ -37,6 +37,9 @@ pub struct Scene {
     pub lights: Vec<Light>,
     pub effect: Option<Effect>,
     pub time: f32,
+    pub total_tris: u32,
+    pub gx_tris: u32,
+    pub gy_tris: u32,
 }
 
 impl Scene {
@@ -48,6 +51,9 @@ impl Scene {
             lights: vec![],
             effect: None,
             time: 0.0,
+            total_tris: 0,
+            gx_tris: 0,
+            gy_tris: 0,
         }
     }
 
@@ -93,7 +99,14 @@ impl Scene {
     pub async fn add_obj_with_mtl(&mut self, obj_path: &str, backend_type: BackendType) -> usize {
         // (A) Load geometry + textures from the .obj + .mtl
         let model = Model::new(obj_path, backend_type).await;
+        self.total_tris += (model.processed_indices.len() / 3) as u32;
+
+        // do these calculations here so that it does not need to be recalculated every frame
+        self.gx_tris = self.total_tris.isqrt() as u32;
+        self.gy_tris = (self.total_tris as f32 / self.gx_tris as f32).ceil() as u32;
+
         self.models.push(model);
+
         self.models.len() - 1
     }
 
@@ -114,7 +127,7 @@ impl Scene {
         self.active_camera.and_then(|index| self.cameras.get(index))
     }
 
-    pub fn update(&mut self, gpu: &mut custom_pipeline::gpu::GPU, delta_time: Duration) {
+    pub fn update(&mut self, gpu: &mut custom_pipeline::renderer::CustomRenderer, delta_time: Duration) {
         self.time += delta_time.as_secs_f32();
 
         if let Some(effect) = &mut self.effect {

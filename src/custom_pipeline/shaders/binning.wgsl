@@ -206,8 +206,6 @@ fn count_triangles(
         return;
     }
 
-    let thread_id = lid.z;
-
     // Each workgroup handles one triangle.
     let base_idx = triangle_index * 3u;
 
@@ -240,7 +238,7 @@ fn count_triangles(
 
     for (var ty = 0u; ty < tile_range_y; ty++) {
         let tile_y = start_tile_y + ty;
-        for (var tx = thread_id; tx < tile_range_x; tx += Z_DISPATCHES) {
+        for (var tx = lid.z; tx < tile_range_x; tx += Z_DISPATCHES) {
             let tile_x = start_tile_x + tx;
             let tile_index = tile_x + tile_y * num_tiles_x;
             atomicAdd(&tile_buffer[tile_index].count, 1u);
