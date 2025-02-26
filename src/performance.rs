@@ -74,10 +74,8 @@ impl PerformanceCollector {
         self.start_time.elapsed() >= self.benchmark_duration
     }
 
-    // Changed to &mut self so we can update `has_printed`
     pub fn finalise(&mut self) -> PerformanceData {
         if self.has_printed {
-            // Already finalized—return calculated metrics without printing again.
             return self.calculate_metrics();
         }
         let data = self.calculate_metrics();
@@ -117,7 +115,6 @@ impl PerformanceCollector {
         let avg_memory_usage =
             self.memory_usages.iter().sum::<u64>() / self.memory_usages.len() as u64;
 
-        // The original 5% and 1% low FPS metrics remain unchanged.
         let percentile_5_index = (total_frames as f64 * 0.05).ceil() as usize;
         let percentile_1_index = (total_frames as f64 * 0.01).ceil() as usize;
 

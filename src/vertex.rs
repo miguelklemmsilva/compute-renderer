@@ -8,6 +8,7 @@ pub struct WgpuVertex {
     pub tex_coords: [f32; 2],
 }
 
+// struct requires padding to be a multiple of 16 bytes
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
 pub struct GpuVertex {
@@ -20,6 +21,7 @@ pub struct GpuVertex {
 }
 
 impl Default for GpuVertex {
+    // auto-fill padding data with 0.0
     fn default() -> Self {
         Self {
             position: [0.0; 3],

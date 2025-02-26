@@ -61,7 +61,6 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
 
     var normal = in.normal;
     
-    // Start with the same ambient light as in your compute shader.
     var final_color = vec3<f32>(0.3);
 
     let num_lights = arrayLength(&lights);
