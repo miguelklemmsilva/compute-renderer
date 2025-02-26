@@ -49,7 +49,7 @@ impl GpuBuffers {
         let num_tiles = (num_tiles_x * num_tiles_y) as u64;
 
         // Add safety margin for overlapping triangles and uneven distribution
-        let max_triangles_per_tile = 128u64;
+        let max_triangles_per_tile = 256u64;
 
         #[repr(C)]
         #[derive(Copy, Clone)]
