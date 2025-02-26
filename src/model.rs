@@ -15,12 +15,12 @@ pub struct Model {
 
 impl Model {
     pub async fn new(file_name: &str, backend_type: BackendType) -> Model {
-        // 1) Load OBJ text
+        // Load OBJ text
         let obj_text = get_asset_path(file_name);
         let directory = obj_text.parent().unwrap();
         let mut obj_reader = BufReader::new(File::open(obj_text.as_path()).unwrap());
 
-        // 2) tobj async: loads .obj + .mtl
+        // tobj async: loads .obj + .mtl
         let (m, _m_materials) = tobj::load_obj_buf(
             &mut obj_reader,
             &tobj::LoadOptions {
