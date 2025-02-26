@@ -19,7 +19,7 @@ pub enum RenderBackend {
     },
     CustomPipeline {
         pixels: Pixels<'static>,
-        gpu: custom_pipeline::gpu::GPU,
+        gpu: custom_pipeline::renderer::CustomRenderer,
     },
 }
 
@@ -90,7 +90,7 @@ impl ApplicationHandler for Window {
                             .unwrap(),
                     )
                 };
-                let gpu = pollster::block_on(custom_pipeline::gpu::GPU::new(
+                let gpu = pollster::block_on(custom_pipeline::renderer::CustomRenderer::new(
                     self.width,
                     self.height,
                     &self.scene,
@@ -309,7 +309,7 @@ impl Window {
                                 .unwrap(),
                         )
                     };
-                    let gpu = pollster::block_on(custom_pipeline::gpu::GPU::new(
+                    let gpu = pollster::block_on(custom_pipeline::renderer::CustomRenderer::new(
                         self.width,
                         self.height,
                         &self.scene,
