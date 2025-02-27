@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera::CameraUniform,
-    scene::{Light, Scene},
+    scene::Scene,
 };
 
 /// Data to hold GPU buffers and bind groups for each Model in the Scene.
@@ -10,8 +10,6 @@ pub struct ModelRenderData {
     pub vertex_buffer: wgpu::Buffer,
     pub index_buffer: wgpu::Buffer,
     pub index_count: u32,
-    // If you have per-model uniforms (e.g. materials), you might add them here.
-    // e.g. material_bind_group: wgpu::BindGroup,
 }
 
 /// The main renderer that uses wgpu's standard raster pipeline.
@@ -89,13 +87,7 @@ impl WgpuRenderer {
             format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: surface_caps
-                .present_modes
-                .iter()
-                // prefer Mailbox (FifoRelaxed), else fallback to Fifo
-                .copied()
-                .find(|m| *m == wgpu::PresentMode::Mailbox || *m == wgpu::PresentMode::Immediate)
-                .unwrap_or(wgpu::PresentMode::Fifo),
+            present_mode: wgpu::PresentMode::AutoVsync,
             alpha_mode: surface_caps.alpha_modes[0],
             view_formats: vec![],
             desired_maximum_frame_latency: 1,
@@ -173,14 +165,12 @@ impl WgpuRenderer {
         });
 
         // === 5) Create the render pipeline
-        // For demonstration, we embed simple WGSL or load from file.
         let shader_source = include_str!("shaders.wgsl");
         let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
             label: Some("Raster Shader"),
             source: wgpu::ShaderSource::Wgsl(shader_source.into()),
         });
 
-        // Example pipeline layout
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Render Pipeline Layout"),
             bind_group_layouts: &[&global_bind_group_layout],
@@ -235,10 +225,6 @@ impl WgpuRenderer {
         // === 6) Create model buffers for each model in the scene
         let mut model_data = Vec::new();
         for model in &scene.models {
-            // Typically you combine all submeshes, or handle them individually.
-            // For demonstration, let's assume each `model` is fully loaded geometry.
-            // If you have multiple meshes inside `model`, adapt as needed.
-
             // Create vertex buffer
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),

@@ -106,7 +106,7 @@ jobs:
       # UPLOAD ARTIFACTS
       # ------------------------------------------
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: compute-renderer-${{ matrix.os }}
           path: artifacts/*.zip
@@ -120,7 +120,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: ./release-binaries
 

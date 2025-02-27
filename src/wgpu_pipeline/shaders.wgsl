@@ -18,68 +18,47 @@ var<uniform> camera: CameraUniform;
 @group(0) @binding(1)
 var<storage, read> lights: array<Light>;
 
-// Vertex inputs
 struct VertexInput {
     @location(0) position: vec3<f32>,
     @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
 };
 
-// Vertex outputs
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) world_position: vec3<f32>,
-    @location(1) world_normal: vec3<f32>,
+    @location(0) position: vec3<f32>,
+    @location(1) normal: vec3<f32>,
     @location(2) uv: vec2<f32>,
 };
 
 @vertex
 fn vs_main(in: VertexInput) -> VertexOutput {
     var out: VertexOutput;
-    
-    // Transform position to world space and clip space
     let world_pos = vec4<f32>(in.position, 1.0);
     out.clip_position = camera.view_proj * world_pos;
-    out.world_position = world_pos.xyz;
-    
-    // Pass world normal
-    out.world_normal = normalize(in.normal);
+    out.position = world_pos.xyz;
+    out.normal = in.normal;
     out.uv = in.uv;
-
     return out;
 }
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    let normal = normalize(in.world_normal);
+    let normal = in.normal;
     
-    // Basic lighting calculation
-    var final_color = vec3<f32>(0.0);
-    let ambient = vec3<f32>(0.1);
-    
-    // Start with ambient light
-    final_color = ambient;
+    // Start with the same ambient light as in your compute shader.
+    var final_color = vec3<f32>(0.3);
 
     let num_lights = arrayLength(&lights);
-    
-    // Add contribution from each light
     for (var i = 0u; i < num_lights; i++) {
         let light = lights[i];
-        let light_dir = normalize(light.world_position - in.world_position);
-        
-        // Diffuse
+        let light_dir = normalize(light.world_position - in.position);
         let diff = max(dot(normal, light_dir), 0.0);
-        
-        // Specular
-        let view_dir = normalize(camera.view_position.xyz - in.world_position);
+        let view_dir = normalize(camera.view_position.xyz - in.position);
         let reflect_dir = reflect(-light_dir, normal);
         let spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
-
         final_color += (diff + spec * 0.5) * light.color * light.intensity;
     }
-    
-    // Ensure the color doesn't exceed 1.0
-    final_color = min(final_color, vec3<f32>(1.0));
 
     return vec4<f32>(final_color, 1.0);
 }

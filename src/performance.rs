@@ -18,11 +18,12 @@ pub struct PerformanceCollector {
     system: System,
     current_pid: sysinfo::Pid,
     start_time: Instant,
-    last_frame_time: Instant,
+    pub last_frame_time: Instant,
     benchmark_duration: Duration,
     scene_name: String,
     scene_index: usize,
     has_started: bool,
+    has_printed: bool,
 }
 
 impl PerformanceCollector {
@@ -39,21 +40,22 @@ impl PerformanceCollector {
             scene_name,
             scene_index,
             has_started: false,
+            has_printed: false,
         }
     }
 
     pub fn update(&mut self) -> bool {
         if !self.has_started {
-            // Reset timers on first frame
-            self.start_time = Instant::now();
-            self.last_frame_time = Instant::now();
+            self.start_time = std::time::Instant::now();
+            self.last_frame_time = std::time::Instant::now();
             self.has_started = true;
             return false;
         }
 
+        // Measure elapsed time
         let frame_time = self.last_frame_time.elapsed().as_secs_f64();
+
         self.frame_times.push(frame_time);
-        self.last_frame_time = Instant::now();
 
         self.system.refresh_cpu_all();
         self.system.refresh_memory();
@@ -68,13 +70,17 @@ impl PerformanceCollector {
             self.memory_usages.push(0);
         }
 
-        // Return true if benchmark is complete
+        // Return true if benchmark duration is reached
         self.start_time.elapsed() >= self.benchmark_duration
     }
 
-    pub fn finalise(&self) -> PerformanceData {
+    pub fn finalise(&mut self) -> PerformanceData {
+        if self.has_printed {
+            return self.calculate_metrics();
+        }
         let data = self.calculate_metrics();
         self.print_results(&data);
+        self.has_printed = true;
         data
     }
 
@@ -82,28 +88,32 @@ impl PerformanceCollector {
         let avg_frame_time = self.frame_times.iter().sum::<f64>() / self.frame_times.len() as f64;
         let avg_fps = 1.0 / avg_frame_time;
 
-        let min_frame_time = *self
-            .frame_times
-            .iter()
-            .min_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
-        let max_frame_time = *self
-            .frame_times
-            .iter()
-            .max_by(|a, b| a.partial_cmp(b).unwrap())
-            .unwrap();
+        // Create a sorted copy of the frame times
+        let mut sorted_frame_times = self.frame_times.clone();
+        sorted_frame_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
+        let total_frames = sorted_frame_times.len();
 
-        let min_fps = 1.0 / max_frame_time;
-        let max_fps = 1.0 / min_frame_time;
+        // compute max_fps as the reciprocal of the average of the fastest 5% of frame times.
+        let fastest_count = ((total_frames as f64) * 0.05).ceil() as usize;
+        let fastest_count = if fastest_count == 0 { 1 } else { fastest_count };
+        let fastest_avg =
+            sorted_frame_times.iter().take(fastest_count).sum::<f64>() / fastest_count as f64;
+        let max_fps = 1.0 / fastest_avg;
+
+        // Compute min_fps as the reciprocal of the average of the slowest 5% of frame times.
+        let slowest_count = ((total_frames as f64) * 0.05).ceil() as usize;
+        let slowest_count = if slowest_count == 0 { 1 } else { slowest_count };
+        let slowest_avg = sorted_frame_times
+            .iter()
+            .rev()
+            .take(slowest_count)
+            .sum::<f64>()
+            / slowest_count as f64;
+        let min_fps = 1.0 / slowest_avg;
 
         let avg_cpu_usage = self.cpu_usages.iter().sum::<f32>() / self.cpu_usages.len() as f32;
         let avg_memory_usage =
             self.memory_usages.iter().sum::<u64>() / self.memory_usages.len() as u64;
-
-        // Calculate percentile FPS
-        let mut sorted_frame_times = self.frame_times.clone();
-        sorted_frame_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
-        let total_frames = sorted_frame_times.len();
 
         let percentile_5_index = (total_frames as f64 * 0.05).ceil() as usize;
         let percentile_1_index = (total_frames as f64 * 0.01).ceil() as usize;

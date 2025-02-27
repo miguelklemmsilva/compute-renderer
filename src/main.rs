@@ -1,7 +1,4 @@
-use std::time::Duration;
-
-use camera::CameraMode;
-use performance::PerformanceCollector;
+use clap::Parser;
 use scene::{CameraConfig, SceneConfig};
 use window::{BackendType, Window};
 use winit::event_loop::{ControlFlow, EventLoop};
@@ -17,44 +14,82 @@ mod vertex;
 mod wgpu_pipeline;
 mod window;
 
+#[derive(Parser, Debug)]
+#[command(
+    name = "Compute Renderer",
+    version,
+    about = "Runs a 3D scene with configurable parameters.",
+    long_about = None
+)]
+struct Cli {
+    /// Window width in pixels
+    #[arg(long, default_value_t = 1024, help = "Window width in pixels")]
+    width: u32,
+
+    /// Window height in pixels
+    #[arg(long, default_value_t = 768, help = "Window height in pixels")]
+    height: u32,
+
+    /// Name of the scene
+    #[arg(long, default_value = "test_scene", help = "Name of the scene")]
+    scene_name: String,
+
+    /// Path to the 3D model (OBJ)
+    #[arg(long, default_value = "suzanne.obj", help = "Path to the .obj file")]
+    model_path: String,
+
+    /// Camera mode: 'first-person' or 'orbit'
+    #[arg(long, default_value = "first-person", help = "Camera mode")]
+    camera_mode: String,
+
+    /// Backend type: 'wgpu' or 'custom'
+    #[arg(long, default_value = "custom", help = "Render backend type")]
+    backend_type: String,
+
+    /// Benchmark duration in seconds (if needed for performance testing)
+    #[arg(long, default_value_t = u64::MAX, help = "Benchmark duration in seconds")]
+    benchmark_duration_secs: u64,
+}
+
 fn main() {
-    let height = 900;
-    let width = 1600;
+    // Parse command line arguments
+    let cli = Cli::parse();
 
-    // Update light position to better illuminate the model
-    let lights = vec![
-        // Key light
-        ([5.0, 5.0, 5.0], [1.0, 0.9, 0.8], 2.0),
-        // Fill light
-        ([-5.0, 3.0, 0.0], [0.3, 0.4, 0.5], 1.0),
-    ];
+    let width = cli.width as usize;
+    let height = cli.height as usize;
 
-    // List of scenes to benchmark
+    // Determine the camera configuration based on user input
+    let camera_config = match cli.camera_mode.as_str() {
+        "first-person" => CameraConfig::new_first_person(),
+        "orbit" => CameraConfig::default(),
+        other => {
+            eprintln!(
+                "Invalid camera mode '{}'. Use 'first-person' or 'orbit'.",
+                other
+            );
+            std::process::exit(1);
+        }
+    };
+
+    // Determine the backend type (WGPU or Custom)
+    let backend_type = match cli.backend_type.as_str() {
+        "wgpu" => BackendType::WgpuPipeline,
+        "custom" => BackendType::CustomPipeline,
+        other => {
+            eprintln!("Invalid backend type '{}'. Use 'wgpu' or 'custom'.", other);
+            std::process::exit(1);
+        }
+    };
+
+    // Construct a single SceneConfig based on CLI parameters
     let scenes = vec![SceneConfig {
-        name: "test".to_string(),
-        model_path: String::from("suzanne.obj"),
-        texture_path: None,
-        lights: lights.clone(),
-        effects: None,
-        camera_config: CameraConfig {
-            mode: CameraMode::FirstPerson,
-            ..Default::default()
-        },
-        benchmark_duration_secs: 10,
-        backend_type: BackendType::CustomPipeline,
-    },
-    SceneConfig {
-        name: "test".to_string(),
-        model_path: String::from("erato/erato.obj"),
-        texture_path: None,
-        lights: lights.clone(),
-        effects: None,
-        camera_config: CameraConfig {
-            mode: CameraMode::FirstPerson,
-            ..Default::default()
-        },
-        benchmark_duration_secs: u64::MAX,
-        backend_type: BackendType::WgpuPipeline,
+        name: cli.scene_name,
+        model_path: cli.model_path,
+        camera_config,
+        backend_type,
+        benchmark_duration_secs: cli.benchmark_duration_secs,
+        // effect: Some(Effect::voxelize(0.5, 1.0)),
+        ..Default::default()
     }];
 
     // Create a single event loop for all scenes
@@ -65,23 +100,17 @@ fn main() {
     let current_scene = 0;
     let scene_config = &scenes[current_scene];
 
-    let collector = PerformanceCollector::new(
-        scene_config.name.clone(),
-        current_scene,
-        Duration::from_secs(scene_config.benchmark_duration_secs),
-    );
-
     let scene = pollster::block_on(scene::Scene::from_config(scene_config, width, height));
 
     // Create window with the same backend type as the scene
-    let mut window =
-        match Window::new_with_window(width, height, scene, collector, scene_config.backend_type) {
-            Ok(window) => window,
-            Err(e) => {
-                eprintln!("Failed to create scene {}: {}", scene_config.name, e);
-                return;
-            }
-        };
+    let mut window = match Window::new_with_window(width, height, scene, scene_config.backend_type)
+    {
+        Ok(window) => window,
+        Err(e) => {
+            eprintln!("Failed to create scene {}: {}", scene_config.name, e);
+            return;
+        }
+    };
 
     // Store scenes in window for cycling
     window.set_scene_configs(scenes);

@@ -1,5 +1,7 @@
 use bytemuck::{Pod, Zeroable};
 
+use super::raster_pass::TILE_SIZE;
+
 pub(crate) const WORKGROUP_SIZE: u32 = 256;
 pub(crate) const fn dispatch_size(len: u32) -> u32 {
     let subgroup_size = WORKGROUP_SIZE;
@@ -11,6 +13,8 @@ pub(crate) const fn dispatch_size(len: u32) -> u32 {
 pub(crate) struct ScreenUniform {
     screen_width: f32,
     screen_height: f32,
+    num_tiles_x: u32,
+    num_tiles_y: u32,
 }
 
 impl ScreenUniform {
@@ -18,6 +22,8 @@ impl ScreenUniform {
         Self {
             screen_width,
             screen_height,
+            num_tiles_x: (screen_width as u32 + TILE_SIZE - 1) / TILE_SIZE,
+            num_tiles_y: (screen_height as u32 + TILE_SIZE - 1) / TILE_SIZE,
         }
     }
 }
@@ -25,16 +31,6 @@ impl ScreenUniform {
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable)]
 pub struct Index(pub u32);
-
-#[repr(C)]
-#[derive(Copy, Clone, Pod, Zeroable, Debug)]
-pub struct Vertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-    pub tex_coords: [f32; 2],
-    pub material_id: u32,
-    pub w_clip: f32,
-}
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
@@ -91,7 +87,24 @@ impl Default for TextureInfo {
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
 pub struct Fragment {
-    pub world_pos: [f32; 3],
-    pub normal: [f32; 3],
     pub uv: [f32; 2],
+    pub normal: [f32; 3],
+    pub world_pos: [f32; 3],
+    pub padding: [f32; 4],
+}
+
+pub fn create_buffer_bind_group_layout_entry(
+    index: u32,
+    read_only: bool,
+) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding: index,
+        visibility: wgpu::ShaderStages::COMPUTE,
+        ty: wgpu::BindingType::Buffer {
+            ty: wgpu::BufferBindingType::Storage { read_only },
+            has_dynamic_offset: false,
+            min_binding_size: None,
+        },
+        count: None,
+    }
 }

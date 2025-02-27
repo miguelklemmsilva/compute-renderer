@@ -1,9 +1,10 @@
-use crate::custom_pipeline::util::{MaterialInfo, TextureInfo};
-use crate::model::{Model, Texture};
-use crate::util::get_asset_path;
+use crate::camera::{Camera, CameraMode};
+use crate::effect::Effect;
+use crate::model::Model;
 use crate::window::BackendType;
-use crate::{camera, effect::Effect, custom_pipeline};
+use crate::{camera, custom_pipeline};
 use std::time::Duration;
+use std::u64;
 
 #[repr(C)]
 #[derive(Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
@@ -34,8 +35,11 @@ pub struct Scene {
     cameras: Vec<camera::Camera>,
     active_camera: Option<usize>,
     pub lights: Vec<Light>,
-    pub effects: Vec<Effect>,
+    pub effect: Option<Effect>,
     pub time: f32,
+    pub total_tris: u32,
+    pub gx_tris: u32,
+    pub gy_tris: u32,
 }
 
 impl Scene {
@@ -45,8 +49,11 @@ impl Scene {
             cameras: vec![],
             active_camera: None,
             lights: vec![],
-            effects: vec![],
+            effect: None,
             time: 0.0,
+            total_tris: 0,
+            gx_tris: 0,
+            gy_tris: 0,
         }
     }
 
@@ -58,36 +65,27 @@ impl Scene {
             .add_obj_with_mtl(&scene_config.model_path, scene_config.backend_type)
             .await;
 
-        // if model has texture, load it
-        if let Some(texture_path) = &scene_config.texture_path {
-            println!("Loading texture: {}", texture_path);
-            scene.add_texture_to_model(0, texture_path);
-        }
-
         // Add lights from config if not a stress test
         for (position, color, intensity) in &scene_config.lights {
             scene.add_light(*position, *color, *intensity);
         }
 
-        // Add effects if specified
-        if let Some(effects) = &scene_config.effects {
-            for effect in effects {
-                scene.add_effect(effect.clone());
-            }
+        if let Some(effect) = &scene_config.effect {
+            scene.effect = Some(effect.clone());
         }
 
         // Add camera and set active
         let camera = match scene_config.camera_config.mode {
-            crate::camera::CameraMode::FirstPerson => crate::camera::Camera::new_first_person(
+            CameraMode::FirstPerson => Camera::new_first_person(
                 glam::Vec3::from(scene_config.camera_config.position),
-                (width as f32) / (height as f32),
+                width as f32 / height as f32,
             ),
-            crate::camera::CameraMode::Orbit => crate::camera::Camera::new(
+            CameraMode::Orbit => Camera::new(
                 scene_config.camera_config.distance,
                 scene_config.camera_config.theta,
                 scene_config.camera_config.phi,
                 glam::Vec3::from(scene_config.camera_config.target),
-                (width as f32) / (height as f32),
+                width as f32 / height as f32,
             ),
         };
         scene.add_camera(camera);
@@ -101,7 +99,14 @@ impl Scene {
     pub async fn add_obj_with_mtl(&mut self, obj_path: &str, backend_type: BackendType) -> usize {
         // (A) Load geometry + textures from the .obj + .mtl
         let model = Model::new(obj_path, backend_type).await;
+        self.total_tris += (model.processed_indices.len() / 3) as u32;
+
+        // do these calculations here so that it does not need to be recalculated every frame
+        self.gx_tris = self.total_tris.isqrt() as u32;
+        self.gy_tris = (self.total_tris as f32 / self.gx_tris as f32).ceil() as u32;
+
         self.models.push(model);
+
         self.models.len() - 1
     }
 
@@ -122,14 +127,11 @@ impl Scene {
         self.active_camera.and_then(|index| self.cameras.get(index))
     }
 
-    pub fn update(&mut self, gpu: &mut custom_pipeline::gpu::GPU, delta_time: Duration) {
+    pub fn update(&mut self, gpu: &mut custom_pipeline::renderer::CustomRenderer, delta_time: Duration) {
         self.time += delta_time.as_secs_f32();
 
-        // Update effects only if there are any
-        if !self.effects.is_empty() {
-            for effect in &mut self.effects {
-                effect.update(delta_time);
-            }
+        if let Some(effect) = &mut self.effect {
+            effect.update(delta_time);
         }
 
         // Update camera and get view matrix
@@ -160,7 +162,7 @@ impl Scene {
         );
 
         // Update effects only if there are any
-        if let Some(effect) = self.effects.first() {
+        if let Some(effect) = &self.effect {
             let mut effect_uniform = crate::effect::EffectUniform::default();
             effect_uniform.update(effect, self.time);
             gpu.queue.write_buffer(
@@ -191,68 +193,40 @@ impl Scene {
         self.lights.push(light);
         self.lights.len() - 1
     }
-
-    pub fn get_lights(&self) -> &[Light] {
-        &self.lights
-    }
-
-    pub fn add_effect(&mut self, effect: Effect) -> usize {
-        self.effects.push(effect);
-        self.effects.len() - 1
-    }
-
-    /// Adds a texture to a model at the specified index
-    pub fn add_texture_to_model(&mut self, model_index: usize, texture_path: &str) -> usize {
-        if let Some(model) = self.models.get_mut(model_index) {
-            // Create a new material info for the texture
-            let texture_offset = model.processed_textures.len() as u32;
-
-            // Load texture
-            let texture_data = Texture::load(get_asset_path(texture_path).to_str().unwrap());
-
-            // Add texture data
-            model
-                .processed_textures
-                .extend_from_slice(&texture_data.data);
-
-            // Create and add material info
-            let texture_info = TextureInfo {
-                offset: texture_offset,
-                width: texture_data.width,
-                height: texture_data.height,
-                _padding: 0,
-            };
-
-            let material_info = MaterialInfo {
-                texture_info,
-                ..Default::default()
-            };
-
-            model.processed_materials.push(material_info);
-
-            // Return the index of the new material
-            model.processed_materials.len() - 1
-        } else {
-            panic!("Model index out of bounds");
-        }
-    }
 }
 
 pub struct SceneConfig {
     pub name: String,
     pub model_path: String,
-    pub texture_path: Option<String>,
     pub lights: Vec<(
         /* position */ [f32; 3],
         /* color */ [f32; 3],
         /* intensity */ f32,
     )>,
-    pub effects: Option<Vec<Effect>>,
+    pub effect: Option<Effect>,
     // Camera configuration
     pub camera_config: CameraConfig,
     // Benchmark duration in seconds
     pub benchmark_duration_secs: u64,
     pub backend_type: BackendType,
+}
+
+impl Default for SceneConfig {
+    fn default() -> Self {
+        Self {
+            name: "test scene".to_string(),
+            model_path: "suzanne.obj".to_string(),
+            lights: vec![
+                ([0.0, 0.0, 0.0], [1.0, 0.9, 0.8], 1.0),
+                // Fill light
+                ([-5.0, 3.0, 0.0], [0.3, 0.4, 0.5], 0.5),
+            ],
+            effect: None,
+            camera_config: CameraConfig::default(),
+            benchmark_duration_secs: u64::MAX,
+            backend_type: BackendType::CustomPipeline,
+        }
+    }
 }
 
 pub struct CameraConfig {
@@ -264,30 +238,27 @@ pub struct CameraConfig {
     pub position: [f32; 3],
 }
 
+impl CameraConfig {
+    #[allow(dead_code)]
+    pub fn new_first_person() -> Self {
+        Self {
+            distance: 0.0,
+            mode: crate::camera::CameraMode::FirstPerson,
+            position: [0.0, 0.0, 0.0],
+            ..Default::default()
+        }
+    }
+}
+
 impl Default for CameraConfig {
     fn default() -> Self {
         Self {
-            distance: 2.0,
+            distance: 4.0,
             theta: 0.0,
             phi: 0.0,
             target: [0.0, 0.0, 0.0],
             mode: crate::camera::CameraMode::Orbit,
             position: [0.0, 2.0, 5.0],
-        }
-    }
-}
-
-impl Default for SceneConfig {
-    fn default() -> Self {
-        Self {
-            name: String::new(),
-            model_path: String::new(),
-            texture_path: None,
-            lights: Vec::new(),
-            effects: None,
-            camera_config: CameraConfig::default(),
-            benchmark_duration_secs: 10,
-            backend_type: BackendType::WgpuPipeline,
         }
     }
 }

@@ -1,12 +1,11 @@
 mod binning_pass;
-mod clear_pass;
-pub mod gpu;
+mod fragment_pass;
+pub mod renderer;
 mod gpu_buffers;
 mod raster_pass;
 pub mod util;
 mod render_pass;
 
-use clear_pass::ClearPass;
+use fragment_pass::FragmentPass;
 use gpu_buffers::GpuBuffers;
 use raster_pass::RasterPass;
-use render_pass::RenderPass;

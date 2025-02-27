@@ -1,5 +1,4 @@
-use super::GpuBuffers;
-use crate::scene;
+use super::{util::create_buffer_bind_group_layout_entry, GpuBuffers};
 
 pub const TILE_SIZE: u32 = 8;
 
@@ -15,66 +14,12 @@ impl RasterPass {
         let group0_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Raster Pass: Group0 Layout"),
             entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 2,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: false },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 3,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 4,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 5,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Storage { read_only: true },
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
+                create_buffer_bind_group_layout_entry(0, true),
+                create_buffer_bind_group_layout_entry(1, false),
+                create_buffer_bind_group_layout_entry(2, false),
+                create_buffer_bind_group_layout_entry(3, true),
+                create_buffer_bind_group_layout_entry(4, true),
+                create_buffer_bind_group_layout_entry(5, true)
             ],
         });
 
@@ -136,19 +81,19 @@ impl RasterPass {
                 },
                 wgpu::BindGroupEntry {
                     binding: 2,
-                    resource: buffers.depth_buffer.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 3,
                     resource: buffers.tile_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 4,
+                    binding: 3,
                     resource: buffers.triangle_list_buffer.as_entire_binding(),
                 },
                 wgpu::BindGroupEntry {
-                    binding: 5,
+                    binding: 4,
                     resource: buffers.index_buffer.as_entire_binding(),
+                },
+                wgpu::BindGroupEntry {
+                    binding: 5,
+                    resource: buffers.triangle_meta_buffer.as_entire_binding(),
                 },
             ],
         });
@@ -179,13 +124,7 @@ impl RasterPass {
         }
     }
 
-    pub fn execute(
-        &self,
-        encoder: &mut wgpu::CommandEncoder,
-        width: u32,
-        height: u32,
-        _scene: &scene::Scene,
-    ) {
+    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, width: u32, height: u32) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Raster Pass"),
             timestamp_writes: None,
