@@ -13,6 +13,9 @@ This project implements a pipeline using compute shaders to evaluate performance
 
 The project aims to demonstrate scenarios where a custom shader-based approach may be advantageous over traditional hardware-accelerated rendering pipelines.
 
+![image](https://github.com/user-attachments/assets/0a254b94-a45a-41be-9125-06b54b773884)
+
+
 ## Features
 
 - Custom software rendering pipeline
