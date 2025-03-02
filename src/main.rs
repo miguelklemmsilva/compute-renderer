@@ -22,6 +22,9 @@ mod window;
     long_about = None
 )]
 struct Cli {
+    #[arg(long, default_value = "false", help = "Run benchmark scenes")]
+    benchmarks: bool,
+
     /// Window width in pixels
     #[arg(long, default_value_t = 1024, help = "Window width in pixels")]
     width: u32,
@@ -29,10 +32,6 @@ struct Cli {
     /// Window height in pixels
     #[arg(long, default_value_t = 768, help = "Window height in pixels")]
     height: u32,
-
-    /// Name of the scene
-    #[arg(long, default_value = "test_scene", help = "Name of the scene")]
-    scene_name: String,
 
     /// Path to the 3D model (OBJ)
     #[arg(long, default_value = "suzanne.obj", help = "Path to the .obj file")]
@@ -58,39 +57,83 @@ fn main() {
     let width = cli.width as usize;
     let height = cli.height as usize;
 
-    // Determine the camera configuration based on user input
-    let camera_config = match cli.camera_mode.as_str() {
-        "first-person" => CameraConfig::new_first_person(),
-        "orbit" => CameraConfig::default(),
-        other => {
-            eprintln!(
-                "Invalid camera mode '{}'. Use 'first-person' or 'orbit'.",
-                other
-            );
-            std::process::exit(1);
-        }
-    };
-
-    // Determine the backend type (WGPU or Custom)
-    let backend_type = match cli.backend_type.as_str() {
-        "wgpu" => BackendType::WgpuPipeline,
-        "custom" => BackendType::CustomPipeline,
-        other => {
-            eprintln!("Invalid backend type '{}'. Use 'wgpu' or 'custom'.", other);
-            std::process::exit(1);
-        }
-    };
-
     // Construct a single SceneConfig based on CLI parameters
-    let scenes = vec![SceneConfig {
-        name: cli.scene_name,
-        model_path: cli.model_path,
-        camera_config,
-        backend_type,
-        benchmark_duration_secs: cli.benchmark_duration_secs,
-        // effect: Some(Effect::mirage(3.0, 0.2, 1.0)),
-        ..Default::default()
-    }];
+
+    let scenes = if cli.benchmarks {
+        vec![
+            SceneConfig {
+                model_path: "suzanne.obj".to_string(),
+                camera_config: CameraConfig {
+                    distance: 4.0,
+                    position: [0.0, 0.0, 3.0],
+                    mode: camera::CameraMode::FirstPerson,
+                    ..Default::default()
+                },
+                benchmark_duration_secs: 5,
+                ..Default::default()
+            },
+            SceneConfig {
+                model_path: "suzanne.obj".to_string(),
+                camera_config: CameraConfig {
+                    distance: 4.0,
+                    position: [0.0, 0.0, 3.0],
+                    mode: camera::CameraMode::FirstPerson,
+                    ..Default::default()
+                },
+                benchmark_duration_secs: 5,
+                backend_type: BackendType::WgpuPipeline,
+                ..Default::default()
+            },
+            SceneConfig {
+                model_path: "dragon.obj".to_string(),
+                benchmark_duration_secs: 5,
+                ..Default::default()
+            },
+            SceneConfig {
+                model_path: "dragon.obj".to_string(),
+                camera_config: CameraConfig {
+                    distance: 4.0,
+                    position: [0.0, 0.0, 3.0],
+                    mode: camera::CameraMode::FirstPerson,
+                    ..Default::default()
+                },
+                benchmark_duration_secs: 5,
+                ..Default::default()
+            },
+        ]
+    } else {
+        // Determine the camera configuration based on user input
+        let camera_config = match cli.camera_mode.as_str() {
+            "first-person" => CameraConfig::new_first_person(),
+            "orbit" => CameraConfig::default(),
+            other => {
+                eprintln!(
+                    "Invalid camera mode '{}'. Use 'first-person' or 'orbit'.",
+                    other
+                );
+                std::process::exit(1);
+            }
+        };
+
+        // Determine the backend type (WGPU or Custom)
+        let backend_type = match cli.backend_type.as_str() {
+            "wgpu" => BackendType::WgpuPipeline,
+            "custom" => BackendType::CustomPipeline,
+            other => {
+                eprintln!("Invalid backend type '{}'. Use 'wgpu' or 'custom'.", other);
+                std::process::exit(1);
+            }
+        };
+
+        vec![SceneConfig {
+            model_path: cli.model_path,
+            camera_config,
+            backend_type,
+            benchmark_duration_secs: cli.benchmark_duration_secs,
+            // effect: Some(Effect::mirage(3.0, 0.2, 1.0)),
+            ..Default::default()
+        }]
+    };
 
     // Create a single event loop for all scenes
     let event_loop = EventLoop::new().expect("Failed to create event loop");
@@ -107,7 +150,7 @@ fn main() {
     {
         Ok(window) => window,
         Err(e) => {
-            eprintln!("Failed to create scene {}: {}", scene_config.name, e);
+            eprintln!("Failed to create scene {}: {}", scene_config.scene_name(), e);
             return;
         }
     };
