@@ -58,18 +58,16 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     let in = fragment_buffer[idx];
-
-    var normal = in.normal;
     
-    var final_color = vec3<f32>(0.3);
+    var final_color = vec3<f32>(0.1);
 
     let num_lights = arrayLength(&lights);
     for (var i = 0u; i < num_lights; i++) {
         let light = lights[i];
         let light_dir = normalize(light.world_position - in.position);
-        let diff = max(dot(normal, light_dir), 0.0);
+        let diff = max(dot(in.normal, light_dir), 0.0);
         let view_dir = normalize(camera.view_pos.xyz - in.position);
-        let reflect_dir = reflect(-light_dir, normal);
+        let reflect_dir = reflect(-light_dir, in.normal);
         let spec = pow(max(dot(view_dir, reflect_dir), 0.0), 32.0);
         final_color += (diff + spec * 0.5) * light.color * light.intensity;
     }

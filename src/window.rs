@@ -62,6 +62,10 @@ impl ApplicationHandler for Window {
 
         let window = self.winit_window.as_ref().unwrap();
 
+        let window_name = &self.scene_configs[self.current_scene_index].name;
+
+        window.set_title(format!("Testing scene {window_name}").as_str());
+
         match self.backend_type {
             BackendType::WgpuPipeline => {
                 // wgpu uses its own surface struct
@@ -86,6 +90,7 @@ impl ApplicationHandler for Window {
                 // custom renderer uses pixels
                 let surface_texture =
                     SurfaceTexture::new(self.width as u32, self.height as u32, window);
+
                 let pixels = unsafe {
                     // SAFETY: We know the window will outlive the pixels
                     std::mem::transmute::<Pixels<'_>, Pixels<'static>>(

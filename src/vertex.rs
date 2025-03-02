@@ -8,6 +8,37 @@ pub struct WgpuVertex {
     pub tex_coords: [f32; 2],
 }
 
+impl WgpuVertex {
+    /// Returns the wgpu layout describing how the `Vertex` is laid out in memory
+    pub fn layout<'a>() -> wgpu::VertexBufferLayout<'a> {
+        wgpu::VertexBufferLayout {
+            array_stride: std::mem::size_of::<Self>() as wgpu::BufferAddress,
+            step_mode: wgpu::VertexStepMode::Vertex,
+            attributes: &[
+                // position
+                wgpu::VertexAttribute {
+                    offset: 0,
+                    shader_location: 0,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // normal
+                wgpu::VertexAttribute {
+                    offset: 12 as wgpu::BufferAddress,
+                    shader_location: 1,
+                    format: wgpu::VertexFormat::Float32x3,
+                },
+                // uv
+                wgpu::VertexAttribute {
+                    offset: 24 as wgpu::BufferAddress,
+                    shader_location: 2,
+                    format: wgpu::VertexFormat::Float32x2,
+                },
+            ],
+        }
+    }
+}
+
+
 // struct requires padding to be a multiple of 16 bytes
 #[repr(C)]
 #[derive(Copy, Clone, Pod, Zeroable, Debug)]
