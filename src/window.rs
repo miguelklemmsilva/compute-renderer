@@ -361,10 +361,9 @@ impl Window {
         if let Some(backend) = &mut self.backend {
             match backend {
                 RenderBackend::WgpuPipeline { surface, renderer } => {
-                    match renderer.render(surface, &self.scene) {
+                    match pollster::block_on(renderer.render(surface, &self.scene)) {
                         Ok(_) => {}
                         Err(wgpu::SurfaceError::Lost) => {
-                            println!("Render error:");
                             if let Some(window) = &self.winit_window {
                                 let size = window.inner_size();
                                 let mut config = renderer.config.clone();
@@ -377,11 +376,16 @@ impl Window {
                         Err(e) => eprintln!("Render error: {:?}", e),
                     }
                 }
-                RenderBackend::CustomPipeline { pixels, gpu } => {
+                RenderBackend::CustomPipeline {
+                    pixels,
+                    gpu: custom_renderer,
+                } => {
                     // update scene info
-                    self.scene.update(gpu, delta_time);
+                    self.scene.update_buffers(custom_renderer, delta_time);
                     // run the pipeline here
-                    let buffer = gpu.render(self.width, self.height, &self.scene).await;
+                    let buffer = custom_renderer
+                        .render(self.width, self.height, &self.scene)
+                        .await;
 
                     let frame = pixels.frame_mut();
                     let buffer_size = buffer.len() * 4;

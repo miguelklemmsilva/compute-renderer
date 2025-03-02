@@ -275,7 +275,7 @@ impl WgpuRenderer {
     ///
     /// # Returns
     /// * `Result<(), wgpu::SurfaceError>` - Ok if rendering succeeded, Err if there was a surface error
-    pub fn render(
+    pub async fn render(
         &mut self,
         surface: &wgpu::Surface<'_>,
         scene: &Scene,
@@ -362,7 +362,7 @@ impl WgpuRenderer {
         frame.present();
 
         // force gpu to wait for rendering to complete to prevent extremely high (fake) frames
-        pollster::block_on(wait_for_gpu(&self.queue, &self.device));
+        wait_for_gpu(&self.queue, &self.device).await;
 
         Ok(())
     }

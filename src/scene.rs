@@ -129,7 +129,11 @@ impl Scene {
         self.active_camera.and_then(|index| self.cameras.get(index))
     }
 
-    pub fn update(&mut self, renderer: &mut custom_pipeline::renderer::CustomRenderer, delta_time: Duration) {
+    pub fn update_buffers(
+        &mut self,
+        renderer: &mut custom_pipeline::renderer::CustomRenderer,
+        delta_time: Duration,
+    ) {
         self.time += delta_time.as_secs_f32();
 
         if let Some(effect) = &mut self.effect {
