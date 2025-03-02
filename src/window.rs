@@ -1,3 +1,4 @@
+use core::fmt;
 use pixels::{Pixels, SurfaceTexture};
 use std::{collections::HashSet, time::Duration};
 use winit::application::ApplicationHandler;
@@ -44,7 +45,7 @@ impl ApplicationHandler for Window {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         // create performance collector for this scene
         self.collector = Some(PerformanceCollector::new(
-            self.scene_configs[self.current_scene_index].name.clone(),
+            self.scene_configs[self.current_scene_index].scene_name(),
             self.current_scene_index,
             Duration::from_secs(
                 self.scene_configs[self.current_scene_index].benchmark_duration_secs,
@@ -62,9 +63,9 @@ impl ApplicationHandler for Window {
 
         let window = self.winit_window.as_ref().unwrap();
 
-        let window_name = &self.scene_configs[self.current_scene_index].name;
+        let window_name = &self.scene_configs[self.current_scene_index].scene_name();
 
-        window.set_title(format!("Testing scene {window_name}").as_str());
+        window.set_title(window_name);
 
         match self.backend_type {
             BackendType::WgpuPipeline => {
@@ -92,11 +93,15 @@ impl ApplicationHandler for Window {
                     SurfaceTexture::new(self.width as u32, self.height as u32, window);
 
                 let pixels = unsafe {
-                    // SAFETY: We know the window will outlive the pixels
-                    std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
+                    let mut pixels =
                         Pixels::new(self.width as u32, self.height as u32, surface_texture)
-                            .unwrap(),
-                    )
+                            .unwrap();
+
+                    pixels.set_present_mode(pixels::wgpu::PresentMode::Immediate);
+                    pixels.enable_vsync(false);
+
+                    // SAFETY: We know the window will outlive the pixels
+                    std::mem::transmute::<Pixels<'_>, Pixels<'static>>(pixels)
                 };
                 let gpu = pollster::block_on(custom_pipeline::renderer::CustomRenderer::new(
                     self.width,
@@ -125,7 +130,7 @@ impl ApplicationHandler for Window {
                                 KeyCode::Escape => {
                                     self.collector.as_mut().unwrap().finalise();
                                     pollster::block_on(self.load_next_scene(event_loop));
-                                },
+                                }
                                 _ => {}
                             }
                         }
@@ -235,6 +240,15 @@ pub enum BackendType {
     CustomPipeline,
 }
 
+impl fmt::Display for BackendType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            BackendType::WgpuPipeline => write!(f, "WGPU"),
+            BackendType::CustomPipeline => write!(f, "Custom"),
+        }
+    }
+}
+
 impl Window {
     /// Create the Window object
     pub fn new_with_window(
@@ -277,7 +291,7 @@ impl Window {
 
         // Create new performance collector
         self.collector = Some(PerformanceCollector::new(
-            scene_config.name.clone(),
+            scene_config.scene_name(),
             self.current_scene_index,
             Duration::from_secs(scene_config.benchmark_duration_secs),
         ));
@@ -295,6 +309,8 @@ impl Window {
 
         // Recreate the backend with the new scene
         if let Some(window) = &self.winit_window {
+            window.set_title(&scene_config.scene_name());
+
             match self.backend_type {
                 BackendType::WgpuPipeline => {
                     let instance = wgpu::Instance::default();
@@ -327,7 +343,6 @@ impl Window {
                         self.height,
                         &self.scene,
                     ));
-
                     self.backend = Some(RenderBackend::CustomPipeline { pixels, gpu });
                 }
             }
@@ -340,10 +355,7 @@ impl Window {
     pub async fn update(&mut self, delta_time: Duration) -> bool {
         if let Some(camera) = self.scene.get_active_camera_mut() {
             camera.update_over_time(delta_time.as_secs_f32());
-            camera.process_keyboard(
-                &self.keys_down,
-                delta_time.as_secs_f32(),
-            );
+            camera.process_keyboard(&self.keys_down, delta_time.as_secs_f32());
         }
 
         if let Some(backend) = &mut self.backend {

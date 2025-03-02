@@ -1,9 +1,6 @@
 use wgpu::util::DeviceExt;
 
-use crate::{
-    camera::CameraUniform,
-    scene::Scene, vertex::WgpuVertex,
-};
+use crate::{camera::CameraUniform, scene::Scene, vertex::WgpuVertex};
 
 /// Data to hold GPU buffers and bind groups for each Model in the Scene.
 pub struct ModelRenderData {
@@ -75,20 +72,15 @@ impl WgpuRenderer {
             .expect("Failed to create device");
 
         // === 2) Create surface configuration
-        let surface_caps = surface.get_capabilities(&adapter);
-        let format = surface_caps
-            .formats
-            .first()
-            .cloned()
-            .unwrap_or(wgpu::TextureFormat::Bgra8UnormSrgb);
+        let format = wgpu::TextureFormat::Bgra8UnormSrgb;
 
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: wgpu::PresentMode::AutoVsync,
-            alpha_mode: surface_caps.alpha_modes[0],
+            present_mode: wgpu::PresentMode::default(),
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],
             desired_maximum_frame_latency: 1,
         };

@@ -198,7 +198,6 @@ impl Scene {
 }
 
 pub struct SceneConfig {
-    pub name: String,
     pub model_path: String,
     pub lights: Vec<(
         /* position */ [f32; 3],
@@ -213,10 +212,15 @@ pub struct SceneConfig {
     pub backend_type: BackendType,
 }
 
+impl SceneConfig {
+    pub fn scene_name(&self) -> String {
+        format!("Scene {} - {} Pipeline", self.model_path, self.backend_type)
+    }
+}
+
 impl Default for SceneConfig {
     fn default() -> Self {
         Self {
-            name: "test scene".to_string(),
             model_path: "suzanne.obj".to_string(),
             lights: vec![
                 ([0.0, 0.0, 0.0], [1.0, 0.9, 0.8], 1.0),
