@@ -2,7 +2,7 @@ use wgpu::util::DeviceExt;
 
 use crate::{
     camera::CameraUniform,
-    scene::Scene,
+    scene::Scene, vertex::WgpuVertex,
 };
 
 /// Data to hold GPU buffers and bind groups for each Model in the Scene.
@@ -184,7 +184,7 @@ impl WgpuRenderer {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[Vertex::layout()],
+                buffers: &[WgpuVertex::layout()],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -393,42 +393,4 @@ fn create_depth_texture(
         usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
         view_formats: &[],
     })
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Zeroable, bytemuck::Pod)]
-struct Vertex {
-    pub position: [f32; 3],
-    pub normal: [f32; 3],
-    pub tex_coords: [f32; 2],
-}
-
-impl Vertex {
-    /// Returns the wgpu layout describing how the `Vertex` is laid out in memory
-    pub fn layout<'a>() -> wgpu::VertexBufferLayout<'a> {
-        wgpu::VertexBufferLayout {
-            array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
-            step_mode: wgpu::VertexStepMode::Vertex,
-            attributes: &[
-                // position
-                wgpu::VertexAttribute {
-                    offset: 0,
-                    shader_location: 0,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                // normal
-                wgpu::VertexAttribute {
-                    offset: 12 as wgpu::BufferAddress,
-                    shader_location: 1,
-                    format: wgpu::VertexFormat::Float32x3,
-                },
-                // uv
-                wgpu::VertexAttribute {
-                    offset: 24 as wgpu::BufferAddress,
-                    shader_location: 2,
-                    format: wgpu::VertexFormat::Float32x2,
-                },
-            ],
-        }
-    }
 }
