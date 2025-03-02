@@ -58,7 +58,7 @@ cargo run --release
 - Hold left click to pan the camera
 - SPACE/C to ascend/descend
 - Shift to temporarily increase velocity
-- [/] to permanently increase/decrease velocity
+- [ and ] to permanently increase/decrease velocity
 
 ## Usage
 
