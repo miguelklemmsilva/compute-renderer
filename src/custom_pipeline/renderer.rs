@@ -52,12 +52,7 @@ impl CustomRenderer {
         }
     }
 
-    pub async fn execute_pipeline(
-        &mut self,
-        width: usize,
-        height: usize,
-        scene: &scene::Scene,
-    ) -> Vec<u32> {
+    pub async fn render(&mut self, width: usize, height: usize, scene: &scene::Scene) -> Vec<u32> {
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
@@ -71,8 +66,12 @@ impl CustomRenderer {
 
         let total_pixel_dispatch = dispatch_size((width * height) as u32);
 
-        self.binning_pass
-            .execute(&mut encoder, scene.gx_tris, scene.gy_tris, total_tile_dispatch);
+        self.binning_pass.execute(
+            &mut encoder,
+            scene.gx_tris,
+            scene.gy_tris,
+            total_tile_dispatch,
+        );
         self.raster_pass
             .execute(&mut encoder, width as u32, height as u32);
         self.fragment_pass
