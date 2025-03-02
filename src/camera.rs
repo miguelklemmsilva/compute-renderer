@@ -84,7 +84,7 @@ impl Camera {
             movement_speed: 5.0,
             mouse_sensitivity: 0.1,
             orbit_speed: 0.5,
-            orbit_distance: 10.0,
+            orbit_distance: 0.0,
         }
     }
 

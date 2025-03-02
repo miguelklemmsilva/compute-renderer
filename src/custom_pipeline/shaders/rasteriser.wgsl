@@ -107,11 +107,21 @@ fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, t
     // Loop over the pixels in the tile.
     for (var y = tile_start_y; y < tile_end_y; y++) {
         for (var x = tile_start_x; x < tile_end_x; x++) {
+            var pos = vec2<f32>(f32(x), f32(y));
+
+            if effect.effect_type == 4u {
+                let offset = vec2<f32>(
+                    effect.param1 * sin(effect.param2 * f32(x) + effect.time + effect.param3),
+                    effect.param1 * cos(effect.param2 * f32(y) + effect.time + effect.param3)
+                );
+                pos += offset;
+            }
+
             let bc = barycentric(
                 v1.screen_pos.xyz,
                 v2.screen_pos.xyz,
                 v3.screen_pos.xyz,
-                vec2<f32>(f32(x), f32(y))
+                pos
             );
 
             var threshold = 0.0;
