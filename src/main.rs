@@ -88,7 +88,7 @@ fn main() {
         camera_config,
         backend_type,
         benchmark_duration_secs: cli.benchmark_duration_secs,
-        // effect: Some(Effect::voxelize(0.5, 1.0)),
+        // effect: Some(Effect::mirage(3.0, 0.2, 1.0)),
         ..Default::default()
     }];
 

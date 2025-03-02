@@ -5,6 +5,7 @@ pub enum Effect {
     Wave(WaveEffect),
     EdgeMelt(EdgeMeltEffect),
     Voxelize(VoxelizeEffect),
+    Mirage(MirageEffect), // New effect variant: Digital Mirage
 }
 
 #[derive(Debug, Clone)]
@@ -30,6 +31,14 @@ pub struct VoxelizeEffect {
     pub time: f32,
 }
 
+#[derive(Debug, Clone)]
+pub struct MirageEffect {
+    pub amplitude: f32,
+    pub frequency: f32,
+    pub phase: f32,
+    pub speed: f32,
+}
+
 #[allow(dead_code)]
 #[derive(Debug, Clone)]
 pub enum WaveDirection {
@@ -46,6 +55,7 @@ impl Effect {
             Effect::Wave(wave) => wave.update(dt),
             Effect::EdgeMelt(edge_melt) => edge_melt.update(dt),
             Effect::Voxelize(voxelize) => voxelize.update(dt),
+            Effect::Mirage(mirage) => mirage.update(dt),
         }
     }
 
@@ -75,6 +85,15 @@ impl Effect {
             time: 0.0,
         })
     }
+
+    pub fn mirage(amplitude: f32, frequency: f32, speed: f32) -> Self {
+        Effect::Mirage(MirageEffect {
+            amplitude,
+            frequency,
+            phase: 0.0,
+            speed,
+        })
+    }
 }
 
 // WaveEffect implementation
@@ -95,8 +114,16 @@ impl EdgeMeltEffect {
 impl VoxelizeEffect {
     pub fn update(&mut self, delta_time: f32) {
         self.time += delta_time * self.speed;
-        let t = ((self.time - std::f32::consts::FRAC_PI_2).sin() + 1.0) * 0.5; // Start at t = 0.0
-        self.voxel_size = t * 1.0; // Now t will start at 0.0
+        let t = ((self.time - std::f32::consts::FRAC_PI_2).sin() + 1.0) * 0.5; // Normalized t starting at 0.0
+        self.voxel_size = t * 1.0; // Adjust voxel size based on t
+    }
+}
+
+// MirageEffect implementation
+impl MirageEffect {
+    pub fn update(&mut self, delta_time: f32) {
+        // Increase phase over time to drive an animated screen distortion.
+        self.phase += delta_time * self.speed;
     }
 }
 
@@ -149,6 +176,13 @@ impl EffectUniform {
             Effect::Voxelize(voxelize) => {
                 self.effect_type = 3;
                 self.param1 = voxelize.voxel_size;
+            }
+            Effect::Mirage(mirage) => {
+                self.effect_type = 4; // New type for Mirage effect
+                self.param1 = mirage.amplitude;
+                self.param2 = mirage.frequency;
+                self.param3 = mirage.phase;
+                self.param4 = mirage.speed;
             }
         }
     }
