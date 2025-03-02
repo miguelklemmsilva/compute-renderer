@@ -3,12 +3,12 @@ use std::{fs::File, io::BufReader};
 use crate::{
     custom_pipeline::util::Index,
     util::get_asset_path,
-    vertex::{GpuVertex, WgpuVertex},
+    vertex::{CustomVertex, WgpuVertex},
     window::BackendType,
 };
 
 pub struct Model {
-    pub processed_vertices_custom: Vec<GpuVertex>,
+    pub processed_vertices_custom: Vec<CustomVertex>,
     pub processed_vertices_wgpu: Vec<WgpuVertex>,
     pub processed_indices: Vec<Index>,
 }
@@ -52,7 +52,7 @@ impl Model {
             match backend_type {
                 BackendType::CustomPipeline => {
                     let vertices = (0..m.mesh.positions.len() / 3)
-                        .map(|i| GpuVertex {
+                        .map(|i| CustomVertex {
                             position: [
                                 m.mesh.positions[i * 3],
                                 m.mesh.positions[i * 3 + 1],

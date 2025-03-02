@@ -197,6 +197,7 @@ impl Scene {
     }
 }
 
+#[derive(Clone)]
 pub struct SceneConfig {
     pub model_path: String,
     pub lights: Vec<(
@@ -235,6 +236,7 @@ impl Default for SceneConfig {
     }
 }
 
+#[derive(Clone)]
 pub struct CameraConfig {
     pub distance: f32,
     pub theta: f32,

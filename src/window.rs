@@ -97,7 +97,7 @@ impl ApplicationHandler for Window {
                         Pixels::new(self.width as u32, self.height as u32, surface_texture)
                             .unwrap();
 
-                    pixels.set_present_mode(pixels::wgpu::PresentMode::Immediate);
+                    pixels.set_present_mode(pixels::wgpu::PresentMode::Fifo);
                     pixels.enable_vsync(false);
 
                     // SAFETY: We know the window will outlive the pixels
@@ -364,6 +364,7 @@ impl Window {
                     match renderer.render(surface, &self.scene) {
                         Ok(_) => {}
                         Err(wgpu::SurfaceError::Lost) => {
+                            println!("Render error:");
                             if let Some(window) = &self.winit_window {
                                 let size = window.inner_size();
                                 let mut config = renderer.config.clone();
@@ -380,9 +381,7 @@ impl Window {
                     // update scene info
                     self.scene.update(gpu, delta_time);
                     // run the pipeline here
-                    let buffer = gpu
-                        .execute_pipeline(self.width, self.height, &self.scene)
-                        .await;
+                    let buffer = gpu.render(self.width, self.height, &self.scene).await;
 
                     let frame = pixels.frame_mut();
                     let buffer_size = buffer.len() * 4;
