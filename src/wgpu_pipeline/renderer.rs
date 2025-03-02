@@ -79,7 +79,7 @@ impl WgpuRenderer {
             format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: wgpu::PresentMode::default(),
+            present_mode: wgpu::PresentMode::Immediate,
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],
             desired_maximum_frame_latency: 1,
@@ -281,7 +281,10 @@ impl WgpuRenderer {
         scene: &Scene,
     ) -> Result<(), wgpu::SurfaceError> {
         // Get the next frame
-        let frame = surface.get_current_texture()?;
+        let frame = match surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(e) => return Err(e),
+        };
 
         // Create a view of the surface texture
         let view = frame
@@ -358,8 +361,20 @@ impl WgpuRenderer {
         self.queue.submit(std::iter::once(encoder.finish()));
         frame.present();
 
+        // force gpu to wait for rendering to complete to prevent extremely high (fake) frames
+        pollster::block_on(wait_for_gpu(&self.queue, &self.device));
+
         Ok(())
     }
+}
+
+async fn wait_for_gpu(queue: &wgpu::Queue, device: &wgpu::Device) {
+    let (tx, rx_output) = futures_intrusive::channel::shared::oneshot_channel();
+    queue.on_submitted_work_done(move || {
+        tx.send(()).unwrap();
+    });
+    device.poll(wgpu::Maintain::Wait);
+    rx_output.receive().await.expect("GPU work done callback was dropped unexpectedly");
 }
 
 fn create_depth_texture_format() -> wgpu::TextureFormat {
