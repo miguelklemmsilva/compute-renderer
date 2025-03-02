@@ -12,6 +12,7 @@ pub struct PerformanceData {
 }
 
 pub struct PerformanceCollector {
+    set_in_period: f32, // seconds
     frame_times: Vec<f64>,
     cpu_usages: Vec<f32>,
     memory_usages: Vec<u64>,
@@ -41,6 +42,7 @@ impl PerformanceCollector {
             scene_index,
             has_started: false,
             has_printed: false,
+            set_in_period: 2.0,
         }
     }
 
@@ -49,6 +51,10 @@ impl PerformanceCollector {
             self.start_time = std::time::Instant::now();
             self.last_frame_time = std::time::Instant::now();
             self.has_started = true;
+            return false;
+        }
+
+        if self.start_time.elapsed() < Duration::from_secs_f32(self.set_in_period) {
             return false;
         }
 
@@ -71,7 +77,7 @@ impl PerformanceCollector {
         }
 
         // Return true if benchmark duration is reached
-        self.start_time.elapsed() >= self.benchmark_duration
+        self.start_time.elapsed() >= self.benchmark_duration + Duration::from_secs_f32(self.set_in_period)
     }
 
     pub fn finalise(&mut self) -> PerformanceData {
@@ -85,6 +91,18 @@ impl PerformanceCollector {
     }
 
     fn calculate_metrics(&self) -> PerformanceData {
+        if self.frame_times.is_empty() {
+            return PerformanceData {
+                avg_fps: 0.0,
+                min_fps: 0.0,
+                max_fps: 0.0,
+                fps_5_percent_low: 0.0,
+                fps_1_percent_low: 0.0,
+                cpu_usage: 0.0,
+                memory_usage: 0,
+            };
+        }
+
         let avg_frame_time = self.frame_times.iter().sum::<f64>() / self.frame_times.len() as f64;
         let avg_fps = 1.0 / avg_frame_time;
 
