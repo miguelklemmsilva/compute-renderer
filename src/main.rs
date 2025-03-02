@@ -57,48 +57,58 @@ fn main() {
     let width = cli.width as usize;
     let height = cli.height as usize;
 
-    // Construct a single SceneConfig based on CLI parameters
-
     let scenes = if cli.benchmarks {
+        let suzanne_scene = SceneConfig {
+            model_path: "suzanne.obj".to_string(),
+            camera_config: CameraConfig {
+                distance: 2.0,
+                position: [0.0, 0.0, 3.0],
+                mode: camera::CameraMode::FirstPerson,
+                ..Default::default()
+            },
+            benchmark_duration_secs: 5,
+            ..Default::default()
+        };
+
+        let dragon_scene = SceneConfig {
+            model_path: "dragon.obj".to_string(),
+            camera_config: CameraConfig {
+                distance: 4.0,
+                position: [0.0, 0.0, 3.0],
+                mode: camera::CameraMode::FirstPerson,
+                ..Default::default()
+            },
+            benchmark_duration_secs: 5,
+            ..Default::default()
+        };
+
+        let exterior_scene = SceneConfig {
+            model_path: "exterior/Exterior.obj".to_string(),
+            camera_config: CameraConfig {
+                distance: 4.0,
+                position: [0.0, 0.0, 3.0],
+                mode: camera::CameraMode::FirstPerson,
+                ..Default::default()
+            },
+            benchmark_duration_secs: 5,
+            ..Default::default()
+        };
+
         vec![
+            suzanne_scene.clone(),
             SceneConfig {
-                model_path: "suzanne.obj".to_string(),
-                camera_config: CameraConfig {
-                    distance: 4.0,
-                    position: [0.0, 0.0, 3.0],
-                    mode: camera::CameraMode::FirstPerson,
-                    ..Default::default()
-                },
-                benchmark_duration_secs: 5,
-                ..Default::default()
-            },
-            SceneConfig {
-                model_path: "suzanne.obj".to_string(),
-                camera_config: CameraConfig {
-                    distance: 4.0,
-                    position: [0.0, 0.0, 3.0],
-                    mode: camera::CameraMode::FirstPerson,
-                    ..Default::default()
-                },
-                benchmark_duration_secs: 5,
                 backend_type: BackendType::WgpuPipeline,
-                ..Default::default()
+                ..suzanne_scene
             },
+            dragon_scene.clone(),
             SceneConfig {
-                model_path: "dragon.obj".to_string(),
-                benchmark_duration_secs: 5,
-                ..Default::default()
+                backend_type: BackendType::WgpuPipeline,
+                ..dragon_scene
             },
+            exterior_scene.clone(),
             SceneConfig {
-                model_path: "dragon.obj".to_string(),
-                camera_config: CameraConfig {
-                    distance: 4.0,
-                    position: [0.0, 0.0, 3.0],
-                    mode: camera::CameraMode::FirstPerson,
-                    ..Default::default()
-                },
-                benchmark_duration_secs: 5,
-                ..Default::default()
+                backend_type: BackendType::WgpuPipeline,
+                ..exterior_scene
             },
         ]
     } else {
@@ -125,6 +135,7 @@ fn main() {
             }
         };
 
+        // Construct a single SceneConfig based on CLI parameters
         vec![SceneConfig {
             model_path: cli.model_path,
             camera_config,
@@ -150,7 +161,11 @@ fn main() {
     {
         Ok(window) => window,
         Err(e) => {
-            eprintln!("Failed to create scene {}: {}", scene_config.scene_name(), e);
+            eprintln!(
+                "Failed to create scene {}: {}",
+                scene_config.scene_name(),
+                e
+            );
             return;
         }
     };
