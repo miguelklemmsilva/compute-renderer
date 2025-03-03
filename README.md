@@ -96,6 +96,6 @@ For development, it's recommended to build from source following the instruction
 This project is being developed as part of a third-year computer science project at Lancaster University, focusing on exploring alternative approaches to real-time 3D rendering using modern GPU compute capabilities. 
 
 ## Gallery
-![image](https://github.com/user-attachments/assets/0a254b94-a45a-41be-9125-06b54b773884)
+![image](https://github.com/user-attachments/assets/b129c9a6-c64e-4108-823d-5df08de4e956)
 ![image](https://github.com/user-attachments/assets/520dd7e5-c2f7-4a05-b2e1-13ae00284e62)
 
