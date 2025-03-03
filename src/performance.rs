@@ -77,7 +77,10 @@ impl PerformanceCollector {
         }
 
         // Return true if benchmark duration is reached
-        self.start_time.elapsed() >= self.benchmark_duration + Duration::from_secs_f32(self.set_in_period)
+        self.start_time.elapsed()
+            >= self
+                .benchmark_duration
+                .saturating_add(Duration::from_secs_f32(self.set_in_period))
     }
 
     pub fn finalise(&mut self) -> PerformanceData {
@@ -130,7 +133,7 @@ impl PerformanceCollector {
         let min_fps = 1.0 / slowest_avg;
 
         let avg_cpu_usage = self.cpu_usages.iter().sum::<f32>() / self.cpu_usages.len() as f32;
-        let avg_memory_usage =
+        let avg_memory_usage: u64 =
             self.memory_usages.iter().sum::<u64>() / self.memory_usages.len() as u64;
 
         let percentile_5_index = (total_frames as f64 * 0.05).ceil() as usize;
