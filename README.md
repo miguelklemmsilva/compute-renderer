@@ -13,9 +13,6 @@ This project implements a pipeline using compute shaders to evaluate performance
 
 The project aims to demonstrate scenarios where a custom shader-based approach may be advantageous over traditional hardware-accelerated rendering pipelines.
 
-![image](https://github.com/user-attachments/assets/0a254b94-a45a-41be-9125-06b54b773884)
-
-
 ## Features
 
 - Custom software rendering pipeline
@@ -97,3 +94,8 @@ For development, it's recommended to build from source following the instruction
 ## Acknowledgments
 
 This project is being developed as part of a third-year computer science project at Lancaster University, focusing on exploring alternative approaches to real-time 3D rendering using modern GPU compute capabilities. 
+
+## Gallery
+![image](https://github.com/user-attachments/assets/0a254b94-a45a-41be-9125-06b54b773884)
+![image](https://github.com/user-attachments/assets/520dd7e5-c2f7-4a05-b2e1-13ae00284e62)
+
