@@ -98,7 +98,6 @@ impl ApplicationHandler for Window {
                             .unwrap();
 
                     pixels.set_present_mode(pixels::wgpu::PresentMode::Fifo);
-                    pixels.enable_vsync(false);
 
                     // SAFETY: We know the window will outlive the pixels
                     std::mem::transmute::<Pixels<'_>, Pixels<'static>>(pixels)

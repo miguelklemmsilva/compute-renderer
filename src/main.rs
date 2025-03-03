@@ -58,6 +58,17 @@ fn main() {
     let height = cli.height as usize;
 
     let scenes = if cli.benchmarks {
+        let sportscar_scene = SceneConfig {
+            model_path: "sportsCar/sportsCar.obj".to_string(),
+            camera_config: CameraConfig {
+                position: [1.1757767, 0.4654234, 3.2008126],
+                mode: camera::CameraMode::FirstPerson,
+                ..Default::default()
+            },
+            benchmark_duration_secs: 5,
+            ..Default::default()
+        };
+
         let suzanne_scene = SceneConfig {
             model_path: "suzanne.obj".to_string(),
             camera_config: CameraConfig {
@@ -70,11 +81,10 @@ fn main() {
             ..Default::default()
         };
 
-        let dragon_scene = SceneConfig {
-            model_path: "dragon.obj".to_string(),
+        let exterior_scene = SceneConfig {
+            model_path: "exterior/Exterior.obj".to_string(),
             camera_config: CameraConfig {
-                distance: 4.0,
-                position: [0.0, 0.0, 3.0],
+                position: [-525.80194, 168.52838, 260.81876],
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
@@ -82,11 +92,11 @@ fn main() {
             ..Default::default()
         };
 
-        let exterior_scene = SceneConfig {
-            model_path: "exterior/Exterior.obj".to_string(),
+        let san_miguel_scene = SceneConfig {
+            model_path: "San_Miguel/san-miguel-low-poly.obj".to_string(),
             camera_config: CameraConfig {
-                distance: 4.0,
-                position: [0.0, 0.0, 3.0],
+                position: [13.566635, 2.6288567, 10.243919],
+                target: [13.587516, 2.5521376, 9.247086],
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
@@ -95,20 +105,25 @@ fn main() {
         };
 
         vec![
-            suzanne_scene.clone(),
+            san_miguel_scene.clone(),
             SceneConfig {
                 backend_type: BackendType::WgpuPipeline,
-                ..suzanne_scene
-            },
-            dragon_scene.clone(),
-            SceneConfig {
-                backend_type: BackendType::WgpuPipeline,
-                ..dragon_scene
+                ..san_miguel_scene
             },
             exterior_scene.clone(),
             SceneConfig {
                 backend_type: BackendType::WgpuPipeline,
                 ..exterior_scene
+            },
+            suzanne_scene.clone(),
+            SceneConfig {
+                backend_type: BackendType::WgpuPipeline,
+                ..suzanne_scene
+            },
+            sportscar_scene.clone(),
+            SceneConfig {
+                backend_type: BackendType::WgpuPipeline,
+                ..sportscar_scene
             },
         ]
     } else {

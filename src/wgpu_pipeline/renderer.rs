@@ -216,7 +216,9 @@ impl WgpuRenderer {
 
         // === 6) Create model buffers for each model in the scene
         let mut model_data = Vec::new();
+        
         for model in &scene.models {
+            println!("Loading model: {}", model.processed_vertices_wgpu.len());
             // Create vertex buffer
             let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Vertex Buffer"),

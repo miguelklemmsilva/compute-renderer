@@ -40,7 +40,7 @@ impl Model {
         .expect("Failed to load model");
 
         // Pre-allocate vectors for processed data
-        let mut processed_vertices_gpu = Vec::new();
+        let mut processed_vertices_custom = Vec::new();
         let mut processed_vertices_wgpu = Vec::new();
         let mut processed_indices = Vec::new();
 
@@ -75,7 +75,7 @@ impl Model {
                             ..Default::default()
                         })
                         .collect::<Vec<_>>();
-                    processed_vertices_gpu.extend(vertices);
+                    processed_vertices_custom.extend(vertices);
                 }
                 BackendType::WgpuPipeline => {
                     let vertices = (0..m.mesh.positions.len() / 3)
@@ -116,13 +116,13 @@ impl Model {
             // Update processed data
             processed_indices.extend(indices);
             current_vertex_count = match backend_type {
-                BackendType::CustomPipeline => processed_vertices_gpu.len() as u32,
+                BackendType::CustomPipeline => processed_vertices_custom.len() as u32,
                 BackendType::WgpuPipeline => processed_vertices_wgpu.len() as u32,
             };
         }
 
         Model {
-            processed_vertices_custom: processed_vertices_gpu,
+            processed_vertices_custom,
             processed_vertices_wgpu,
             processed_indices,
         }
