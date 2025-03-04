@@ -59,9 +59,9 @@ fn main() {
 
     let scenes = if cli.benchmarks {
         let sportscar_scene = SceneConfig {
-            model_path: "sportsCar/sportsCar.obj".to_string(),
+            model_path: "rungholt/house.obj".to_string(),
             camera_config: CameraConfig {
-                position: [1.1757767, 0.4654234, 3.2008126],
+                position: [4.7797003, 25.154022, 52.4443],
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
@@ -96,7 +96,6 @@ fn main() {
             model_path: "San_Miguel/san-miguel-low-poly.obj".to_string(),
             camera_config: CameraConfig {
                 position: [13.566635, 2.6288567, 10.243919],
-                target: [13.587516, 2.5521376, 9.247086],
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
