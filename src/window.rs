@@ -97,7 +97,7 @@ impl ApplicationHandler for Window {
                         Pixels::new(self.width as u32, self.height as u32, surface_texture)
                             .unwrap();
 
-                    pixels.set_present_mode(pixels::wgpu::PresentMode::Fifo);
+                    pixels.set_present_mode(pixels::wgpu::PresentMode::Immediate);
 
                     // SAFETY: We know the window will outlive the pixels
                     std::mem::transmute::<Pixels<'_>, Pixels<'static>>(pixels)
@@ -332,10 +332,12 @@ impl Window {
                     let surface_texture =
                         SurfaceTexture::new(self.width as u32, self.height as u32, window);
                     let pixels = unsafe {
-                        std::mem::transmute::<Pixels<'_>, Pixels<'static>>(
+                        let mut pixels =
                             Pixels::new(self.width as u32, self.height as u32, surface_texture)
-                                .unwrap(),
-                        )
+                                .unwrap();
+                        pixels.set_present_mode(pixels::wgpu::PresentMode::Immediate);
+
+                        std::mem::transmute::<Pixels<'_>, Pixels<'static>>(pixels)
                     };
                     let gpu = pollster::block_on(custom_pipeline::renderer::CustomRenderer::new(
                         self.width,
