@@ -136,6 +136,10 @@ impl Camera {
             if keys_down.contains(&KeyCode::KeyC) {
                 movement -= Vec3::Y;
             }
+            if keys_down.contains(&KeyCode::KeyP) {
+                println!("Camera position: {:?}", self.eye);
+                println!("Camera target: {:?}", self.target);
+            }
 
             if movement != Vec3::ZERO {
                 movement = movement.normalize() * velocity;

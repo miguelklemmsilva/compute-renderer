@@ -25,6 +25,9 @@ struct Cli {
     #[arg(long, default_value = "false", help = "Run benchmark scenes")]
     benchmarks: bool,
 
+// subcommand: Subcommand,
+
+
     /// Window width in pixels
     #[arg(long, default_value_t = 1024, help = "Window width in pixels")]
     width: u32,
@@ -58,14 +61,15 @@ fn main() {
     let height = cli.height as usize;
 
     let scenes = if cli.benchmarks {
-        let sportscar_scene = SceneConfig {
-            model_path: "rungholt/house.obj".to_string(),
+        let benchmark_duration_secs = 30;
+        let vokselia_spawn_scene = SceneConfig {
+            model_path: "vokselia_spawn/vokselia_spawn.obj".to_string(),
             camera_config: CameraConfig {
-                position: [4.7797003, 25.154022, 52.4443],
+                position: [0.0, 0.86896104, 1.4793645],
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
-            benchmark_duration_secs: 5,
+            benchmark_duration_secs,
             ..Default::default()
         };
 
@@ -77,7 +81,7 @@ fn main() {
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
-            benchmark_duration_secs: 5,
+            benchmark_duration_secs,
             ..Default::default()
         };
 
@@ -88,7 +92,7 @@ fn main() {
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
-            benchmark_duration_secs: 5,
+            benchmark_duration_secs,
             ..Default::default()
         };
 
@@ -99,7 +103,7 @@ fn main() {
                 mode: camera::CameraMode::FirstPerson,
                 ..Default::default()
             },
-            benchmark_duration_secs: 5,
+            benchmark_duration_secs,
             ..Default::default()
         };
 
@@ -119,10 +123,10 @@ fn main() {
                 backend_type: BackendType::WgpuPipeline,
                 ..suzanne_scene
             },
-            sportscar_scene.clone(),
+            vokselia_spawn_scene.clone(),
             SceneConfig {
                 backend_type: BackendType::WgpuPipeline,
-                ..sportscar_scene
+                ..vokselia_spawn_scene
             },
         ]
     } else {
