@@ -46,7 +46,6 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let normal = in.normal;
     
-    // Start with the same ambient light as in your compute shader.
     var final_color = vec3<f32>(0.1);
 
     let num_lights = arrayLength(&lights);
