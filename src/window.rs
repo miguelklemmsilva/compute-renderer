@@ -8,6 +8,7 @@ use winit::event_loop::ActiveEventLoop;
 use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window as WinitWindow, WindowAttributes, WindowId};
 
+use crate::custom_pipeline::renderer::CustomRenderer;
 use crate::{
     custom_pipeline, performance::PerformanceCollector, scene,
     wgpu_pipeline::renderer::WgpuRenderer,
@@ -20,7 +21,7 @@ pub enum RenderBackend {
     },
     CustomPipeline {
         pixels: Pixels<'static>,
-        gpu: custom_pipeline::renderer::CustomRenderer,
+        renderer: CustomRenderer,
     },
 }
 
@@ -102,13 +103,13 @@ impl ApplicationHandler for Window {
                     // SAFETY: We know the window will outlive the pixels
                     std::mem::transmute::<Pixels<'_>, Pixels<'static>>(pixels)
                 };
-                let gpu = pollster::block_on(custom_pipeline::renderer::CustomRenderer::new(
+                let renderer = pollster::block_on(custom_pipeline::renderer::CustomRenderer::new(
                     self.width,
                     self.height,
                     &self.scene,
                 ));
 
-                self.backend = Some(RenderBackend::CustomPipeline { pixels, gpu });
+                self.backend = Some(RenderBackend::CustomPipeline { pixels, renderer });
             }
         }
     }
@@ -163,7 +164,7 @@ impl ApplicationHandler for Window {
                             surface.configure(&renderer.device, &config);
                             renderer.resize(&config);
                         }
-                        RenderBackend::CustomPipeline { pixels, gpu } => {
+                        RenderBackend::CustomPipeline { pixels, renderer } => {
                             if pixels.resize_surface(size.width, size.height).is_err() {
                                 event_loop.exit();
                                 return;
@@ -172,7 +173,7 @@ impl ApplicationHandler for Window {
                                 event_loop.exit();
                                 return;
                             }
-                            gpu.resize(size.width, size.height, &self.scene);
+                            renderer.resize(size.width, size.height, &self.scene);
                         }
                     }
                 }
@@ -339,12 +340,12 @@ impl Window {
 
                         std::mem::transmute::<Pixels<'_>, Pixels<'static>>(pixels)
                     };
-                    let gpu = pollster::block_on(custom_pipeline::renderer::CustomRenderer::new(
+                    let renderer = pollster::block_on(CustomRenderer::new(
                         self.width,
                         self.height,
                         &self.scene,
                     ));
-                    self.backend = Some(RenderBackend::CustomPipeline { pixels, gpu });
+                    self.backend = Some(RenderBackend::CustomPipeline { pixels, renderer });
                 }
             }
         }
@@ -379,7 +380,7 @@ impl Window {
                 }
                 RenderBackend::CustomPipeline {
                     pixels,
-                    gpu: custom_renderer,
+                    renderer: custom_renderer,
                 } => {
                     // update scene info
                     self.scene.update_buffers(custom_renderer, delta_time);
