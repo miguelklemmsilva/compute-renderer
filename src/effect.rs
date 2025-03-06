@@ -5,7 +5,7 @@ pub enum Effect {
     Wave(WaveEffect),
     EdgeMelt(EdgeMeltEffect),
     Voxelize(VoxelizeEffect),
-    Mirage(MirageEffect), // New effect variant: Digital Mirage
+    Mirage(MirageEffect),
 }
 
 #[derive(Debug, Clone)]
@@ -178,7 +178,7 @@ impl EffectUniform {
                 self.param1 = voxelize.voxel_size;
             }
             Effect::Mirage(mirage) => {
-                self.effect_type = 4; // New type for Mirage effect
+                self.effect_type = 4;
                 self.param1 = mirage.amplitude;
                 self.param2 = mirage.frequency;
                 self.param3 = mirage.phase;
