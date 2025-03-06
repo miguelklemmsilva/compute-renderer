@@ -65,7 +65,6 @@ impl Scene {
             .add_obj_with_mtl(&scene_config.model_path, scene_config.backend_type)
             .await;
 
-        // Add lights from config if not a stress test
         for (position, color, intensity) in &scene_config.lights {
             scene.add_light(*position, *color, *intensity);
         }
