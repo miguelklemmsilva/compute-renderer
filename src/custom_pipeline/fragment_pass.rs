@@ -162,7 +162,7 @@ impl FragmentPass {
         }
     }
 
-    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, total_pixel_dispatch: u32) {
+    pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, width: u32, height: u32) {
         let mut cpass = encoder.begin_compute_pass(&wgpu::ComputePassDescriptor {
             label: Some("Fragment Pass"),
             timestamp_writes: None,
@@ -176,6 +176,6 @@ impl FragmentPass {
         cpass.set_bind_group(4, &self.bind_group_4, &[]);
         cpass.set_bind_group(5, &self.bind_group_5, &[]);
 
-        cpass.dispatch_workgroups(total_pixel_dispatch, 1, 1);
+        cpass.dispatch_workgroups(width, height, 1);
     }
 }

@@ -7,7 +7,7 @@ use crate::{
     scene,
 };
 
-use super::raster_pass::TILE_SIZE;
+use super::{raster_pass::TILE_SIZE, util::{TileMeta, TriangleMeta}};
 
 pub struct GpuBuffers {
     pub camera_buffer: wgpu::Buffer,
@@ -62,14 +62,6 @@ impl GpuBuffers {
         // Add safety margin for overlapping triangles and uneven distribution
         let max_triangles_per_tile = std::cmp::max(base_triangles_per_tile, 128) as u64;
 
-        #[repr(C)]
-        #[derive(Copy, Clone)]
-        struct TriangleMeta {
-            min_max: [f32; 4],
-            start_tile: [u32; 2],
-            tile_range: [u32; 2],
-        }
-
         Self {
             camera_buffer: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Camera Buffer"),
@@ -121,8 +113,8 @@ impl GpuBuffers {
             }),
             tile_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Tile Buffer"),
-                size: num_tiles * std::mem::size_of::<[u32; 4]>() as u64,
-                usage: wgpu::BufferUsages::STORAGE,
+                size: num_tiles * std::mem::size_of::<TileMeta>() as u64,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             }),
             triangle_list_buffer: device.create_buffer(&wgpu::BufferDescriptor {
@@ -144,7 +136,7 @@ impl GpuBuffers {
                 size: num_tiles
                     * max_triangles_per_tile
                     * std::mem::size_of::<TriangleMeta>() as u64,
-                usage: wgpu::BufferUsages::STORAGE,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::MAP_READ,
                 mapped_at_creation: false,
             }),
         }

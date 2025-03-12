@@ -47,9 +47,9 @@ struct Fragment {
 // The fragment data & count from the raster pass
 @group(5) @binding(0) var<storage, read_write> fragment_buffer: array<Fragment>;
 
-@compute @workgroup_size(256)
-fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let idx = global_id.x + global_id.y * u32(screen_dims.width);
+@compute @workgroup_size(1)
+fn fragment_main(@builtin(workgroup_id) wg: vec3<u32>,) {
+    let idx = wg.x + wg.y * u32(screen_dims.width);
     output_buffer[idx] = 0u;
 
     // Early-out if there's no valid fragment

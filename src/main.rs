@@ -66,7 +66,7 @@ fn main() {
     // Select scenes and determine starting scene based on whether the benchmarks subcommand was used.
     let (scenes, start_offset) = match &cli.command {
         Some(Commands::Benchmarks { offset }) => {
-            let benchmark_duration_secs = 30;
+            let benchmark_duration_secs = 5;
             let vokselia_spawn_scene = SceneConfig {
                 model_path: "vokselia_spawn/vokselia_spawn.obj".to_string(),
                 camera_config: CameraConfig {
@@ -176,7 +176,7 @@ fn main() {
                 model_path: cli.model_path,
                 camera_config,
                 backend_type,
-                effect: Some(effect::Effect::voxelize(3.0, 0.2)),
+                // effect: Some(effect::Effect::voxelize(3.0, 0.2)),
                 ..Default::default()
             };
 
