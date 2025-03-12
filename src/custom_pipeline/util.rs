@@ -108,3 +108,20 @@ pub fn create_buffer_bind_group_layout_entry(
         count: None,
     }
 }
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod, Debug)]
+pub struct TriangleMeta {
+    pub min_max: [f32; 4],
+    pub start_tile: [u32; 2],
+    pub tile_range: [u32; 2],
+}
+
+#[repr(C)]
+#[derive(Copy, Clone, bytemuck::Zeroable, bytemuck::Pod)]
+pub struct TileMeta {
+    pub count: u32,
+    pub offset: u32,
+    pub write_index: u32,
+    pub padding: u32,
+}
