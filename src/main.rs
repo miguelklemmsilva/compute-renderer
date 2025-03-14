@@ -51,8 +51,58 @@ enum Commands {
     /// Run benchmarks with a specified starting offset (zero-indexed)
     Benchmarks {
         /// Offset to start benchmarks (zero-indexed)
-        #[arg(long, default_value_t = 0, help = "Offset to start benchmarks (zero-indexed)")]
+        #[arg(
+            long,
+            default_value_t = 0,
+            help = "Offset to start benchmarks (zero-indexed)"
+        )]
         offset: usize,
+    },
+    /// Choose an effect to apply to the scene.
+    ///
+    /// Effect types:
+    /// - **voxelize**: Uses param1 as voxel size, param2 as speed.
+    /// - **edge_melt**: Uses param1 as amplitude, param2 as speed.
+    /// - **mirage**: Uses param1 as amplitude, param2 as frequency, param3 as speed.
+    /// - **wave**: Uses param1 as amplitude, param2 as frequency, param3 as speed,
+    ///   and param4 for direction (0 = Vertical, 1 = Horizontal, 2 = Radial).
+    /// - **none**: Disables effects.
+    Effect {
+        /// Effect type: 'voxelize', 'edge_melt', 'mirage', 'wave', or 'none'
+        #[arg(
+            long,
+            default_value = "voxelize",
+            help = "'voxelize', 'edge_melt', 'mirage', 'wave', or 'none'"
+        )]
+        effect: String,
+        /// Parameter 1: For voxelize: voxel_size, wave: amplitude, edge_melt: amplitude, mirage: amplitude
+        #[arg(
+            long,
+            default_value_t = 3.0,
+            help = "For voxelize: voxel_size, wave: amplitude, edge_melt: amplitude, mirage: amplitude"
+        )]
+        param1: f32,
+        /// Parameter 2: For voxelize: speed, wave: frequency, edge_melt: speed, mirage: frequency
+        #[arg(
+            long,
+            default_value_t = 0.2,
+            help = "For voxelize: speed, wave: frequency, edge_melt: speed, mirage: frequency"
+        )]
+        param2: f32,
+        /// Parameter 3: For wave: speed, mirage: speed. (Default is not used for voxelize or edge_melt.)
+        #[arg(
+            long,
+            default_value_t = 1.0,
+            help = "For wave: speed, mirage: speed. (Default is not used for voxelize or edge_melt.)"
+        )]
+        param3: f32,
+        /// Parameter 4: For wave: direction (0 = Vertical, 1 = Horizontal, 2 = Radial).
+        #[arg(
+            long,
+            default_value_t = 0,
+            help = "Effect parameter 4 (for wave effect: 0=Vertical, 1=Horizontal, 2=Radial)"
+        )]
+        param4: u32,
     },
 }
 
@@ -63,8 +113,46 @@ fn main() {
     let width = cli.width as usize;
     let height = cli.height as usize;
 
+    let effect = match &cli.command {
+        Some(Commands::Effect {
+            effect,
+            param1,
+            param2,
+            param3,
+            param4,
+        }) => match effect.as_str() {
+            "voxelize" => Some(effect::Effect::voxelize(*param1, *param2)),
+            "edge_melt" => Some(effect::Effect::edge_melt(*param1, *param2)),
+            "mirage" => Some(effect::Effect::mirage(*param1, *param2, *param3)),
+            "wave" => {
+                let direction = match param4 {
+                    0 => effect::WaveDirection::Vertical,
+                    1 => effect::WaveDirection::Horizontal,
+                    2 => effect::WaveDirection::Radial,
+                    _ => {
+                        eprintln!(
+                                "Invalid wave direction {}. Use 0 for Vertical, 1 for Horizontal, or 2 for Radial.",
+                                param4
+                            );
+                        std::process::exit(1);
+                    }
+                };
+                Some(effect::Effect::wave(*param1, *param2, *param3, direction))
+            }
+            "none" => None,
+            other => {
+                eprintln!(
+                        "Invalid effect '{}'. Use 'voxelize', 'edge_melt', 'mirage', 'wave', or 'none'.",
+                        other
+                    );
+                std::process::exit(1);
+            }
+        },
+        _ => None,
+    };
+
     // Select scenes and determine starting scene based on whether the benchmarks subcommand was used.
-    let (scenes, start_offset) = match &cli.command {
+    let (scenes, start_offset) = match cli.command {
         Some(Commands::Benchmarks { offset }) => {
             let benchmark_duration_secs = 30;
             let vokselia_spawn_scene = SceneConfig {
@@ -135,7 +223,7 @@ fn main() {
                 },
             ];
 
-            if *offset >= scenes.len() {
+            if offset >= scenes.len() {
                 eprintln!(
                     "Invalid offset: {}. There are only {} scenes available for benchmarks.",
                     offset,
@@ -144,7 +232,7 @@ fn main() {
                 std::process::exit(1);
             }
 
-            (scenes, *offset)
+            (scenes, offset)
         }
         _ => {
             // Regular mode: create a single scene based on CLI parameters.
@@ -164,10 +252,7 @@ fn main() {
                 "wgpu" => BackendType::WgpuPipeline,
                 "custom" => BackendType::CustomPipeline,
                 other => {
-                    eprintln!(
-                        "Invalid backend type '{}'. Use 'wgpu' or 'custom'.",
-                        other
-                    );
+                    eprintln!("Invalid backend type '{}'. Use 'wgpu' or 'custom'.", other);
                     std::process::exit(1);
                 }
             };
@@ -176,7 +261,7 @@ fn main() {
                 model_path: cli.model_path,
                 camera_config,
                 backend_type,
-                effect: Some(effect::Effect::voxelize(3.0, 0.2)),
+                effect,
                 ..Default::default()
             };
 
