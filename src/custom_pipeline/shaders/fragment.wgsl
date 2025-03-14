@@ -50,7 +50,8 @@ struct Fragment {
 @compute @workgroup_size(256)
 fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     let idx = global_id.x + global_id.y * u32(screen_dims.width);
-    output_buffer[idx] = 0u;
+    // 0,191,255
+    output_buffer[idx] = (255u << 24u) | (255u << 16u) | (0u << 8u) | 0u;
 
     // Early-out if there's no valid fragment
     if idx >= arrayLength(&fragment_buffer) || fragment_buffer[idx].flag == 0u {
