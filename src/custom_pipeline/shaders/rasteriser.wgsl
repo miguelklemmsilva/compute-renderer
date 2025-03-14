@@ -93,11 +93,11 @@ const MAX_TILES: u32 = TILE_SIZE * TILE_SIZE;
 var<workgroup> local_depth: array<atomic<u32>, MAX_TILES>;
 
 // ---------------------------------------------------------------------
-// Rasterization function: rasterize a triangle into one tile.
+// Rasterization function: rasterise a triangle into one tile.
 // The triangle’s vertices are in screen space and already have their
 // perspective divide (and attributes pre–divided by w) applied.
 // ---------------------------------------------------------------------
-fn rasterize_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, tile_y: u32) {
+fn rasterise_triangle_in_tile(v1: Vertex, v2: Vertex, v3: Vertex, tile_x: u32, tile_y: u32) {
     // Compute the pixel bounds for the tile.
     let tile_start_x = tile_x * TILE_SIZE;
     let tile_end_x = min(tile_start_x + TILE_SIZE, u32(screen_dims.width));
@@ -232,8 +232,8 @@ fn raster_main(
         let v2 = projected_buffer[idx2];
         let v3 = projected_buffer[idx3];
 
-        // Now rasterize the triangle into this tile.
-        rasterize_triangle_in_tile(v1, v2, v3, tile_x, tile_y);
+        // Now rasterise the triangle into this tile.
+        rasterise_triangle_in_tile(v1, v2, v3, tile_x, tile_y);
     }
 
     storageBarrier();

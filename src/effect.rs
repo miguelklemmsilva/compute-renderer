@@ -96,21 +96,18 @@ impl Effect {
     }
 }
 
-// WaveEffect implementation
 impl WaveEffect {
     pub fn update(&mut self, delta_time: f32) {
         self.phase += delta_time * self.speed;
     }
 }
 
-// EdgeMeltEffect implementation
 impl EdgeMeltEffect {
     pub fn update(&mut self, delta_time: f32) {
         self.phase += delta_time * self.speed;
     }
 }
 
-// VoxelizeEffect implementation
 impl VoxelizeEffect {
     pub fn update(&mut self, delta_time: f32) {
         self.time += delta_time * self.speed;
@@ -119,7 +116,6 @@ impl VoxelizeEffect {
     }
 }
 
-// MirageEffect implementation
 impl MirageEffect {
     pub fn update(&mut self, delta_time: f32) {
         // Increase phase over time to drive an animated screen distortion.
