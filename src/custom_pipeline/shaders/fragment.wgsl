@@ -35,7 +35,7 @@ struct Fragment {
 };
 
 
-@group(0) @binding(0) var<storage, read_write> output_buffer: array<u32>;
+@group(0) @binding(0) var output_tex: texture_storage_2d<bgra8unorm, write>;
 
 @group(1) @binding(0) var<uniform> screen_dims: Uniform;
 @group(2) @binding(0) var<uniform> camera: Camera;
@@ -49,16 +49,25 @@ struct Fragment {
 
 @compute @workgroup_size(256)
 fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
-    let idx = global_id.x + global_id.y * u32(screen_dims.width);
-    output_buffer[idx] = (255u << 24u) | (255u << 16u) | (0u << 8u) | 0u;
+
+    let idx = global_id.x;
+    let tex_width = u32(screen_dims.width);  // Use the actual texture width
+    let x = i32(idx % tex_width);
+    let y = i32(idx / tex_width);
+
+    textureStore(
+        output_tex,
+        vec2<i32>(x, y),
+        vec4<f32>(0.0, 0.0, 1.0, 1.0)
+    );
 
     // Early-out if there's no valid fragment
     if idx >= arrayLength(&fragment_buffer) || fragment_buffer[idx].flag == 0u {
         return;
     }
 
+
     let in = fragment_buffer[idx];
-    
     var final_color = vec3<f32>(0.1);
 
     let num_lights = arrayLength(&lights);
@@ -73,16 +82,12 @@ fn fragment_main(@builtin(global_invocation_id) global_id: vec3<u32>) {
     }
 
     fragment_buffer[idx].flag = 0u;
-
     final_color = clamp(final_color, vec3<f32>(0.0), vec3<f32>(1.0));
-
     let srgb_color = pow(final_color, vec3<f32>(1.0 / 2.2));
 
-    // Convert float color to integer
-    let R = u32(srgb_color.x * 255.0);
-    let G = u32(srgb_color.y * 255.0);
-    let B = u32(srgb_color.z * 255.0);
-
-    let output_color = (255u << 24u) | (B << 16u) | (G << 8u) | R;
-    output_buffer[idx] = output_color;
+    textureStore(
+        output_tex,
+        vec2<i32>(x, y),
+        vec4<f32>(srgb_color, 1.0)
+    );
 }
