@@ -4,8 +4,8 @@ use super::gpu_buffers::GpuBuffers;
 
 pub struct PresentPass {
     pipeline: wgpu::RenderPipeline,
-    bind_group: wgpu::BindGroup,
-    screen_bind_group: wgpu::BindGroup,
+    bind_group_0: wgpu::BindGroup,
+    bind_group_1: wgpu::BindGroup,
 }
 
 impl PresentPass {
@@ -16,29 +16,30 @@ impl PresentPass {
         // We create a bind group layout that has:
         //   binding(0) -> our output texture (sampled)
         //   binding(1) -> a sampler
-        let bind_group_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("PresentPass BGL"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
+        let bind_group_layout_0 =
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: Some("PresentPass BGL"),
+                entries: &[
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 0,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Texture {
+                            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                            view_dimension: wgpu::TextureViewDimension::D2,
+                            multisampled: false,
+                        },
+                        count: None,
                     },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
-                    count: None,
-                },
-            ],
-        });
+                    wgpu::BindGroupLayoutEntry {
+                        binding: 1,
+                        visibility: wgpu::ShaderStages::FRAGMENT,
+                        ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                        count: None,
+                    },
+                ],
+            });
 
-        let screen_bind_group_layout =
+        let bind_group_layout_1 =
             device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
                 label: Some("Screen Bind Group Layout"),
                 entries: &[wgpu::BindGroupLayoutEntry {
@@ -53,9 +54,9 @@ impl PresentPass {
                 }],
             });
 
-        let bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("PresentPass bind group"),
-            layout: &bind_group_layout,
+            layout: &bind_group_layout_0,
             entries: &[
                 wgpu::BindGroupEntry {
                     binding: 0,
@@ -68,9 +69,9 @@ impl PresentPass {
             ],
         });
 
-        let screen_bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        let bind_group_1 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Present Pass: Group1"),
-            layout: &screen_bind_group_layout,
+            layout: &bind_group_layout_1,
             entries: &[wgpu::BindGroupEntry {
                 binding: 0,
                 resource: buffers.screen_buffer.as_entire_binding(),
@@ -79,7 +80,7 @@ impl PresentPass {
 
         let pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("PresentPass pipeline layout"),
-            bind_group_layouts: &[&bind_group_layout, &screen_bind_group_layout],
+            bind_group_layouts: &[&bind_group_layout_0, &bind_group_layout_1],
             push_constant_ranges: &[],
         });
 
@@ -102,7 +103,7 @@ impl PresentPass {
                 module: &shader,
                 entry_point: Some("fs_main"),
                 targets: &[Some(wgpu::ColorTargetState {
-                    format: wgpu::TextureFormat::Bgra8Unorm, // or your chosen format
+                    format: wgpu::TextureFormat::Bgra8Unorm,
                     blend: Some(wgpu::BlendState::REPLACE),
                     write_mask: wgpu::ColorWrites::ALL,
                 })],
@@ -117,17 +118,14 @@ impl PresentPass {
 
         Self {
             pipeline,
-            bind_group,
-            screen_bind_group,
+            bind_group_0,
+            bind_group_1,
         }
     }
 
     pub fn resize(&mut self, device: &wgpu::Device, new_view: &wgpu::TextureView) {
-        // Re-create the bind group for the new view size
-        // In a real program, you'd also re-check your pipeline's color target,
-        // or re-create the pipeline if the format changed, etc.
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-        self.bind_group = device.create_bind_group(&wgpu::BindGroupDescriptor {
+        self.bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("PresentPass bind group"),
             layout: &self.pipeline.get_bind_group_layout(0),
             entries: &[
@@ -150,7 +148,7 @@ impl PresentPass {
                 view,
                 resolve_target: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                    load: wgpu::LoadOp::Clear(wgpu::Color::BLUE),
                     store: wgpu::StoreOp::Store,
                 },
             })],
@@ -160,8 +158,8 @@ impl PresentPass {
         });
 
         rpass.set_pipeline(&self.pipeline);
-        rpass.set_bind_group(0, &self.bind_group, &[]);
-        rpass.set_bind_group(1, &self.screen_bind_group, &[]);
+        rpass.set_bind_group(0, &self.bind_group_0, &[]);
+        rpass.set_bind_group(1, &self.bind_group_1, &[]);
         // Draw a single full screen triangle
         rpass.draw(0..3, 0..1);
     }
