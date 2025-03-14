@@ -14,9 +14,16 @@ impl FragmentPass {
     pub fn new(device: &wgpu::Device, buffers: &GpuBuffers) -> Self {
         let group0_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("Fragment Pass: Group0 Layout (Output)"),
-            entries: &[
-                create_buffer_bind_group_layout_entry(0, false),
-            ],
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::StorageTexture {
+                    access: wgpu::StorageTextureAccess::WriteOnly,
+                    format: wgpu::TextureFormat::Bgra8Unorm,
+                    view_dimension: wgpu::TextureViewDimension::D2,
+                },
+                count: None,
+            }],
         });
 
         let group1_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
@@ -98,12 +105,10 @@ impl FragmentPass {
         let bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: Some("Fragment Pass: Group0"),
             layout: &group0_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: buffers.output_buffer.as_entire_binding(),
-                },
-            ],
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(&buffers.output_view),
+            }],
         });
 
         let bind_group_1 = device.create_bind_group(&wgpu::BindGroupDescriptor {

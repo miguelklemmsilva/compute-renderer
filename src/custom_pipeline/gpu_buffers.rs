@@ -18,11 +18,11 @@ pub struct GpuBuffers {
     pub index_buffer: wgpu::Buffer,
     pub projected_buffer: wgpu::Buffer,
     pub fragment_buffer: wgpu::Buffer,
-    pub output_buffer: wgpu::Buffer,
     pub tile_buffer: wgpu::Buffer,
     pub triangle_list_buffer: wgpu::Buffer,
     pub partial_sums_buffer: wgpu::Buffer,
     pub triangle_meta_buffer: wgpu::Buffer,
+    pub output_view: wgpu::TextureView,
 }
 
 impl GpuBuffers {
@@ -70,6 +70,24 @@ impl GpuBuffers {
             tile_range: [u32; 2],
         }
 
+        let texture_desc = wgpu::TextureDescriptor {
+            label: Some("Output Texture"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            format: wgpu::TextureFormat::Bgra8Unorm,
+            usage: wgpu::TextureUsages::STORAGE_BINDING
+                | wgpu::TextureUsages::TEXTURE_BINDING
+                | wgpu::TextureUsages::RENDER_ATTACHMENT,
+            dimension: wgpu::TextureDimension::D2,
+            view_formats: &[],
+        };
+        let output_texture = device.create_texture(&texture_desc);
+
         Self {
             camera_buffer: device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("Camera Buffer"),
@@ -113,12 +131,6 @@ impl GpuBuffers {
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
-            output_buffer: device.create_buffer(&wgpu::BufferDescriptor {
-                label: Some("Output Buffer"),
-                size: max_fragments * std::mem::size_of::<u32>() as u64,
-                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::MAP_READ,
-                mapped_at_creation: false,
-            }),
             tile_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Tile Buffer"),
                 size: num_tiles * std::mem::size_of::<[u32; 4]>() as u64,
@@ -127,9 +139,7 @@ impl GpuBuffers {
             }),
             triangle_list_buffer: device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("Triangle List Buffer"),
-                size: num_tiles
-                    * max_triangles_per_tile
-                    * (std::mem::size_of::<u64>() as u64),
+                size: num_tiles * max_triangles_per_tile * (std::mem::size_of::<u64>() as u64),
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
@@ -147,6 +157,7 @@ impl GpuBuffers {
                 usage: wgpu::BufferUsages::STORAGE,
                 mapped_at_creation: false,
             }),
+            output_view: output_texture.create_view(&wgpu::TextureViewDescriptor::default()),
         }
     }
 }
