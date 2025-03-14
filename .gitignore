@@ -1,4 +1,15 @@
 /target
+
+# And except the assets folder
+!/assets/
+
+# Now ignore all files inside assets
 /assets
+
+# Re-include only the files or folders you want in assets
+!/assets/vokselia_spawn/
+!/assets/San_Miguel/
+!/assets/Exterior/
+!/assets/suzanne.obj
 
 **/.DS_Store
