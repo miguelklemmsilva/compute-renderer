@@ -1,28 +1,47 @@
-use crate::scene;
+use crate::scene::{self, Scene};
 
 use super::{
-    binning_pass::BinningPass, raster_pass::TILE_SIZE, util::dispatch_size, FragmentPass,
-    GpuBuffers, RasterPass,
+    binning_pass::BinningPass, present_pass::PresentPass, raster_pass::TILE_SIZE,
+    util::dispatch_size, FragmentPass, GpuBuffers, RasterPass,
 };
 
 pub struct CustomRenderer {
     pub device: wgpu::Device,
     pub queue: wgpu::Queue,
 
+    pub surface_config: wgpu::SurfaceConfiguration,
+
     pub buffers: GpuBuffers,
 
+    pub binning_pass: BinningPass,
     pub raster_pass: RasterPass,
     pub fragment_pass: FragmentPass,
-    pub binning_pass: BinningPass,
+
+    pub present_pass: PresentPass,
+
+    pub width: u32,
+    pub height: u32,
 }
 
 impl CustomRenderer {
-    pub async fn new(width: usize, height: usize, scene: &scene::Scene) -> Self {
-        let instance = wgpu::Instance::default();
+    pub async fn new(
+        instance: &wgpu::Instance,
+        surface: &wgpu::Surface<'_>,
+        width: u32,
+        height: u32,
+        scene: &Scene,
+    ) -> Self {
+        // Choose adapter
         let adapter = instance
-            .request_adapter(&wgpu::RequestAdapterOptions::default())
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: Some(&surface),
+                force_fallback_adapter: false,
+            })
             .await
             .expect("Failed to find an appropriate adapter");
+
+        // Create device/queue
         let (device, queue) = adapter
             .request_device(
                 &wgpu::DeviceDescriptor {
@@ -36,35 +55,75 @@ impl CustomRenderer {
             .await
             .expect("Failed to create device");
 
-        let buffers = GpuBuffers::new(&device, width as u32, height as u32, scene);
+        let format = wgpu::TextureFormat::Bgra8Unorm;
+
+        let surface_config = wgpu::SurfaceConfiguration {
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+            format,
+            width: width.max(1),
+            height: height.max(1),
+            present_mode: wgpu::PresentMode::Immediate,
+            alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+            view_formats: vec![],
+            desired_maximum_frame_latency: 1,
+        };
+        surface.configure(&device, &surface_config);
+
+        // Create the GpuBuffers and passes
+        let width = surface_config.width;
+        let height = surface_config.height;
+        let buffers = GpuBuffers::new(&device, width, height, scene);
 
         let binning_pass = BinningPass::new(&device, &buffers);
         let raster_pass = RasterPass::new(&device, &buffers);
         let fragment_pass = FragmentPass::new(&device, &buffers);
 
+        // Create the final pass that samples from the output texture
+        let present_pass = PresentPass::new(&device, &buffers);
+
         Self {
             device,
             queue,
+            surface_config,
             buffers,
+            binning_pass,
             raster_pass,
             fragment_pass,
-            binning_pass,
+            present_pass,
+            width,
+            height,
         }
     }
 
-    pub async fn render(&mut self, width: usize, height: usize, scene: &scene::Scene) -> Vec<u32> {
+    pub async fn render(
+        &mut self,
+        surface: &wgpu::Surface<'_>,
+        scene: &scene::Scene,
+    ) -> Result<(), wgpu::SurfaceError> {
+        let frame = match surface.get_current_texture() {
+            Ok(frame) => frame,
+            Err(e) => return Err(e),
+        };
+
+        let frame_view = frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
         let mut encoder = self
             .device
             .create_command_encoder(&wgpu::CommandEncoderDescriptor {
                 label: Some("Command Encoder"),
             });
 
-        let num_tiles_x = (width + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
-        let num_tiles_y = (height + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
+        let num_tiles_x =
+            (self.surface_config.width as usize + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
+        let num_tiles_y =
+            (self.surface_config.height as usize + TILE_SIZE as usize - 1) / TILE_SIZE as usize;
 
         let total_tile_dispatch = dispatch_size((num_tiles_x * num_tiles_y) as u32);
 
-        let total_pixel_dispatch = dispatch_size((width * height) as u32);
+        let total_pixel_dispatch =
+            dispatch_size(self.surface_config.width * self.surface_config.height);
 
         self.binning_pass.execute(
             &mut encoder,
@@ -72,37 +131,35 @@ impl CustomRenderer {
             scene.gy_tris,
             total_tile_dispatch,
         );
-        self.raster_pass
-            .execute(&mut encoder, width as u32, height as u32);
+        self.raster_pass.execute(
+            &mut encoder,
+            self.surface_config.width,
+            self.surface_config.height,
+        );
         self.fragment_pass
             .execute(&mut encoder, total_pixel_dispatch);
 
+        self.present_pass
+            .execute(&mut encoder, &frame_view);
+
         self.queue.submit(Some(encoder.finish()));
 
-        // Read the output buffer for the final pixels
-        let buffer_slice = self.buffers.output_buffer.slice(..);
-        let (tx, rx_output) = futures_intrusive::channel::shared::oneshot_channel();
-        buffer_slice.map_async(wgpu::MapMode::Read, move |result| {
-            tx.send(result).unwrap();
-        });
-        self.device.poll(wgpu::Maintain::Wait);
-        rx_output.receive().await.unwrap().unwrap();
+        frame.present();
 
-        let data = buffer_slice.get_mapped_range();
-        let pixels = bytemuck::cast_slice(&data).to_vec();
-        drop(data);
-        self.buffers.output_buffer.unmap();
-
-        pixels
+        Ok(())
     }
 
-    pub fn resize(&mut self, width: u32, height: u32, scene: &scene::Scene) {
-        // Recreate buffers that depend on screen dimensions
-        self.buffers = GpuBuffers::new(&self.device, width, height, scene);
+    pub fn resize(&mut self, config: &wgpu::SurfaceConfiguration, scene: &Scene) {
+        self.surface_config = config.clone();
+        self.width = config.width;
+        self.height = config.height;
 
-        // Recreate passes with new buffers
+        // Recreate the output texture and present pass
+        self.buffers = GpuBuffers::new(&self.device, self.width, self.height, scene);
         self.binning_pass = BinningPass::new(&self.device, &self.buffers);
         self.raster_pass = RasterPass::new(&self.device, &self.buffers);
         self.fragment_pass = FragmentPass::new(&self.device, &self.buffers);
+        self.present_pass
+            .resize(&self.device, &self.buffers.output_view);
     }
 }

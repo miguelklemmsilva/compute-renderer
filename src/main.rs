@@ -259,7 +259,10 @@ fn main() {
 
             let scene_config = SceneConfig {
                 model_path: cli.model_path,
-                camera_config,
+                camera_config: CameraConfig {
+                    position: [13.566635, 2.6288567, 10.243919],
+                    ..camera_config
+                },
                 backend_type,
                 effect,
                 ..Default::default()
