@@ -30,20 +30,24 @@ The project aims to demonstrate scenarios where a custom shader-based approach m
 
 ## Building
 
-1. Clone the repository:
+1. Large Files and Git LFS
+
+This project uses Git Large File Storage (LFS) to manage large asset files (e.g., .obj models). Please refer to the [Git LFS documentation](https://git-lfs.com) and follow their instructions for installation and setup.
+
+2. Clone the repository:
 
 ```bash
 git clone [repository-url]
 cd compute-renderer
 ```
 
-2. Build the project:
+3. Build the project:
 
 ```bash
 cargo build --release
 ```
 
-3. Run the project:
+4. Run the project:
 
 ```bash
 cargo run --release
