@@ -74,12 +74,22 @@ impl WgpuRenderer {
         // === 2) Create surface configuration
         let format = wgpu::TextureFormat::Bgra8UnormSrgb;
 
+        let surface_caps = surface.get_capabilities(&adapter);
+        let present_mode = if surface_caps
+            .present_modes
+            .contains(&wgpu::PresentMode::Immediate)
+        {
+            &wgpu::PresentMode::Immediate
+        } else {
+            surface_caps.present_modes.first().unwrap()
+        };
+
         let config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: wgpu::PresentMode::Immediate,
+            present_mode: *present_mode,
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],
             desired_maximum_frame_latency: 1,
@@ -216,7 +226,7 @@ impl WgpuRenderer {
 
         // === 6) Create model buffers for each model in the scene
         let mut model_data = Vec::new();
-        
+
         for model in &scene.models {
             println!("Loading model: {}", model.processed_vertices_wgpu.len());
             // Create vertex buffer
@@ -376,7 +386,10 @@ async fn wait_for_gpu(queue: &wgpu::Queue, device: &wgpu::Device) {
         tx.send(()).unwrap();
     });
     device.poll(wgpu::Maintain::Wait);
-    rx_output.receive().await.expect("GPU work done callback was dropped unexpectedly");
+    rx_output
+        .receive()
+        .await
+        .expect("GPU work done callback was dropped unexpectedly");
 }
 
 fn create_depth_texture_format() -> wgpu::TextureFormat {

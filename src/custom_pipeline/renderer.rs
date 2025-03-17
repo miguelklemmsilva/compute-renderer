@@ -57,12 +57,19 @@ impl CustomRenderer {
 
         let format = wgpu::TextureFormat::Bgra8Unorm;
 
+        let surface_caps = surface.get_capabilities(&adapter);
+        let present_mode = if surface_caps.present_modes.contains(&wgpu::PresentMode::Immediate) {
+            &wgpu::PresentMode::Immediate
+        } else {
+            surface_caps.present_modes.first().unwrap()
+        };
+
         let surface_config = wgpu::SurfaceConfiguration {
             usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
             format,
             width: width.max(1),
             height: height.max(1),
-            present_mode: wgpu::PresentMode::Immediate,
+            present_mode: *present_mode,
             alpha_mode: wgpu::CompositeAlphaMode::Opaque,
             view_formats: vec![],
             desired_maximum_frame_latency: 1,
