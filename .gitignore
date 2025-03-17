@@ -1,15 +1,13 @@
 /target
 
-# And except the assets folder
-!/assets/
+assets/*
 
-# Now ignore all files inside assets
-/assets
+# Unignore the folders you want to keep
+!assets/San_Miguel/
+!assets/Exterior/
+!assets/vokselia_spawn/
 
-# Re-include only the files or folders you want in assets
-!/assets/vokselia_spawn/
-!/assets/San_Miguel/
-!/assets/Exterior/
-!/assets/suzanne.obj
+# Unignore the specific file you want to keep
+!assets/suzanne.obj
 
 **/.DS_Store
