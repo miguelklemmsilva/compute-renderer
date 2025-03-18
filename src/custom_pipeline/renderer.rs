@@ -166,7 +166,6 @@ impl CustomRenderer {
         self.binning_pass = BinningPass::new(&self.device, &self.buffers);
         self.raster_pass = RasterPass::new(&self.device, &self.buffers);
         self.fragment_pass = FragmentPass::new(&self.device, &self.buffers);
-        self.present_pass
-            .resize(&self.device, &self.buffers.output_view);
+        self.present_pass = PresentPass::new(&self.device, &self.buffers);
     }
 }

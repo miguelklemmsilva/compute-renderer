@@ -8,25 +8,17 @@ use winit::keyboard::{KeyCode, PhysicalKey};
 use winit::window::{Window as WinitWindow, WindowAttributes, WindowId};
 
 use crate::custom_pipeline::renderer::CustomRenderer;
-use crate::{
-    performance::PerformanceCollector, scene,
-    wgpu_pipeline::renderer::WgpuRenderer,
-};
+use crate::{performance::PerformanceCollector, scene, wgpu_pipeline::renderer::WgpuRenderer};
 
 pub enum RenderBackend {
-    WgpuPipeline {
-        surface: wgpu::Surface<'static>,
-        renderer: WgpuRenderer,
-    },
-    CustomPipeline {
-        surface: wgpu::Surface<'static>,
-        renderer: CustomRenderer,
-    },
+    WgpuPipeline { renderer: WgpuRenderer },
+    CustomPipeline { renderer: CustomRenderer },
 }
 
 pub struct Window {
     winit_window: Option<WinitWindow>,
     backend: Option<RenderBackend>,
+    surface: Option<wgpu::Surface<'static>>,
     pub height: usize,
     pub width: usize,
     pub scene: scene::Scene,
@@ -73,33 +65,33 @@ impl ApplicationHandler for Window {
         // wgpu uses its own surface struct
         let instance = wgpu::Instance::default();
         // SAFETY: The window is stored in self.winit_window and will live as long as the surface
-        let surface = unsafe {
+        self.surface = Some(unsafe {
             let surface = instance.create_surface(window).unwrap();
             std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface)
-        };
+        });
 
         match self.backend_type {
             BackendType::WgpuPipeline => {
                 let renderer = pollster::block_on(WgpuRenderer::new(
                     &instance,
-                    &surface,
+                    self.surface.as_ref().unwrap(),
                     self.width as u32,
                     self.height as u32,
                     &self.scene,
                 ));
 
-                self.backend = Some(RenderBackend::WgpuPipeline { surface, renderer });
+                self.backend = Some(RenderBackend::WgpuPipeline { renderer });
             }
             BackendType::CustomPipeline => {
                 let renderer = pollster::block_on(CustomRenderer::new(
                     &instance,
-                    &surface,
+                    self.surface.as_ref().unwrap(),
                     self.width as u32,
                     self.height as u32,
                     &self.scene,
                 ));
 
-                self.backend = Some(RenderBackend::CustomPipeline { surface, renderer });
+                self.backend = Some(RenderBackend::CustomPipeline { renderer });
             }
         }
     }
@@ -147,18 +139,24 @@ impl ApplicationHandler for Window {
 
                 if let Some(backend) = &mut self.backend {
                     match backend {
-                        RenderBackend::WgpuPipeline { surface, renderer } => {
+                        RenderBackend::WgpuPipeline { renderer } => {
                             let mut config = renderer.config.clone();
                             config.width = size.width;
                             config.height = size.height;
-                            surface.configure(&renderer.device, &config);
+                            self.surface
+                                .as_mut()
+                                .unwrap()
+                                .configure(&renderer.device, &config);
                             renderer.resize(&config);
                         }
-                        RenderBackend::CustomPipeline { surface, renderer } => {
+                        RenderBackend::CustomPipeline { renderer } => {
                             let mut config = renderer.surface_config.clone();
                             config.width = size.width;
                             config.height = size.height;
-                            surface.configure(&renderer.device, &config);
+                            self.surface
+                                .as_mut()
+                                .unwrap()
+                                .configure(&renderer.device, &config);
                             renderer.resize(&config, &self.scene);
                         }
                     }
@@ -245,6 +243,7 @@ impl Window {
     ) -> Result<Window, Box<dyn std::error::Error>> {
         Ok(Window {
             winit_window: None,
+            surface: None,
             backend: None,
             backend_type,
             height,
@@ -298,32 +297,32 @@ impl Window {
             window.set_title(&scene_config.scene_name());
 
             let instance = wgpu::Instance::default();
-            let surface = unsafe {
+            self.surface = Some(unsafe {
                 let surface = instance.create_surface(window).unwrap();
                 std::mem::transmute::<wgpu::Surface<'_>, wgpu::Surface<'static>>(surface)
-            };
+            });
 
             match self.backend_type {
                 BackendType::WgpuPipeline => {
                     let renderer = pollster::block_on(WgpuRenderer::new(
                         &instance,
-                        &surface,
+                        self.surface.as_ref().unwrap(),
                         self.width as u32,
                         self.height as u32,
                         &self.scene,
                     ));
 
-                    self.backend = Some(RenderBackend::WgpuPipeline { surface, renderer });
+                    self.backend = Some(RenderBackend::WgpuPipeline { renderer });
                 }
                 BackendType::CustomPipeline => {
                     let renderer = pollster::block_on(CustomRenderer::new(
                         &instance,
-                        &surface,
+                        self.surface.as_ref().unwrap(),
                         self.width as u32,
                         self.height as u32,
                         &self.scene,
                     ));
-                    self.backend = Some(RenderBackend::CustomPipeline { surface, renderer });
+                    self.backend = Some(RenderBackend::CustomPipeline { renderer });
                 }
             }
         }
@@ -340,8 +339,11 @@ impl Window {
 
         if let Some(backend) = &mut self.backend {
             match backend {
-                RenderBackend::WgpuPipeline { surface, renderer } => {
-                    match renderer.render(surface, &self.scene).await {
+                RenderBackend::WgpuPipeline { renderer } => {
+                    match renderer
+                        .render(self.surface.as_ref().unwrap(), &self.scene)
+                        .await
+                    {
                         Ok(_) => {}
                         Err(wgpu::SurfaceError::Lost) => {
                             if let Some(window) = &self.winit_window {
@@ -349,7 +351,10 @@ impl Window {
                                 let mut config = renderer.config.clone();
                                 config.width = size.width;
                                 config.height = size.height;
-                                surface.configure(&renderer.device, &config);
+                                self.surface
+                                    .as_mut()
+                                    .unwrap()
+                                    .configure(&renderer.device, &config);
                                 renderer.resize(&config);
                             }
                         }
@@ -357,13 +362,15 @@ impl Window {
                     }
                 }
                 RenderBackend::CustomPipeline {
-                    surface,
                     renderer: custom_renderer,
                 } => {
                     // update scene info
                     self.scene.update_buffers(custom_renderer, delta_time);
                     // run the pipeline here
-                    match custom_renderer.render(surface, &self.scene).await {
+                    match custom_renderer
+                        .render(self.surface.as_ref().unwrap(), &self.scene)
+                        .await
+                    {
                         Ok(_) => {}
                         Err(wgpu::SurfaceError::Lost) => {
                             if let Some(window) = &self.winit_window {
@@ -371,7 +378,10 @@ impl Window {
                                 let mut config = custom_renderer.surface_config.clone();
                                 config.width = size.width;
                                 config.height = size.height;
-                                surface.configure(&custom_renderer.device, &config);
+                                self.surface
+                                    .as_mut()
+                                    .unwrap()
+                                    .configure(&custom_renderer.device, &config);
                                 custom_renderer.resize(&config, &self.scene);
                             }
                         }

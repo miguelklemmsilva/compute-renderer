@@ -100,13 +100,13 @@ enum Commands {
 }
 
 
-fn main() {
-    // Parse command line arguments
+fn main() {    
     let cli = Cli::parse();
 
     let width = cli.width as usize;
     let height = cli.height as usize;
 
+    // Determine if a visual effect is requested and configure it accordingly. This enables dynamic scene modifications.
     let effect = match &cli.command {
         Some(Commands::Effect {
             effect,
@@ -119,6 +119,7 @@ fn main() {
             "edge_melt" => Some(effect::Effect::edge_melt(*param1, *param2)),
             "mirage" => Some(effect::Effect::mirage(*param1, *param2, *param3)),
             "wave" => {
+                // For the 'wave' effect, determine its direction based on user input to ensure the correct visual transformation.
                 let direction = match param4 {
                     0 => effect::WaveDirection::Vertical,
                     1 => effect::WaveDirection::Horizontal,
@@ -145,9 +146,10 @@ fn main() {
         _ => None,
     };
 
-    // Select scenes and determine starting scene based on whether the benchmarks subcommand was used.
+    // Decide between benchmark mode and regular mode. Benchmark mode evaluates performance over predefined scenes.
     let (scenes, start_offset) = match cli.command {
         Some(Commands::Benchmarks { offset }) => {
+            // Set benchmark duration and initialize various scene configurations to test both custom and WGPU pipelines.
             let benchmark_duration_secs = 30;
             let vokselia_spawn_scene = SceneConfig {
                 model_path: "vokselia_spawn/vokselia_spawn.obj".to_string(),
@@ -229,7 +231,7 @@ fn main() {
             (scenes, offset)
         }
         _ => {
-            // Regular mode: create a single scene based on CLI parameters.
+            // Regular mode: Build a scene using user-specified camera mode, backend, and model path.
             let camera_config = match cli.camera_mode.as_str() {
                 "first-person" => CameraConfig::new_first_person(),
                 "orbit" => CameraConfig::default(),
@@ -266,16 +268,17 @@ fn main() {
         }
     };
 
-    // Create a single event loop for all scenes.
+    // Create a centralized event loop for rendering and event handling, crucial for a responsive application.
     let event_loop = EventLoop::new().expect("Failed to create event loop");
     event_loop.set_control_flow(ControlFlow::Poll);
 
-    // Select the starting scene using the provided offset (or 0 for normal mode).
+    // Select the starting scene based on the provided offset (or default to the first scene).
     let scene_config = &scenes[start_offset];
 
+    // Asynchronously initialize the scene to handle setup operations such as resource loading.
     let scene = pollster::block_on(scene::Scene::from_config(scene_config, width, height));
 
-    // Create window with the same backend type as the scene.
+    // Create the rendering window with a backend matching the scene configuration to ensure compatibility.
     let mut window = match Window::new_with_window(width, height, scene, scene_config.backend_type)
     {
         Ok(window) => window,
@@ -289,10 +292,10 @@ fn main() {
         }
     };
 
-    // Store scenes in window for cycling.
+    // Store all scene configurations in the window to enable switching between scenes during runtime.
     window.set_scene_configs(scenes);
 
-    // Run the event loop with our application handler.
+    // Start the event loop which continuously renders the scene and processes user input.
     event_loop
         .run_app(&mut window)
         .expect("Failed to run application");

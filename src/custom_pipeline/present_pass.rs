@@ -123,24 +123,6 @@ impl PresentPass {
         }
     }
 
-    pub fn resize(&mut self, device: &wgpu::Device, new_view: &wgpu::TextureView) {
-        let sampler = device.create_sampler(&wgpu::SamplerDescriptor::default());
-        self.bind_group_0 = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("PresentPass bind group"),
-            layout: &self.pipeline.get_bind_group_layout(0),
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(new_view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: wgpu::BindingResource::Sampler(&sampler),
-                },
-            ],
-        });
-    }
-
     pub fn execute(&self, encoder: &mut wgpu::CommandEncoder, view: &wgpu::TextureView) {
         let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
             label: Some("PresentPass RenderPass"),
