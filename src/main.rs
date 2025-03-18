@@ -19,27 +19,35 @@ mod window;
     name = "Compute Renderer",
     version,
     about = "Runs a 3D scene with configurable parameters.",
-    long_about = None
+    long_about = "A command-line tool for rendering 3D scenes using different backends and effects. \
+                 Supports custom software rasterization and WGPU pipeline rendering. \
+                 Allows selecting camera modes, effects, and benchmarking scenes."
 )]
 struct Cli {
-    /// Window width in pixels
-    #[arg(long, default_value_t = 1024, help = "Window width in pixels")]
+    /// Window width in pixels (default: 1024)
+    #[arg(long, default_value_t = 1024, help = "Set the width of the application window (in pixels)")]
     width: u32,
 
-    /// Window height in pixels
-    #[arg(long, default_value_t = 768, help = "Window height in pixels")]
+    /// Window height in pixels (default: 768)
+    #[arg(long, default_value_t = 768, help = "Set the height of the application window (in pixels)")]
     height: u32,
 
-    /// Path to the 3D model (OBJ)
-    #[arg(long, default_value = "suzanne.obj", help = "Path to the .obj file")]
+    /// Path to the 3D model (OBJ format, default: suzanne.obj)
+    #[arg(long, default_value = "suzanne.obj", help = "Specify the path to a 3D model file in .obj format")]
     model_path: String,
 
-    /// Camera mode: 'first-person' or 'orbit'
-    #[arg(long, default_value = "first-person", help = "Camera mode")]
+    /// Camera mode selection (default: first-person)
+    /// Options:
+    /// - first-person: Controls behave like an FPS game (WASD + mouse)
+    /// - orbit: Rotates around the object with mouse drag
+    #[arg(long, default_value = "first-person", help = "Choose camera mode: 'first-person' or 'orbit'")]
     camera_mode: String,
 
-    /// Backend type: 'wgpu' or 'custom'
-    #[arg(long, default_value = "custom", help = "Render backend type")]
+    /// Rendering backend selection (default: custom)
+    /// Options:
+    /// - custom: Software rasterization using compute shaders
+    /// - wgpu: Hardware-accelerated rendering via WGPU
+    #[arg(long, default_value = "custom", help = "Select rendering backend: 'wgpu' or 'custom'")]
     backend_type: String,
 
     #[command(subcommand)]
@@ -48,63 +56,49 @@ struct Cli {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
-    /// Run benchmarks with a specified starting offset (zero-indexed)
+    /// Run performance benchmarks across different scenes
+    ///
+    /// Available scenes:
+    /// 0 - San Miguel (custom pipeline)
+    /// 1 - San Miguel (WGPU pipeline)
+    /// 2 - Exterior (custom pipeline)
+    /// 3 - Exterior (WGPU pipeline)
+    /// 4 - Suzanne (custom pipeline)
+    /// 5 - Suzanne (WGPU pipeline)
+    /// 6 - Vokselia Spawn (custom pipeline)
+    /// 7 - Vokselia Spawn (WGPU pipeline)
     Benchmarks {
-        /// Offset to start benchmarks (zero-indexed)
-        #[arg(
-            long,
-            default_value_t = 0,
-            help = "Offset to start benchmarks (zero-indexed)"
-        )]
+        /// Offset to start benchmarks (valid values: 0-7)
+        #[arg(long, default_value_t = 0, help = "Scene index to start benchmarks from (0-7)")]
         offset: usize,
     },
-    /// Choose an effect to apply to the scene.
+    /// Apply a visual effect to the scene
     ///
-    /// Effect types:
-    /// - **voxelize**: Uses param1 as voxel size, param2 as speed.
-    /// - **edge_melt**: Uses param1 as amplitude, param2 as speed.
-    /// - **mirage**: Uses param1 as amplitude, param2 as frequency, param3 as speed.
-    /// - **wave**: Uses param1 as amplitude, param2 as frequency, param3 as speed,
-    ///   and param4 for direction (0 = Vertical, 1 = Horizontal, 2 = Radial).
-    /// - **none**: Disables effects.
+    /// Available effects:
+    /// - voxelize: Converts the scene into a voxelized form
+    /// - edge_melt: Warps edges dynamically
+    /// - mirage: Distorts the scene with wave-like motion
+    /// - wave: Oscillates scene geometry in different patterns
+    /// - none: Disables effects
     Effect {
-        /// Effect type: 'voxelize', 'edge_melt', 'mirage', 'wave', or 'none'
-        #[arg(
-            long,
-            default_value = "voxelize",
-            help = "'voxelize', 'edge_melt', 'mirage', 'wave', or 'none'"
-        )]
+        /// Effect type (default: voxelize)
+        #[arg(long, default_value = "voxelize", help = "Choose effect: 'voxelize', 'edge_melt', 'mirage', 'wave', or 'none'")]
         effect: String,
-        /// Parameter 1: For voxelize: voxel_size, wave: amplitude, edge_melt: amplitude, mirage: amplitude
-        #[arg(
-            long,
-            default_value_t = 3.0,
-            help = "For voxelize: voxel_size, wave: amplitude, edge_melt: amplitude, mirage: amplitude"
-        )]
+        /// Parameter 1: Controls voxel size, amplitude, or intensity (default: 3.0)
+        #[arg(long, default_value_t = 3.0, help = "Primary effect parameter (varies by effect type)")]
         param1: f32,
-        /// Parameter 2: For voxelize: speed, wave: frequency, edge_melt: speed, mirage: frequency
-        #[arg(
-            long,
-            default_value_t = 0.2,
-            help = "For voxelize: speed, wave: frequency, edge_melt: speed, mirage: frequency"
-        )]
+        /// Parameter 2: Controls speed or frequency (default: 0.2)
+        #[arg(long, default_value_t = 0.2, help = "Secondary effect parameter (varies by effect type)")]
         param2: f32,
-        /// Parameter 3: For wave: speed, mirage: speed. (Default is not used for voxelize or edge_melt.)
-        #[arg(
-            long,
-            default_value_t = 1.0,
-            help = "For wave: speed, mirage: speed. (Default is not used for voxelize or edge_melt.)"
-        )]
+        /// Parameter 3: For wave & mirage effects (default: 1.0)
+        #[arg(long, default_value_t = 1.0, help = "Third effect parameter (for wave & mirage effects)")]
         param3: f32,
-        /// Parameter 4: For wave: direction (0 = Vertical, 1 = Horizontal, 2 = Radial).
-        #[arg(
-            long,
-            default_value_t = 0,
-            help = "Effect parameter 4 (for wave effect: 0=Vertical, 1=Horizontal, 2=Radial)"
-        )]
+        /// Parameter 4: Wave effect direction (0 = Vertical, 1 = Horizontal, 2 = Radial) (default: 0)
+        #[arg(long, default_value_t = 0, help = "Wave direction (0=Vertical, 1=Horizontal, 2=Radial)")]
         param4: u32,
     },
 }
+
 
 fn main() {
     // Parse command line arguments
