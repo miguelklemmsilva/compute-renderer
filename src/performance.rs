@@ -1,6 +1,6 @@
 use std::time::{Duration, Instant};
 use sysinfo::{get_current_pid, System};
-
+// Define structures to hold performance metrics for benchmarking the rendering process.
 pub struct PerformanceData {
     pub avg_fps: f64,
     pub min_fps: f64,
@@ -11,6 +11,7 @@ pub struct PerformanceData {
     pub memory_usage: u64,
 }
 
+// PerformanceData holds key benchmarking metrics such as average, minimum, and maximum FPS, as well as CPU and memory usage.
 pub struct PerformanceCollector {
     set_in_period: f32, // seconds
     frame_times: Vec<f64>,
@@ -27,6 +28,7 @@ pub struct PerformanceCollector {
     has_printed: bool,
 }
 
+// PerformanceCollector gathers runtime performance metrics over a set duration for a given scene, enabling analysis of rendering performance.
 impl PerformanceCollector {
     pub fn new(scene_name: String, scene_index: usize, benchmark_duration: Duration) -> Self {
         Self {
@@ -47,6 +49,7 @@ impl PerformanceCollector {
     }
 
     pub fn update(&mut self) -> bool {
+        // Periodically update collected metrics: records frame times and system performance after an initial stabilization period.
         if !self.has_started {
             self.start_time = std::time::Instant::now();
             self.last_frame_time = std::time::Instant::now();
@@ -54,6 +57,7 @@ impl PerformanceCollector {
             return false;
         }
 
+        // Skip the first few frames to allow the application to stabilise.
         if self.start_time.elapsed() < Duration::from_secs_f32(self.set_in_period) {
             return false;
         }
@@ -76,7 +80,7 @@ impl PerformanceCollector {
             self.memory_usages.push(0);
         }
 
-        // Return true if benchmark duration is reached
+        // Return true if the benchmark has run for the desired duration, indicating it's time to finalise the metrics.
         self.start_time.elapsed()
             >= self
                 .benchmark_duration
@@ -94,6 +98,8 @@ impl PerformanceCollector {
     }
 
     fn calculate_metrics(&self) -> PerformanceData {
+        // Analyse the collected frame times and system usage data to compute performance metrics.
+        // This includes calculating average FPS and determining performance consistency through percentiles.
         if self.frame_times.is_empty() {
             return PerformanceData {
                 avg_fps: 0.0,
@@ -106,24 +112,23 @@ impl PerformanceCollector {
             };
         }
 
+        // Calculate the average frame time, then derive the average FPS as its reciprocal.
         let avg_frame_time = self.frame_times.iter().sum::<f64>() / self.frame_times.len() as f64;
         let avg_fps = 1.0 / avg_frame_time;
 
-        // Create a sorted copy of the frame times
+        // Sort the collected frame times to facilitate extraction of the fastest and slowest segments.
         let mut sorted_frame_times = self.frame_times.clone();
         sorted_frame_times.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let total_frames = sorted_frame_times.len();
 
-        // compute max_fps as the reciprocal of the average of the fastest 5% of frame times.
+        // Compute the average of the fastest 5% of frame times to approximate the maximum achievable FPS.
         let fastest_count = ((total_frames as f64) * 0.05).ceil() as usize;
-        let fastest_count = if fastest_count == 0 { 1 } else { fastest_count };
         let fastest_avg =
             sorted_frame_times.iter().take(fastest_count).sum::<f64>() / fastest_count as f64;
         let max_fps = 1.0 / fastest_avg;
 
-        // Compute min_fps as the reciprocal of the average of the slowest 5% of frame times.
+        // Compute the average of the slowest 5% of frame times to estimate the minimum FPS during performance dips.
         let slowest_count = ((total_frames as f64) * 0.05).ceil() as usize;
-        let slowest_count = if slowest_count == 0 { 1 } else { slowest_count };
         let slowest_avg = sorted_frame_times
             .iter()
             .rev()
@@ -136,6 +141,7 @@ impl PerformanceCollector {
         let avg_memory_usage: u64 =
             self.memory_usages.iter().sum::<u64>() / self.memory_usages.len() as u64;
 
+        // Calculate lower FPS percentiles (5% and 1%) to gauge worst-case performance scenarios.
         let percentile_5_index = (total_frames as f64 * 0.05).ceil() as usize;
         let percentile_1_index = (total_frames as f64 * 0.01).ceil() as usize;
 
@@ -165,6 +171,7 @@ impl PerformanceCollector {
     }
 
     fn print_results(&self, data: &PerformanceData) {
+        // Print the computed performance metrics to the console for easy review and analysis.
         println!(
             "Performance Data for Scene {}: {}",
             self.scene_index + 1,

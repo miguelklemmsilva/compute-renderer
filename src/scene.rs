@@ -1,8 +1,9 @@
 use crate::camera::{Camera, CameraMode};
+use crate::custom_pipeline::renderer::CustomRenderer;
 use crate::effect::Effect;
 use crate::model::Model;
 use crate::window::BackendType;
-use crate::{camera, custom_pipeline};
+use crate::camera;
 use std::time::Duration;
 use std::u64;
 
@@ -130,7 +131,7 @@ impl Scene {
 
     pub fn update_buffers(
         &mut self,
-        renderer: &mut custom_pipeline::renderer::CustomRenderer,
+        renderer: &mut CustomRenderer,
         delta_time: Duration,
     ) {
         self.time += delta_time.as_secs_f32();

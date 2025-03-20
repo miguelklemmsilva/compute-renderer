@@ -35,7 +35,7 @@ pub struct Window {
 
 impl ApplicationHandler for Window {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        // create performance collector for this scene
+        // Initialise performance collector to monitor scene performance and benchmark duration.
         self.collector = Some(PerformanceCollector::new(
             self.scene_configs[self.current_scene_index].scene_name(),
             self.current_scene_index,
@@ -44,6 +44,7 @@ impl ApplicationHandler for Window {
             ),
         ));
 
+        // Create the OS window with specified dimensions as the rendering target.
         self.winit_window = Some(
             event_loop
                 .create_window(
@@ -54,16 +55,16 @@ impl ApplicationHandler for Window {
         );
 
         let window = self.winit_window.as_ref().unwrap();
-
+        // Set window title based on the current scene to identify the active scene.
         let window_name = &self.scene_configs[self.current_scene_index].scene_name();
-
         window.set_title(window_name);
-
+        // Update stored width and height to match the actual window dimensions.
         self.width = window.inner_size().width as usize;
         self.height = window.inner_size().height as usize;
 
-        // wgpu uses its own surface struct
+        // Initialise GPU instance and prepare to create a rendering surface.
         let instance = wgpu::Instance::default();
+        // Create GPU rendering surface; unsafe block is used to extend the surface lifetime.
         // SAFETY: The window is stored in self.winit_window and will live as long as the surface
         self.surface = Some(unsafe {
             let surface = instance.create_surface(window).unwrap();
@@ -71,6 +72,7 @@ impl ApplicationHandler for Window {
         });
 
         match self.backend_type {
+            // Depending on the backend type, initialise the corresponding renderer to configure the rendering pipeline.
             BackendType::WgpuPipeline => {
                 let renderer = pollster::block_on(WgpuRenderer::new(
                     &instance,
@@ -99,6 +101,7 @@ impl ApplicationHandler for Window {
     fn window_event(&mut self, event_loop: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => {
+                // On close request, finalize performance metrics and exit the event loop.
                 self.collector.as_mut().unwrap().finalise();
                 event_loop.exit();
             }
@@ -106,8 +109,9 @@ impl ApplicationHandler for Window {
                 if let PhysicalKey::Code(keycode) = event.physical_key {
                     match event.state {
                         ElementState::Pressed => {
+                            // Record key press to track user input for camera and scene control.
                             self.keys_down.insert(keycode);
-                            // user switches scene with escape
+                            // Escape key pressed triggers scene switching; finalise current metrics and load the next scene.
                             match keycode {
                                 KeyCode::Escape => {
                                     self.collector.as_mut().unwrap().finalise();
@@ -127,9 +131,11 @@ impl ApplicationHandler for Window {
                 button: MouseButton::Left,
                 ..
             } => {
+                // Update mouse pressed state to enable camera panning based on input.
                 self.mouse_pressed = state == ElementState::Pressed;
             }
             WindowEvent::Resized(size) => {
+                // Handle window resize: update dimensions, adjust camera aspect ratio, and reconfigure the rendering backend accordingly.
                 self.width = size.width as usize;
                 self.height = size.height as usize;
 
@@ -174,7 +180,7 @@ impl ApplicationHandler for Window {
     ) {
         match event {
             DeviceEvent::MouseMotion { delta } => {
-                // pan camera if user presses left click
+                // Use mouse motion delta to pan the active camera when the left mouse button is pressed.
                 if self.mouse_pressed {
                     if let Some(camera) = self.scene.get_active_camera_mut() {
                         camera.process_mouse(delta.0 as f32, -delta.1 as f32);
@@ -186,12 +192,13 @@ impl ApplicationHandler for Window {
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
-        // Update per frame
+        // Update frame timing and process scene updates before waiting for the next event.
         let delta_time = self.collector.as_mut().unwrap().last_frame_time.elapsed();
         self.collector.as_mut().unwrap().last_frame_time = std::time::Instant::now();
 
         // Async block to call `self.update(delta_time).await`
         if pollster::block_on(async {
+            // Asynchronously update the scene; if update fails or the scene completes, finalize metrics and attempt to load the next scene.
             if !self.update(delta_time).await {
                 // Scene is done, try to load next scene
                 self.collector.as_mut().unwrap().finalise();
@@ -214,6 +221,7 @@ impl ApplicationHandler for Window {
     }
 
     fn exiting(&mut self, _event_loop: &ActiveEventLoop) {
+        // Finalise performance metrics as the application exits.
         self.collector.as_mut().unwrap().finalise();
     }
 }
@@ -235,6 +243,7 @@ impl fmt::Display for BackendType {
 
 impl Window {
     /// Create the Window object
+    // Initialize Window struct with default values for OS window, rendering backend, and input tracking.
     pub fn new_with_window(
         width: usize,
         height: usize,
@@ -258,14 +267,15 @@ impl Window {
     }
 
     pub fn set_scene_configs(&mut self, configs: Vec<scene::SceneConfig>) {
+        // Store the provided scene configurations for future scene cycling.
         self.scene_configs = configs;
     }
 
     async fn load_next_scene(&mut self, event_loop: &ActiveEventLoop) -> bool {
-        // Increment scene index
+        // Increment scene index to load the next scene.
         self.current_scene_index += 1;
 
-        // Check if we've gone through all scenes
+        // Check if all scenes have been cycled through; exit if no more scenes remain.
         if self.current_scene_index >= self.scene_configs.len() {
             event_loop.exit();
             return false;
@@ -274,14 +284,14 @@ impl Window {
         // Get the next scene config
         let scene_config = &self.scene_configs[self.current_scene_index];
 
-        // Create new performance collector
+        // Reinitialize performance collector for the new scene.
         self.collector = Some(PerformanceCollector::new(
             scene_config.scene_name(),
             self.current_scene_index,
             Duration::from_secs(scene_config.benchmark_duration_secs),
         ));
 
-        // Create new scene
+        // Asynchronously create the new scene based on the updated configuration.
         self.scene = crate::scene::Scene::from_config(
             scene_config,
             self.width as usize,
@@ -289,10 +299,10 @@ impl Window {
         )
         .await;
 
-        // Update backend type
+        // Update backend type to match the new scene configuration.
         self.backend_type = scene_config.backend_type;
 
-        // Recreate the backend with the new scene
+        // Recreate rendering backend to initialize the new scene.
         if let Some(window) = &self.winit_window {
             window.set_title(&scene_config.scene_name());
 
@@ -304,24 +314,25 @@ impl Window {
 
             match self.backend_type {
                 BackendType::WgpuPipeline => {
-                    let renderer = pollster::block_on(WgpuRenderer::new(
+                    let renderer = WgpuRenderer::new(
                         &instance,
                         self.surface.as_ref().unwrap(),
                         self.width as u32,
                         self.height as u32,
                         &self.scene,
-                    ));
+                    ).await;
 
                     self.backend = Some(RenderBackend::WgpuPipeline { renderer });
                 }
                 BackendType::CustomPipeline => {
-                    let renderer = pollster::block_on(CustomRenderer::new(
+                    let renderer = CustomRenderer::new(
                         &instance,
                         self.surface.as_ref().unwrap(),
                         self.width as u32,
                         self.height as u32,
                         &self.scene,
-                    ));
+                    ).await;
+
                     self.backend = Some(RenderBackend::CustomPipeline { renderer });
                 }
             }
@@ -332,6 +343,7 @@ impl Window {
 
     /// Update the application each frame
     pub async fn update(&mut self, delta_time: Duration) -> bool {
+        // Update active camera with elapsed time and process keyboard inputs.
         if let Some(camera) = self.scene.get_active_camera_mut() {
             camera.update_over_time(delta_time.as_secs_f32());
             camera.process_keyboard(&self.keys_down, delta_time.as_secs_f32());
@@ -340,6 +352,7 @@ impl Window {
         if let Some(backend) = &mut self.backend {
             match backend {
                 RenderBackend::WgpuPipeline { renderer } => {
+                    // Render scene using the WGPU pipeline; reconfigure if the rendering surface is lost.
                     match renderer
                         .render(self.surface.as_ref().unwrap(), &self.scene)
                         .await
@@ -364,7 +377,7 @@ impl Window {
                 RenderBackend::CustomPipeline {
                     renderer: custom_renderer,
                 } => {
-                    // update scene info
+                    // Update scene buffers and render using the custom pipeline; reconfigure on loss of rendering surface.
                     self.scene.update_buffers(custom_renderer, delta_time);
                     // run the pipeline here
                     match custom_renderer
@@ -391,6 +404,8 @@ impl Window {
             }
         }
 
+        // Return whether the scene should continue running based on the performance collector update.
+        // Performance collector contains logic for scene completion and benchmark duration.
         !self.collector.as_mut().unwrap().update()
     }
 }
